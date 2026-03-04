@@ -616,16 +616,16 @@ export const verifyIdentity = async (req, res) => {
     try {
         const userUid = req.user.uid;
 
-        // 1. Files Check
+        // 1. Files Validation
         if (!req.files || !req.files.idFront || !req.files.liveSelfie) {
             return res.status(400).json({ message: "ID Front aur Live Selfie dono lazmi hain." });
         }
 
-        // 2. OpenAI Vision ke liye Images ko Buffer se Base64 mein convert karein
+        // 2. Base64 Conversion
         const idFrontBase64 = req.files.idFront[0].buffer.toString('base64');
         const selfieBase64 = req.files.liveSelfie[0].buffer.toString('base64');
 
-        // 3. OpenAI GPT-4o Call (Face Comparison)
+        // 3. OpenAI GPT-4o Call with Enhanced Prompt
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
@@ -634,33 +634,50 @@ export const verifyIdentity = async (req, res) => {
                     content: [
                         { 
                             type: "text", 
-                            text: "Task: Compare these two images. Image 1 is a National ID Card, Image 2 is a Live Selfie. Verify if they are the same person. Return ONLY a JSON: { 'isMatched': boolean, 'confidence': number, 'reason': 'string in Roman Urdu' }" 
+                            text: `Task: Compare Image 1 (National ID Card) and Image 2 (Live Selfie). 
+                            Steps:
+                            1. Analyze facial features (eyes, nose, jawline) in both images.
+                            2. Account for lighting and camera quality differences.
+                            3. Determine if they are the same person.
+                            
+                            Return ONLY a JSON object: 
+                            { 
+                              "isMatched": boolean, 
+                              "confidence": number, 
+                              "reason": "Short reason in Roman Urdu (e.g., 'Chehra bilkul match kar raha hai' or 'Tasveer saaf nahi hai')" 
+                            }` 
                         },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idFrontBase64}` } },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${selfieBase64}` } },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idFrontBase64}`, detail: "high" } },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${selfieBase64}`, detail: "high" } },
                     ],
                 },
             ],
             response_format: { type: "json_object" },
         });
 
-        const verdict = JSON.parse(response.choices[0].message.content);
+        const content = response.choices[0].message.content;
+        if (!content) {
+            return res.status(500).json({ message: "AI response empty hai." });
+        }
 
-        if (verdict.isMatched && verdict.confidence > 80) {
-            
-            // 4. Save Selfie to Local 'uploads/' Folder
+        const verdict = JSON.parse(content);
+
+        // Validation for AI output
+        if (!verdict || typeof verdict.isMatched === 'undefined') {
+            return res.status(400).json({ message: "AI response format ghalat hai. Dobara koshish karen." });
+        }
+
+        // 4. Match Success Logic (Confidence threshold kept at 75% for better pass rate)
+        if (verdict.isMatched && verdict.confidence >= 75) {
             const uploadDir = 'uploads/';
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
             const fileName = `profile-${userUid}-${Date.now()}.jpg`;
             const filePath = path.join(uploadDir, fileName);
-            
-            // File save karein
             fs.writeFileSync(filePath, req.files.liveSelfie[0].buffer);
             
             const profileUrl = `${req.protocol}://${req.get("host")}/uploads/${fileName}`;
 
-            // 5. Update User Record in Database
             await User.findOneAndUpdate(
                 { uid: userUid },
                 { 
@@ -676,6 +693,7 @@ export const verifyIdentity = async (req, res) => {
                 profilePic: profileUrl 
             });
         } else {
+            // Agar match nahi hua to AI ka reason bhej rahe hain
             return res.status(400).json({ 
                 success: false, 
                 message: `Verification Fail: ${verdict.reason}` 
@@ -685,5 +703,24 @@ export const verifyIdentity = async (req, res) => {
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
         res.status(500).json({ message: "Server error during verification", error: error.message });
+    }
+};
+// ==========================================
+// 👤 GET CURRENT USER DETAILS (For Navbar/Profile)
+// ==========================================
+export const me = async (req, res) => {
+    try {
+        const userUid = req.user.uid; // Middleware se UID mil rahi hai
+        const user = await User.findOne({ uid: userUid });
+
+        if (!user) {
+            return res.status(404).json({ message: "User database mein nahi mila" });
+        }
+
+        // User ka pura data bhej rahe hain (isVerified status ke sath)
+        res.status(200).json(user);
+    } catch (error) {
+        console.error("🔥 Me API Error:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
     }
 };

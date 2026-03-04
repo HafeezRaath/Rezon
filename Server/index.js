@@ -10,7 +10,6 @@ import admin from "firebase-admin";
 import { createRequire } from "module";
 
 import route from "./Routes/userRoutes.js";
-// ✅ YEH LINE ADD KARO: Admin routes import
 import adminRoutes from "./Routes/adminRoutes.js";
 
 import Chat from "./model/chat.js";
@@ -47,6 +46,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 
@@ -59,9 +59,15 @@ const __dirname = path.dirname(__filename);
 // ==========================================
 // 🧩 Middlewares
 // ==========================================
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ✅ CORS Update: Credentials allow karein
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
+
+// ✅ Payload Limit Update: Taake ID Card aur Selfie images block na hon
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Static uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -70,7 +76,6 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // 🛣️ Routes
 // ==========================================
 app.use("/api", route);
-// ✅ YEH LINE ADD KARO: Admin routes enable
 app.use("/api/admin", adminRoutes);
 
 // ==========================================
@@ -84,30 +89,20 @@ let onlineUsers = {};
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
 
-  // 🟢 User Online
   socket.on("user_online", async (userId) => {
     if (!userId) return;
-
     onlineUsers[userId] = socket.id;
-
-    await User.findOneAndUpdate(
-      { uid: userId },
-      { isOnline: true }
-    );
-
+    await User.findOneAndUpdate({ uid: userId }, { isOnline: true });
     io.emit("status_change", { userId, isOnline: true });
     console.log(`🟢 User ${userId} is Online`);
   });
 
-  // 📥 Join Chat Room
   socket.on("join_chat", (chatId) => {
     socket.join(chatId);
   });
 
-  // 📩 Send Message (Restore chat if deleted)
   socket.on("send_message", async (data) => {
     const { chatId, senderId, message } = data;
-
     try {
       await Chat.findByIdAndUpdate(chatId, {
         $push: {
@@ -120,10 +115,9 @@ io.on("connection", (socket) => {
         },
         $set: {
           lastMessage: message,
-          deletedBy: [], // 🔥 restore chat
+          deletedBy: [],
         },
       });
-
       io.to(chatId).emit("receive_message", data);
       console.log(`📩 Message from ${senderId} in chat ${chatId}`);
     } catch (error) {
@@ -131,48 +125,26 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 👁️ Seen Logic (Instagram style)
   socket.on("message_seen", async ({ chatId, userId }) => {
     try {
       await Chat.updateOne(
         { _id: chatId },
         { $set: { "messages.$[msg].isRead": true } },
-        {
-          arrayFilters: [
-            { "msg.senderId": { $ne: userId }, "msg.isRead": false },
-          ],
-        }
+        { arrayFilters: [{ "msg.senderId": { $ne: userId }, "msg.isRead": false }] }
       );
-
       io.to(chatId).emit("messages_marked_read", { chatId });
-      console.log(`👁️ Messages in ${chatId} seen by ${userId}`);
     } catch (error) {
       console.error("Seen Error:", error);
     }
   });
 
-  // 🔴 Disconnect
   socket.on("disconnect", async () => {
-    const userId = Object.keys(onlineUsers).find(
-      (key) => onlineUsers[key] === socket.id
-    );
-
+    const userId = Object.keys(onlineUsers).find(key => onlineUsers[key] === socket.id);
     if (userId) {
       const lastSeen = new Date();
-
-      await User.findOneAndUpdate(
-        { uid: userId },
-        { isOnline: false, lastSeen }
-      );
-
+      await User.findOneAndUpdate({ uid: userId }, { isOnline: false, lastSeen });
       delete onlineUsers[userId];
-
-      io.emit("status_change", {
-        userId,
-        isOnline: false,
-        lastSeen,
-      });
-
+      io.emit("status_change", { userId, isOnline: false, lastSeen });
       console.log(`🔴 User ${userId} is Offline`);
     }
   });
@@ -190,7 +162,6 @@ mongoose
     console.log("✅ MongoDB Connected Successfully");
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server is running on port: ${PORT}`);
-      // ✅ Admin routes loaded message
       console.log(`👑 Admin Panel: http://localhost:${PORT}/api/admin/dashboard`);
     });
   })
