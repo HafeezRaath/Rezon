@@ -1,19 +1,22 @@
-import mongoose from 'mongoose'; // Change 'require' to 'import'
+import mongoose from 'mongoose';
 
 const reportSchema = new mongoose.Schema({
     reporterId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true // Admin panel search fast karne ke liye
     },
     reportedUserId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     adId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Ad'
+        ref: 'Ad',
+        index: true
     },
     reason: {
         type: String,
@@ -25,7 +28,8 @@ const reportSchema = new mongoose.Schema({
             'Inappropriate Content', 
             'Spam', 
             'Other'
-        ]
+        ],
+        index: true
     },
     description: {
         type: String,
@@ -35,13 +39,16 @@ const reportSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['Pending', 'Resolved', 'Dismissed'],
-        default: 'Pending'
+        default: 'Pending',
+        index: true
     },
     evidenceImage: {
         type: String 
     }
 }, { timestamps: true });
 
-// Change module.exports to export default
+// ✅ Composite index: Pending reports ko date ke mutabiq dekhne ke liye
+reportSchema.index({ status: 1, createdAt: -1 });
+
 const Report = mongoose.model('Report', reportSchema);
 export default Report;

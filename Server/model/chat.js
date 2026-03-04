@@ -1,10 +1,10 @@
-import mongoose from "mongoose"; // Baqi files ke mutabiq import use karein
+import mongoose from "mongoose";
 
 const ChatSchema = new mongoose.Schema(
   {
     participants: [
       {
-        type: String, 
+        type: String, // Firebase UIDs
         required: true,
       },
     ],
@@ -12,6 +12,7 @@ const ChatSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Ad", 
       required: true,
+      index: true // Specific ad ki chats jaldi dhoondne ke liye
     },
     messages: [
       {
@@ -24,13 +25,23 @@ const ChatSchema = new mongoose.Schema(
     lastMessage: {
       type: String,
     },
-    // 🔑 Ye field humne add ki hai soft delete ke liye
+    // Soft delete: User ID array mein hogi toh usay chat nazar nahi aayegi
     deletedBy: {
-      type: [String], // Array of Firebase UIDs
+      type: [String], 
       default: [],
     },
   },
   { timestamps: true }
 );
+
+// ✅ Performance Indices for Atlas
+// 1. User ki saari chats fast load karne ke liye
+ChatSchema.index({ participants: 1 });
+
+// 2. Specific user ki recent chats order mein dekhne ke liye
+ChatSchema.index({ participants: 1, updatedAt: -1 });
+
+// 3. Duplicate chat rokne ke liye (Aik ad par do users ki aik hi chat honi chahiye)
+ChatSchema.index({ participants: 1, adId: 1 });
 
 export default mongoose.model("Chat", ChatSchema);

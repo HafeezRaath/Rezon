@@ -24,6 +24,7 @@ dotenv.config();
 // 🔐 Firebase Admin Setup
 // ==========================================
 const require = createRequire(import.meta.url);
+// Ensure credentials.json is present in your Server folder on Hostinger
 const serviceAccount = require("./credentials.json");
 
 if (!admin.apps.length) {
@@ -40,11 +41,16 @@ const app = express();
 const httpServer = createServer(app);
 
 // ==========================================
-// 🌐 Socket.IO Setup
+// 🌐 Socket.IO Setup - UPDATED FOR PRODUCTION
 // ==========================================
+const allowedOrigins = [
+  "https://rezon.raathdeveloper.com", 
+  "http://localhost:5173"
+];
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -59,13 +65,19 @@ const __dirname = path.dirname(__filename);
 // ==========================================
 // 🧩 Middlewares
 // ==========================================
-// ✅ CORS Update: Credentials allow karein
+// ✅ CORS Update: Multiple origins allow karein
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
-// ✅ Payload Limit Update: Taake ID Card aur Selfie images block na hon
+// ✅ Payload Limit Update
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -154,7 +166,7 @@ io.on("connection", (socket) => {
 // 🗄️ MongoDB Connection
 // ==========================================
 const PORT = process.env.PORT || 8000;
-const MONGO_URL = process.env.MONGO_URL;
+const MONGO_URL = process.env.MONGO_URL; // Hostinger Environment Variables se aayega
 
 mongoose
   .connect(MONGO_URL)
@@ -162,7 +174,8 @@ mongoose
     console.log("✅ MongoDB Connected Successfully");
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server is running on port: ${PORT}`);
-      console.log(`👑 Admin Panel: http://localhost:${PORT}/api/admin/dashboard`);
+      // Live server par localhost nahi chale ga, but console for logs
+      console.log(`👑 Admin Panel Live: https://rezon.raathdeveloper.com/api/admin/dashboard`);
     });
   })
   .catch((error) => {

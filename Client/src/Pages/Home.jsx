@@ -10,7 +10,11 @@ import Footer from '../Components/footer';
 const Home = ({ user }) => {
   return (
     <>
-      <Hero/>
+      <HeroSection 
+  setShowLogin={setShowLogin} 
+  setShowAds={setShowAds} 
+  setShowVerification={setShowVerification} 
+/>
       <CategoriesSection/>
       {/* 🚀 AllAds ko yahan user pass karna sabse zaroori hai */}
       <AllAds user={user} />  

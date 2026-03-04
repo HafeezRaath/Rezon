@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaFilter, FaRedo } from 'react-icons/fa';
 
-// 🔥 CATEGORY FILTER MAP (Yahi map use hoga)
+// 🔥 CATEGORY FILTER MAP (Expanded to match your marketplace)
 const CATEGORY_FILTER_MAP = {
     "Mobile": [
         { name: "brand", label: "Brand", type: "text" },
@@ -16,6 +16,10 @@ const CATEGORY_FILTER_MAP = {
         { name: "mileage_max", label: "Max Mileage (km)", type: "number" },
         { name: "fuelType", label: "Fuel Type", type: "select", options: ["Petrol", "Diesel", "Hybrid"] },
     ],
+    "Furniture": [
+        { name: "material", label: "Material", type: "text" },
+        { name: "price_min", label: "Min Price", type: "number" },
+    ],
     "default": [{ name: "price_min", label: "Min Price", type: "number" }]
 };
 
@@ -24,14 +28,15 @@ const FilterInput = ({ name, label, type, value, onChange }) => (
     <div className="flex flex-col text-sm mb-3"> 
         <label className="font-semibold text-gray-700 mb-1">{label}</label>
         <input type={type} name={name} value={value} onChange={onChange}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-pink-500 focus:border-pink-500 outline-none"/>
+            className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-all"/>
     </div>
 );
+
 const FilterSelect = ({ name, label, options, value, onChange }) => (
     <div className="flex flex-col text-sm mb-3"> 
         <label className="font-semibold text-gray-700 mb-1">{label}</label>
         <select name={name} value={value} onChange={onChange}
-            className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-pink-500 focus:border-pink-500 outline-none">
+            className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-all">
             <option value="">All</option>
             {options.map(opt => (<option key={opt} value={opt}>{opt}</option>))}
         </select>
@@ -51,7 +56,7 @@ const Filters = ({ categoryCode, onFilterChange }) => {
         const { name, value } = e.target;
         const newFilters = { ...filterValues, [name]: value };
         setFilterValues(newFilters);
-        onFilterChange(newFilters); // Parent ko update karo
+        onFilterChange(newFilters); // Parent (CategoryAds.js) ko update karo
     };
 
     const handleReset = () => {
@@ -62,17 +67,17 @@ const Filters = ({ categoryCode, onFilterChange }) => {
     if (filterConfig.length === 0) return null;
 
     return (
-        // Design: Clean white box with strong shadow, jaisa Onsus/Radios mein hai
-        <div className="bg-white p-5 rounded-2xl shadow-xl border border-gray-100 md:sticky md:top-20"> 
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <FaFilter className="text-pink-600"/> Filters
+        <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 md:sticky md:top-24 h-fit animate-in fade-in duration-500"> 
+            <div className="flex justify-between items-center mb-5 border-b border-gray-50 pb-4">
+                <h3 className="text-xl font-black text-gray-900 flex items-center gap-2 uppercase tracking-tighter">
+                    <FaFilter className="text-pink-600 text-lg"/> Filters
                 </h3>
-                <button onClick={handleReset} className="text-sm text-gray-500 hover:text-pink-600 transition flex items-center gap-1">
-                    <FaRedo className="text-sm"/> Reset
+                <button onClick={handleReset} className="text-xs font-bold text-gray-400 hover:text-pink-600 transition-all flex items-center gap-1 uppercase tracking-widest">
+                    <FaRedo className="text-[10px]"/> Reset
                 </button>
             </div>
-            <div className="space-y-2"> 
+
+            <div className="space-y-1"> 
                 {filterConfig.map(filter => (
                     filter.type === 'select' ? (
                         <FilterSelect key={filter.name} {...filter} value={filterValues[filter.name] || ''} onChange={handleFilterChange}/>
@@ -80,6 +85,12 @@ const Filters = ({ categoryCode, onFilterChange }) => {
                         <FilterInput key={filter.name} {...filter} value={filterValues[filter.name] || ''} onChange={handleFilterChange}/>
                     )
                 ))}
+            </div>
+            
+            <div className="mt-6 pt-4 border-t border-gray-50">
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest text-center">
+                    AI Optimized Results
+                </p>
             </div>
         </div>
     );

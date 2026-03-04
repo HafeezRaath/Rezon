@@ -31,26 +31,23 @@ const CATEGORY_FIELD_MAP = {
 };
 
 const ALLOWED_CATEGORIES = Object.keys(CATEGORY_FIELD_MAP);
+
 // ==========================================
 // ✨ AI SMART ASSIST (Analyze & Suggest Price)
 // ==========================================
-// ==========================================
-// ✨ AI SMART ASSIST (Dynamic Category Support)
-// ==========================================
 export const getAISuggestions = async (req, res) => {
     try {
-        const { category } = req.body; // Frontend se category aayegi
+        const { category } = req.body; 
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ message: "Kam se kam ek image upload karein" });
         }
 
-        // Sabhi images ko process karein taake AI settings aur box ko scan kar sake
         const imagesContent = req.files.map(file => ({
             type: "image_url",
             image_url: { url: `data:image/jpeg;base64,${file.buffer.toString('base64')}` }
         }));
 
-       const promptText = `
+        const promptText = `
 Strictly analyze the text and hardware in ALL provided images for the "${category}" category.
 
 1. **OCR Focus**: Read the 'Battery Health' screenshot carefully. Extract Max Capacity, Cycle Count, and First Use Date.
@@ -86,7 +83,6 @@ Return ONLY a JSON object:
 
         const aiData = JSON.parse(response.choices[0].message.content);
 
-        // Database similarity search (optimized for category)
         const similarAds = await Ad.find({
             category: category,
             title: { $regex: aiData.product.split(' ')[0], $options: 'i' },
@@ -109,7 +105,7 @@ Return ONLY a JSON object:
                 condition: aiData.condition,
                 description: aiData.aiDescription,
                 suggestedPrice: Math.round(finalPrice),
-                details: aiData.extractedDetails, // Seedha details object mein map hoga
+                details: aiData.extractedDetails,
                 info: dataSource
             }
         });
@@ -118,6 +114,7 @@ Return ONLY a JSON object:
         res.status(500).json({ message: "AI process failed", error: error.message });
     }
 };
+
 // ==========================================
 // USER REGISTRATION
 // ==========================================
@@ -140,12 +137,9 @@ export const registerUser = async (req, res) => {
         res.status(500).json({ message: "Registration failed", error: error.message });
     }
 };
-
 // ==========================================
-// ADVERTISEMENT CONTROLLERS
+// ADVERTISEMENT CONTROLLERS (Create with Duplicate Shield)
 // ==========================================
-
-
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -154,14 +148,12 @@ export const create = async (req, res) => {
             return res.status(400).json({ message: "At least one image is required" });
         }
 
-        // --- STEP 1: Fast Hashing (Check ALL uploaded images) ---
         const currentHashes = [];
         for (const file of req.files) {
             const hash = await imghash.hash(file.buffer);
             currentHashes.push(hash);
         }
 
-        // Database mein check karein ke in 10 mein se koi bhi hash pehle se hai?
         const internalDuplicate = await Ad.findOne({
             imageHashes: { $in: currentHashes },
             isDeleted: false
@@ -173,8 +165,6 @@ export const create = async (req, res) => {
             });
         }
 
-        // --- STEP 2: OpenAI Smart Vision (Scan the whole batch) ---
-        // Hum sari nayi images ko array mein convert karenge
         const newImagesContent = req.files.map(file => ({
             type: "image_url",
             image_url: { url: `data:image/jpeg;base64,${file.buffer.toString('base64')}` }
@@ -190,10 +180,9 @@ export const create = async (req, res) => {
                     type: "text", 
                     text: "Analyze these 'New Uploaded Images' against the 'Reference Images'. If ANY image from the new set shows the EXACT same physical product as any reference, mark as duplicate. Check serial numbers, scratches, or unique backgrounds. Return JSON: { 'isDuplicate': boolean, 'reason': 'string' }" 
                 },
-                ...newImagesContent // Sari nayi images (up to 10)
+                ...newImagesContent
             ];
 
-            // Reference images (Localhost handle karke)
             for (const ad of recentAds) {
                 const imageUrl = ad.images[0];
                 if (imageUrl.includes('localhost')) {
@@ -225,7 +214,6 @@ export const create = async (req, res) => {
             }
         }
 
-        // --- STEP 3: Save Process ---
         const imageUrls = [];
         const uploadDir = 'uploads/';
         if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -261,6 +249,7 @@ export const create = async (req, res) => {
         res.status(500).json({ message: "Posting failed", error: error.message });
     }
 };
+
 export const getAllAds = async (req, res) => {
     try {
         const { city } = req.query;
@@ -346,7 +335,6 @@ export const deleteAd = async (req, res) => {
         res.status(500).json({ errorMessage: error.message });
     }
 };
-
 // ==========================================
 // MARK AS SOLD CONTROLLERS
 // ==========================================
@@ -544,7 +532,6 @@ export const createReview = async (req, res) => {
     }
 };
 
-// Controller.js mein update (optional but recommended)
 export const getSellerReviews = async (req, res) => {
     try {
         const { sellerId } = req.params;
@@ -556,7 +543,6 @@ export const getSellerReviews = async (req, res) => {
             .populate("adId", "title images")
             .sort({ createdAt: -1 });
 
-        // Seller ki details ke saath reviews bhejein
         res.status(200).json({
             seller: seller,
             reviews: reviews
@@ -605,10 +591,7 @@ export const createReport = async (req, res) => {
         res.status(500).json({ message: "Report fail ho gayi" });
     }
 };
-// Controller.js mein update (optional but recommended)
-// ==========================================
-// 🛡️ IDENTITY VERIFICATION (KYC) logic
-// ==========================================
+
 // ==========================================
 // 🛡️ LOCAL IDENTITY VERIFICATION (KYC)
 // ==========================================
@@ -616,16 +599,13 @@ export const verifyIdentity = async (req, res) => {
     try {
         const userUid = req.user.uid;
 
-        // 1. Files Validation
         if (!req.files || !req.files.idFront || !req.files.liveSelfie) {
             return res.status(400).json({ message: "ID Front aur Live Selfie dono lazmi hain." });
         }
 
-        // 2. Base64 Conversion
         const idFrontBase64 = req.files.idFront[0].buffer.toString('base64');
         const selfieBase64 = req.files.liveSelfie[0].buffer.toString('base64');
 
-        // 3. OpenAI GPT-4o Call with Enhanced Prompt
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
@@ -644,7 +624,7 @@ export const verifyIdentity = async (req, res) => {
                             { 
                               "isMatched": boolean, 
                               "confidence": number, 
-                              "reason": "Short reason in Roman Urdu (e.g., 'Chehra bilkul match kar raha hai' or 'Tasveer saaf nahi hai')" 
+                              "reason": "Short reason in Roman Urdu (e.g., 'Chehra bilkul match kar raha hai')" 
                             }` 
                         },
                         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idFrontBase64}`, detail: "high" } },
@@ -662,12 +642,6 @@ export const verifyIdentity = async (req, res) => {
 
         const verdict = JSON.parse(content);
 
-        // Validation for AI output
-        if (!verdict || typeof verdict.isMatched === 'undefined') {
-            return res.status(400).json({ message: "AI response format ghalat hai. Dobara koshish karen." });
-        }
-
-        // 4. Match Success Logic (Confidence threshold kept at 75% for better pass rate)
         if (verdict.isMatched && verdict.confidence >= 75) {
             const uploadDir = 'uploads/';
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -693,7 +667,6 @@ export const verifyIdentity = async (req, res) => {
                 profilePic: profileUrl 
             });
         } else {
-            // Agar match nahi hua to AI ka reason bhej rahe hain
             return res.status(400).json({ 
                 success: false, 
                 message: `Verification Fail: ${verdict.reason}` 
@@ -705,19 +678,19 @@ export const verifyIdentity = async (req, res) => {
         res.status(500).json({ message: "Server error during verification", error: error.message });
     }
 };
+
 // ==========================================
 // 👤 GET CURRENT USER DETAILS (For Navbar/Profile)
 // ==========================================
 export const me = async (req, res) => {
     try {
-        const userUid = req.user.uid; // Middleware se UID mil rahi hai
+        const userUid = req.user.uid;
         const user = await User.findOne({ uid: userUid });
 
         if (!user) {
             return res.status(404).json({ message: "User database mein nahi mila" });
         }
 
-        // User ka pura data bhej rahe hain (isVerified status ke sath)
         res.status(200).json(user);
     } catch (error) {
         console.error("🔥 Me API Error:", error);

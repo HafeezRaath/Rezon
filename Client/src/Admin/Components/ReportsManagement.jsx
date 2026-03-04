@@ -12,7 +12,7 @@ import {
     FaMapMarkerAlt,
     FaBox,
     FaTrashAlt,
-    FaEye // Naya icon preview ke liye
+    FaEye
 } from 'react-icons/fa';
 import ActionModal from './ActionModal';
 import UserProfileModal from './UserProfileModal'; 
@@ -23,11 +23,13 @@ const ReportsManagement = () => {
     const [loading, setLoading] = useState(true);
     const [actionModal, setActionModal] = useState(null);
     const [profileModal, setProfileModal] = useState(null); 
-    const [adPreviewModal, setAdPreviewModal] = useState(null); // 🆕 Ad Preview State
+    const [adPreviewModal, setAdPreviewModal] = useState(null);
     const [filter, setFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const API_URL = "http://localhost:8000/api/admin";
+    // 🔥 LIVE API URL logic Hostinger deployment ke liye
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    const API_URL = `${API_BASE_URL}/admin`;
     
     const getAuthHeaders = () => ({
         headers: { 

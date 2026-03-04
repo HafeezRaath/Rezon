@@ -16,7 +16,7 @@ import {
     canReview,
     getAISuggestions,
     verifyIdentity,
-    me // 👈 Ye import controller mein add karne ke baad yahan shamil karein
+    me 
 } from "../Controller/userController.js"; 
 
 import authenticate from '../authMiddleware.js'; 
@@ -25,27 +25,27 @@ import User from "../model/user.js";
 
 const route = express.Router();
 
-// Multer Setup
+// Multer Setup - Memory storage use ho rahi hai taake live server par storage issue na ho
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 👈 10MB kar dein
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
 // ========== USER & AUTH ROUTES ==========
 route.post("/register", registerUser); 
 
-// ✅ Naya Route: Current User ka data (isVerified status ke liye)
+// Current User data for verification status
 route.get("/users/me", authenticate, me);
 
-// ✅ Verification Route
+// Identity Verification Route (Front, Back, Selfie)
 route.post("/verify-identity", authenticate, upload.fields([
     { name: 'idFront', maxCount: 1 },
     { name: 'idBack', maxCount: 1 },
     { name: 'liveSelfie', maxCount: 1 }
 ]), verifyIdentity);
 
-// ✅ Notifications Route (Dummy implementation to avoid 404)
+// Notifications Route (Handled inside to avoid 404)
 route.get("/notifications", authenticate, async (req, res) => {
     try {
         res.status(200).json({ notifications: [] }); 
@@ -73,10 +73,11 @@ route.get("/reviews/seller/:sellerId", getSellerReviews);
 // ========== REPORT ROUTES ==========
 route.post("/reports", authenticate, createReport);
 
-// ========== CHAT SYSTEM ROUTES (Existing) ==========
+// ========== CHAT SYSTEM ROUTES ==========
 route.post("/chat/start", authenticate, async (req, res) => {
     try {
         const { buyerId, sellerId, adId } = req.body;
+        // Check if chat already exists
         let chat = await Chat.findOne({
             adId: adId,
             participants: { $all: [buyerId, sellerId] }
@@ -100,7 +101,5 @@ route.post("/chat/start", authenticate, async (req, res) => {
         res.status(500).json({ message: "Chat start karne mein masla hai" });
     }
 });
-
-// ... Baki saare chat routes jo aapne diye thay woh yahan continue honge ...
 
 export default route;

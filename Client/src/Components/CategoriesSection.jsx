@@ -1,7 +1,4 @@
-// CategoriesSection.jsx
-
 import React from 'react';
-// import { useNavigate } from 'react-router-dom'; // Agar zaroori ho to rakhein
 import CategoryCard from './CategoryCard'
 import {
     FaMobileAlt, FaCar, FaHome, FaBuilding, FaTv, FaMotorcycle, FaIndustry,
@@ -29,10 +26,12 @@ const categories = [
 
 const CategoriesSection = () => {
   return (
-    <section className="px-4 py-10 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Top Categories</h2>
+    <section className="px-4 py-10 max-w-7xl mx-auto overflow-hidden">
+      <h2 className="text-3xl font-black text-gray-900 mb-8 uppercase tracking-tighter border-l-8 border-pink-600 pl-4">
+        Top Categories
+      </h2>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 md:gap-6">
         {categories.map((cat, idx) => (
           <CategoryCard
             key={idx}

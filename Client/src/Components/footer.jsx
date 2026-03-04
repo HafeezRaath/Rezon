@@ -32,8 +32,8 @@ const footer = () => {
           <div className="col-span-1">
             <h4 className="text-lg font-semibold mb-4 text-pink-500">Quick Links</h4>
             <ul className="space-y-3 text-sm">
-              <li><a href="#" className="text-gray-400 hover:text-pink-300 transition-colors">Home</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-pink-300 transition-colors">All Ads</a></li>
+              <li><a href="/" className="text-gray-400 hover:text-pink-300 transition-colors">Home</a></li>
+              <li><a href="/mobiles" className="text-gray-400 hover:text-pink-300 transition-colors">All Ads</a></li>
               <li><a href="#" className="text-gray-400 hover:text-pink-300 transition-colors">About Us</a></li>
               <li><a href="#" className="text-gray-400 hover:text-pink-300 transition-colors">Blog</a></li>
             </ul>
@@ -56,11 +56,11 @@ const footer = () => {
             <ul className="space-y-3 text-sm">
               <li className="flex items-center space-x-2">
                 <FaPhoneAlt className="text-red-500 text-xs" /> {/* Red Accent */}
-                <span className="text-gray-400 hover:text-white transition-colors">+92 3XX XXXX XXX</span>
+                <span className="text-gray-400 hover:text-white transition-colors">0307 7850656</span>
               </li>
               <li className="flex items-center space-x-2">
                 <FaEnvelope className="text-red-500 text-xs" /> {/* Red Accent */}
-                <span className="text-gray-400 hover:text-white transition-colors">support@rezon.com</span>
+                <span className="text-gray-400 hover:text-white transition-colors">raathdeveloper@gmail.com</span>
               </li>
             </ul>
           </div>
@@ -70,7 +70,7 @@ const footer = () => {
         {/* === 2. COPYRIGHT BAR === */}
         <div className="text-center md:flex md:justify-between md:items-center text-sm text-gray-500">
           <p>&copy; {new Date().getFullYear()} REZON. All rights reserved.</p>
-          <p className="mt-2 md:mt-0">Made with ❤️ in Pakistan</p>
+          <p className="mt-2 md:mt-0 font-medium italic">Developed by <a href="https://raathdeveloper.com" target="_blank" className="text-pink-500 hover:underline">Hafeez Raath</a> 🇵🇰</p>
         </div>
         
       </div>

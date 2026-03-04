@@ -31,10 +31,12 @@ const AdminPanel = () => {
 
     return (
         <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
-            {activeTab === 'dashboard' && <Dashboard />}
-            {activeTab === 'ads' && <AdsManagement />}
-            {activeTab === 'reports' && <ReportsManagement />}
-            {activeTab === 'users' && <UsersManagement />} {/* 🆕 Ye line add ki */}
+            <div className="animate-in fade-in duration-500">
+                {activeTab === 'dashboard' && <Dashboard />}
+                {activeTab === 'ads' && <AdsManagement />}
+                {activeTab === 'reports' && <ReportsManagement />}
+                {activeTab === 'users' && <UsersManagement />} {/* 🆕 Ye line add ki */}
+            </div>
         </AdminLayout>
     );
 };

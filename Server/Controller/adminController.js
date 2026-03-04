@@ -125,8 +125,26 @@ export const updateReportStatus = async (req, res) => {
 };
 
 // ==========================================
-// 👤 USER MANAGEMENT (The Missing Parts)
+// 👤 USER MANAGEMENT
 // ==========================================
+export const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find().sort({ createdAt: -1 });
+        const sanitizedUsers = users.map(user => {
+            let finalName = user.displayName || user.name || user.fullName;
+            if (!finalName || finalName === "" || finalName === "Unknown User") {
+                finalName = user.email.split('@')[0]; 
+            }
+            return {
+                ...user._doc,
+                displayName: finalName 
+            };
+        });
+        res.status(200).json(sanitizedUsers);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
 
 export const getFlaggedUsers = async (req, res) => {
     try {
@@ -196,32 +214,7 @@ export const banUser = async (req, res) => {
         res.status(500).json({ success: false, message: "Action failed" });
     }
 };
-export const getAllUsers = async (req, res) => {
-    try {
-        const users = await User.find().sort({ createdAt: -1 });
 
-        // Data ko map karke name missing wala masla hal karein
-        const sanitizedUsers = users.map(user => {
-            let finalName = user.displayName || user.name || user.fullName;
-
-            // Agar DB mein name bilkul khali hai, to email se name nikalo
-            if (!finalName || finalName === "" || finalName === "Unknown User") {
-                finalName = user.email.split('@')[0]; // raathdeveloper@gmail.com -> raathdeveloper
-            }
-
-            return {
-                ...user._doc,
-                displayName: finalName // Frontend hamesha isi key ko read karega
-            };
-        });
-
-        res.status(200).json(sanitizedUsers);
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-// 2. Toggle Block/Unblock
 export const toggleBlockUser = async (req, res) => {
     try {
         const { userId } = req.body;
@@ -236,17 +229,18 @@ export const toggleBlockUser = async (req, res) => {
     }
 };
 
-// 3. Delete User & Their Ads
 export const deleteUserAdmin = async (req, res) => {
     try {
         const { userId } = req.params;
-        await Ad.deleteMany({ sellerId: userId }); // User ke ads bhi khatam
+        const user = await User.findById(userId);
+        if (user) await Ad.deleteMany({ posted_by_uid: user.uid }); 
         await User.findByIdAndDelete(userId);
         res.status(200).json({ success: true, message: "User and their ads deleted" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
 export const deleteReport = async (req, res) => {
     try {
         const { reportId } = req.params;
@@ -256,5 +250,3 @@ export const deleteReport = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
-// ================= DASHBOARD STATS =================
-

@@ -5,7 +5,7 @@ const adSchema = new mongoose.Schema(
     posted_by_uid: {
       type: String,
       required: true,
-      index: true,
+      index: true, // User ads filter karne ke liye fast index
     },
     images: {
       type: [String],
@@ -20,6 +20,7 @@ const adSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      index: 'text', // ✅ Atlas Text Search support ke liye
     },
     description: {
       type: String,
@@ -28,10 +29,12 @@ const adSchema = new mongoose.Schema(
     price: {
       type: Number,
       required: true,
+      index: true, // Price range filtering ke liye
     },
     location: {
       type: String,
       required: true,
+      index: true, // City-wise filtering ke liye
     },
     condition: {
       type: String,
@@ -46,6 +49,7 @@ const adSchema = new mongoose.Schema(
         "Bikes", "Business", "Services", "Jobs", "Animals", "Furniture",
         "Fashion", "Books", "Kids",
       ],
+      index: true, // Category-wise filter fast karne ke liye
     },
     details: {
       type: mongoose.Schema.Types.Mixed,
@@ -55,7 +59,8 @@ const adSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ['Active', 'Reserved', 'Sold'],
-      default: 'Active'
+      default: 'Active',
+      index: true
     },
     soldTo: {
       type: mongoose.Schema.Types.ObjectId,
@@ -68,7 +73,7 @@ const adSchema = new mongoose.Schema(
       default: null
     },
     
-    // ✅ NEW: Soft delete fields for TTL
+    // Soft delete fields for TTL
     isDeleted: {
       type: Boolean,
       default: false,
@@ -87,12 +92,11 @@ const adSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ TTL Index: Auto-delete documents when deleteAfter time is reached
-// MongoDB automatically removes documents 30 days after sold
+// ✅ TTL Index: Auto-delete setup
 adSchema.index({ deleteAfter: 1 }, { expireAfterSeconds: 0 });
 
-// ✅ Composite index for faster queries (active ads only)
+// ✅ Composite index: Live production queries ko optimize karne ke liye
+adSchema.index({ category: 1, status: 1, isDeleted: 1 });
 adSchema.index({ posted_by_uid: 1, isDeleted: 1, createdAt: -1 });
-adSchema.index({ status: 1, isDeleted: 1 });
 
 export default mongoose.model("Ad", adSchema);

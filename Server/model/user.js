@@ -4,26 +4,31 @@ const UserSchema = new mongoose.Schema({
     uid: { 
         type: String, 
         required: true, 
-        unique: true 
+        unique: true,
+        index: true // Fast lookup ke liye
     },
     name: { 
         type: String, 
-        required: true 
+        required: true,
+        trim: true // Extra spaces khatam karne ke liye
     },
     email: { 
         type: String, 
         required: true, 
-        unique: true 
+        unique: true,
+        lowercase: true, // Email ko hamesha lowercase mein rakhega
+        index: true 
     },
-    // ✅ NEW: Password field (Bcrypt ke sath hash karke save kariyega)
+    // Password field (Bcrypt ke sath hash karke save kariyega)
     password: {
         type: String,
         default: "" 
     },
-    // ✅ NEW: Phone & OTP Status
+    // Phone & OTP Status
     phoneNumber: { 
         type: String, 
-        default: "" 
+        default: "",
+        index: true 
     },
     isPhoneVerified: {
         type: Boolean,
@@ -34,13 +39,14 @@ const UserSchema = new mongoose.Schema({
         default: "" 
     },
     
-    // ✅ NEW: Identity Verification (KYC) Fields
+    // Identity Verification (KYC) Fields
     isVerified: {
         type: Boolean,
-        default: false
+        default: false,
+        index: true
     },
     idCardFront: {
-        type: String, // Path to local uploads folder
+        type: String, 
         default: ""
     },
     idCardBack: {
@@ -50,22 +56,27 @@ const UserSchema = new mongoose.Schema({
     verificationStatus: {
         type: String,
         enum: ['Unverified', 'Pending', 'Verified', 'Rejected'],
-        default: 'Unverified'
+        default: 'Unverified',
+        index: true
     },
 
-    // Rating & Reviews (Existing)
+    // Rating & Reviews
     rating: { type: Number, default: 0, min: 0, max: 5 },
     totalReviews: { type: Number, default: 0 },
     
-    // Admin/Safety (Existing)
+    // Admin/Safety
     warningCount: { type: Number, default: 0 },
     isFlagged: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     
-    // Online status (Existing)
+    // Online status
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: null }
 
 }, { timestamps: true });
+
+// ✅ Composite index for admin filters
+UserSchema.index({ isVerified: 1, verificationStatus: 1 });
+UserSchema.index({ isActive: 1, isFlagged: 1 });
 
 export default mongoose.model("User", UserSchema);
