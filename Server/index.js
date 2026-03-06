@@ -24,7 +24,7 @@ dotenv.config();
 // 🔐 Firebase Admin Setup
 // ==========================================
 const require = createRequire(import.meta.url);
-const serviceAccount = require("./credentials.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 if (!admin.apps.length) {
   admin.initializeApp({
