@@ -10,6 +10,9 @@ import Footer from "./footer";
 // === 1. CONFIGS & HELPER FUNCTIONS ===
 // ***************************************************************
 
+// ✅ LIVE RAILWAY API CONFIG
+const API_BASE_URL = "https://rezon.up.railway.app/api";
+
 // 🔥 A. SLUG to CODE MAP
 const getCodeFromSlug = (slug) => {
     const codeMap = {
@@ -240,13 +243,15 @@ const CategoryAds = () => {
             return; 
         }
         setLoading(true);
-        axios.get("http://localhost:8000/api/ads") 
+        // ✅ UPDATED: Fetching from Railway
+        axios.get(`${API_BASE_URL}/ads`) 
             .then((res) => {
                 const categorySpecificAds = res.data.filter((ad) => ad.category === categoryCode);
                 setAllCategoryAds(categorySpecificAds);
                 setLoading(false);
             })
-            .catch(() => { 
+            .catch((err) => { 
+                console.error("Ads fetch error:", err);
                 setLoading(false); 
             });
     }, [categoryCode]); 

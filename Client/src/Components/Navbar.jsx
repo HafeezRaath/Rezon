@@ -35,9 +35,9 @@ const Navbar = () => {
     const [isVerifying, setIsVerifying] = useState(false);
 
     // 🔧 FIXED: Removed trailing space from production URL
-    const API_URL = window.location.hostname === "localhost" 
+  const API_URL = window.location.hostname === "localhost" 
         ? "http://localhost:8000/api" 
-        : "https://api.raathdeveloper.com/api";
+        : "https://rezon.up.railway.app/api";
 
     // 🔒 Click outside to close dropdowns
     useEffect(() => {

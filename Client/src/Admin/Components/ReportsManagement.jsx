@@ -2,17 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { 
-    FaCheck, 
-    FaTimes, 
-    FaUser, 
-    FaFlag, 
-    FaHistory,
-    FaSearch,
-    FaPhone,
-    FaMapMarkerAlt,
-    FaBox,
-    FaTrashAlt,
-    FaEye
+    FaCheck, FaTimes, FaUser, FaFlag, FaHistory, FaSearch,
+    FaPhone, FaMapMarkerAlt, FaBox, FaTrashAlt, FaEye
 } from 'react-icons/fa';
 import ActionModal from './ActionModal';
 import UserProfileModal from './UserProfileModal'; 
@@ -27,8 +18,8 @@ const ReportsManagement = () => {
     const [filter, setFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // 🔥 LIVE API URL logic Hostinger deployment ke liye
-    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    // ✅ UPDATED: RAILWAY LIVE API URL
+    const API_BASE_URL = "https://rezon.up.railway.app/api";
     const API_URL = `${API_BASE_URL}/admin`;
     
     const getAuthHeaders = () => ({
@@ -49,7 +40,7 @@ const ReportsManagement = () => {
             const reportsData = res.data?.reports || res.data || [];
             setReports(Array.isArray(reportsData) ? reportsData : []);
         } catch (err) {
-            toast.error("Reports load nahi huay");
+            toast.error("Reports load nahi huay. Railway connection check karein!");
             setReports([]);
         } finally {
             setLoading(false);
@@ -128,7 +119,7 @@ const ReportsManagement = () => {
                 setSelectedReport(null);
             }
         } catch (err) {
-            toast.error("Action failed");
+            toast.error("Action failed. Check backend logs.");
         }
     };
 
@@ -151,27 +142,27 @@ const ReportsManagement = () => {
         }
     };
 
-    if (loading) return <div className="text-center py-20 font-bold">Loading Rezon Reports...</div>;
+    if (loading) return <div className="text-center py-20 font-bold italic text-pink-600">Loading Rezon Reports...</div>;
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
             {/* Header Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
-                    <p className="text-gray-500 text-sm">Pending</p>
-                    <p className="text-2xl font-bold">{reports.filter(r => r.status === 'Pending').length}</p>
+                    <p className="text-gray-500 text-xs uppercase font-bold">Pending</p>
+                    <p className="text-2xl font-black">{reports.filter(r => r.status === 'Pending').length}</p>
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
-                    <p className="text-gray-500 text-sm">Resolved</p>
-                    <p className="text-2xl font-bold">{reports.filter(r => r.status === 'Resolved').length}</p>
+                    <p className="text-gray-500 text-xs uppercase font-bold">Resolved</p>
+                    <p className="text-2xl font-black">{reports.filter(r => r.status === 'Resolved').length}</p>
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow border-l-4 border-red-500">
-                    <p className="text-gray-500 text-sm">High Priority</p>
-                    <p className="text-2xl font-bold">{reports.filter(r => r.reason?.toLowerCase().includes('scam')).length}</p>
+                    <p className="text-gray-500 text-xs uppercase font-bold">Scams</p>
+                    <p className="text-2xl font-black">{reports.filter(r => r.reason?.toLowerCase().includes('scam')).length}</p>
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
-                    <p className="text-gray-500 text-sm">Total</p>
-                    <p className="text-2xl font-bold">{reports.length}</p>
+                    <p className="text-gray-500 text-xs uppercase font-bold">Total</p>
+                    <p className="text-2xl font-black">{reports.length}</p>
                 </div>
             </div>
 
@@ -186,7 +177,7 @@ const ReportsManagement = () => {
                                 placeholder="Search reports..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-pink-500 text-sm"
+                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-pink-500 text-sm font-medium"
                             />
                         </div>
                         <div className="flex gap-2">
@@ -194,7 +185,7 @@ const ReportsManagement = () => {
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
-                                    className={`px-3 py-1 rounded text-xs font-bold capitalize transition-all ${filter === f ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-500'}`}
                                 >
                                     {f}
                                 </button>
@@ -202,7 +193,7 @@ const ReportsManagement = () => {
                         </div>
                     </div>
                     
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
                         {filteredReports.length > 0 ? filteredReports.map(report => (
                             <div
                                 key={report._id}
@@ -210,237 +201,135 @@ const ReportsManagement = () => {
                                 className={`p-4 border-b cursor-pointer transition-all ${selectedReport?._id === report._id ? 'bg-pink-50 border-l-4 border-pink-600' : 'hover:bg-gray-50'}`}
                             >
                                 <div className="flex justify-between mb-1">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getStatusColor(report.status)}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${getStatusColor(report.status)}`}>
                                         {report.status}
                                     </span>
-                                    <span className="text-[10px] text-gray-400 font-medium">{new Date(report.createdAt).toLocaleDateString()}</span>
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase">{new Date(report.createdAt).toLocaleDateString()}</span>
                                 </div>
-                                <p className="font-bold text-sm text-gray-800 line-clamp-1">{report.reason}</p>
-                                <p className="text-xs text-gray-500 line-clamp-1">{report.description}</p>
-                                <p className="text-[10px] text-pink-600 mt-1 font-semibold">👤 {report.reportedUserId?.name}</p>
+                                <p className="font-black text-gray-800 text-sm line-clamp-1 uppercase tracking-tight">{report.reason}</p>
+                                <p className="text-xs text-gray-500 line-clamp-1 italic font-medium">{report.description}</p>
+                                <p className="text-[10px] text-pink-600 mt-1 font-black uppercase">👤 {report.reportedUserId?.name}</p>
                             </div>
-                        )) : <div className="p-10 text-center text-gray-400 text-sm">Koi report nahi mili.</div>}
+                        )) : <div className="p-10 text-center text-gray-400 text-xs font-bold uppercase">No reports found.</div>}
                     </div>
                 </div>
 
-                {/* Report Detail */}
+                {/* Report Detail View */}
                 <div className="lg:col-span-2">
                     {selectedReport ? (
-                        <div className="bg-white rounded-xl shadow p-6 space-y-6 border border-gray-100 animate-in fade-in duration-300">
-                            {/* Header */}
+                        <div className="bg-white rounded-xl shadow p-6 space-y-6 border border-gray-100 animate-in fade-in duration-300 overflow-y-auto h-[700px] custom-scrollbar">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h2 className="text-2xl font-extrabold text-gray-800">Report Details</h2>
-                                    <p className="text-xs text-gray-400 font-medium mt-1">ID: {selectedReport._id}</p>
+                                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">Investigation Case</h2>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Ref ID: {selectedReport._id}</p>
                                 </div>
                                 <div className="flex gap-3">
                                     <button 
                                         onClick={() => handleDeleteReport(selectedReport._id)}
-                                        className="flex items-center gap-2 text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-600 hover:text-white transition-all font-bold"
+                                        className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
                                     >
-                                        <FaTrashAlt /> Delete Report
+                                        <FaTrashAlt /> Purge Case
                                     </button>
-                                    <button onClick={() => setSelectedReport(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                    <button onClick={() => setSelectedReport(null)} className="text-gray-300 hover:text-red-500 transition-colors">
                                         <FaTimes size={24} />
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Status & Reason */}
-                            <div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-xl shadow-sm">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="font-bold text-red-800 flex items-center gap-2 text-lg">
+                            {/* Violation Summary */}
+                            <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-2xl">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="font-black text-red-800 flex items-center gap-2 text-lg uppercase tracking-tight">
                                         <FaFlag /> {selectedReport.reason}
                                     </h3>
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusColor(selectedReport.status)}`}>
+                                    <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(selectedReport.status)}`}>
                                         {selectedReport.status}
                                     </span>
                                 </div>
-                                <p className="text-red-700 text-sm leading-relaxed">{selectedReport.description}</p>
+                                <p className="text-red-700 text-sm font-medium leading-relaxed italic">"{selectedReport.description}"</p>
                             </div>
 
-                            {/* Reported Ad Preview */}
+                            {/* Linked Content */}
                             {selectedReport.adId ? (
-                                <div className="border rounded-2xl p-4 bg-gray-50 hover:bg-white transition-all group border-gray-200">
-                                    <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
-                                        <FaBox className="text-pink-600" /> Reported Product
-                                    </h4>
-                                    <div className="flex gap-5">
+                                <div className="border-2 border-dashed border-gray-200 rounded-[2rem] p-6 bg-gray-50">
+                                    <h4 className="font-black text-gray-400 text-[10px] uppercase tracking-[0.2em] mb-4">Evidence: Linked Ad</h4>
+                                    <div className="flex flex-col md:flex-row gap-6">
                                         <img 
-                                            src={selectedReport.adId.images?.[0] || '/placeholder.jpg'} 
-                                            alt="product"
-                                            className="w-36 h-36 rounded-xl object-cover border-2 border-white shadow-md"
+                                            src={selectedReport.adId.images?.[0] || 'https://via.placeholder.com/150'} 
+                                            className="w-full md:w-44 h-44 rounded-3xl object-cover border-4 border-white shadow-xl"
+                                            alt="ad evidence"
                                         />
-                                        <div className="flex-1 flex flex-col justify-center">
-                                            <h5 className="font-extrabold text-xl text-gray-800">{selectedReport.adId.title}</h5>
-                                            <p className="text-pink-600 font-black text-3xl mt-1">Rs {selectedReport.adId.price?.toLocaleString()}</p>
-                                            <div className="flex items-center gap-3 mt-2 text-gray-500 text-xs font-medium">
-                                                <span>{selectedReport.adId.category}</span>
-                                                <span>•</span>
-                                                <span className="flex items-center gap-1"><FaMapMarkerAlt size={10}/> {selectedReport.adId.location}</span>
+                                        <div className="flex-1 space-y-2">
+                                            <h5 className="font-black text-2xl text-gray-900 uppercase tracking-tighter leading-none">{selectedReport.adId.title}</h5>
+                                            <p className="text-pink-600 font-black text-3xl">Rs {selectedReport.adId.price?.toLocaleString()}</p>
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                <span className="bg-white px-3 py-1 rounded-full text-[9px] font-black text-gray-500 border uppercase">{selectedReport.adId.category}</span>
+                                                <span className="bg-white px-3 py-1 rounded-full text-[9px] font-black text-gray-500 border uppercase flex items-center gap-1"><FaMapMarkerAlt size={8}/> {selectedReport.adId.location}</span>
                                             </div>
                                             <button 
                                                 onClick={() => setAdPreviewModal(selectedReport.adId)}
-                                                className="mt-4 flex items-center gap-2 w-fit bg-white text-blue-600 px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-600 hover:text-white transition-all text-xs font-bold"
+                                                className="mt-4 flex items-center gap-2 bg-gray-900 text-white px-6 py-2.5 rounded-xl hover:bg-pink-600 transition-all text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95"
                                             >
-                                                <FaEye /> View Full Ad Details
+                                                <FaEye /> Full Investigation
                                             </button>
                                         </div>
                                     </div>
                                 </div>
-                            ) : <div className="p-4 bg-gray-100 rounded-xl text-center text-sm text-gray-500 italic">Is report ke sath koi Ad link nahi hai.</div>}
+                            ) : <div className="p-10 border-2 border-dashed rounded-[2rem] text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">No Direct Ad Evidence Linked</div>}
 
                             {/* Profiles Section */}
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="border border-red-100 rounded-2xl p-5 bg-gradient-to-br from-red-50 to-white shadow-sm">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h4 className="font-bold text-red-800 flex items-center gap-2 text-sm uppercase">
-                                            <FaUser /> Accused User
-                                        </h4>
-                                        <button onClick={() => openProfile(selectedReport.reportedUserId)} className="text-[10px] bg-white text-red-600 px-3 py-1.5 rounded-full border border-red-200 hover:bg-red-600 hover:text-white transition-all font-bold">
-                                            Full Profile
-                                        </button>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="border border-red-100 rounded-3xl p-5 bg-white shadow-sm relative overflow-hidden group">
+                                    <div className="flex justify-between items-center mb-4 relative z-10">
+                                        <h4 className="font-black text-red-600 text-[10px] uppercase tracking-widest">Target Account</h4>
+                                        <button onClick={() => openProfile(selectedReport.reportedUserId)} className="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-black uppercase hover:bg-red-600 hover:text-white transition-all">Profile</button>
                                     </div>
-                                    <p className="font-black text-gray-800">{selectedReport.reportedUserId?.name || "Unknown"}</p>
-                                    <p className="text-xs text-gray-500 mt-1">{selectedReport.reportedUserId?.email}</p>
+                                    <p className="font-black text-gray-800 text-lg relative z-10">{selectedReport.reportedUserId?.name || "Unknown User"}</p>
+                                    <p className="text-xs text-gray-400 font-bold truncate relative z-10">{selectedReport.reportedUserId?.email}</p>
+                                    <FaUser className="absolute -bottom-4 -right-4 text-gray-50 text-6xl group-hover:text-red-50 transition-colors" />
                                 </div>
 
-                                <div className="border border-blue-100 rounded-2xl p-5 bg-gradient-to-br from-blue-50 to-white shadow-sm">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h4 className="font-bold text-blue-800 flex items-center gap-2 text-sm uppercase">
-                                            <FaUser /> Reporter
-                                        </h4>
-                                        <button onClick={() => openProfile(selectedReport.reporterId)} className="text-[10px] bg-white text-blue-600 px-3 py-1.5 rounded-full border border-blue-200 hover:bg-blue-600 hover:text-white transition-all font-bold">
-                                            Full Profile
-                                        </button>
+                                <div className="border border-blue-100 rounded-3xl p-5 bg-white shadow-sm relative overflow-hidden group">
+                                    <div className="flex justify-between items-center mb-4 relative z-10">
+                                        <h4 className="font-black text-blue-600 text-[10px] uppercase tracking-widest">Reporting Agent</h4>
+                                        <button onClick={() => openProfile(selectedReport.reporterId)} className="text-[9px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-black uppercase hover:bg-blue-600 hover:text-white transition-all">Profile</button>
                                     </div>
-                                    <p className="font-black text-gray-800">{selectedReport.reporterId?.name || "Anonymous"}</p>
-                                    <p className="text-xs text-gray-500 mt-1">{selectedReport.reporterId?.email}</p>
+                                    <p className="font-black text-gray-800 text-lg relative z-10">{selectedReport.reporterId?.name || "System"}</p>
+                                    <p className="text-xs text-gray-400 font-bold truncate relative z-10">{selectedReport.reporterId?.email}</p>
+                                    <FaHistory className="absolute -bottom-4 -right-4 text-gray-50 text-6xl group-hover:text-blue-50 transition-colors" />
                                 </div>
                             </div>
 
-                            {/* Action Row */}
+                            {/* Action Control Panel */}
                             {selectedReport.status === 'Pending' && (
-                                <div className="pt-6 border-t border-gray-100">
-                                    <h4 className="font-black text-gray-800 mb-4 text-sm uppercase tracking-widest">Admin Actions Required:</h4>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <button onClick={() => setActionModal('WARN')} className="p-3 bg-yellow-50 text-yellow-700 rounded-xl font-bold text-xs hover:bg-yellow-500 hover:text-white transition-all border border-yellow-100">
-                                            ⚠️ Send Warning
-                                        </button>
-                                        <button onClick={() => setActionModal('HIDE_AD')} className="p-3 bg-orange-50 text-orange-700 rounded-xl font-bold text-xs hover:bg-orange-500 hover:text-white transition-all border border-orange-100">
-                                            🙈 Hide Content
-                                        </button>
-                                        <button onClick={() => setActionModal('DELETE_AD')} className="p-3 bg-red-50 text-red-700 rounded-xl font-bold text-xs hover:bg-red-500 hover:text-white transition-all border border-red-100">
-                                            🗑️ Remove Ad
-                                        </button>
-                                        <button onClick={() => setActionModal('SUSPEND')} className="p-3 bg-purple-50 text-purple-700 rounded-xl font-bold text-xs hover:bg-purple-600 hover:text-white transition-all border border-purple-100">
-                                            ⏸️ Suspend Account
-                                        </button>
-                                        <button onClick={() => setActionModal('BAN')} className="p-3 bg-black text-white rounded-xl font-bold text-xs hover:bg-red-600 transition-all">
-                                            🚫 Hard Ban
-                                        </button>
-                                        <button onClick={() => handleAction({ actionType: 'DISMISS' })} className="p-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-xs hover:bg-gray-800 hover:text-white transition-all">
-                                            ✓ Dismiss Report
-                                        </button>
+                                <div className="pt-8 border-t border-gray-100">
+                                    <h4 className="font-black text-gray-900 mb-5 text-[11px] uppercase tracking-[0.3em] text-center">Execute Enforcement Protocol</h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        <button onClick={() => setActionModal('WARN')} className="p-4 bg-white text-yellow-600 rounded-2xl font-black text-[10px] uppercase border-2 border-yellow-100 hover:bg-yellow-600 hover:text-white transition-all shadow-sm">⚠️ Issue Warning</button>
+                                        <button onClick={() => setActionModal('HIDE_AD')} className="p-4 bg-white text-orange-600 rounded-2xl font-black text-[10px] uppercase border-2 border-orange-100 hover:bg-orange-600 hover:text-white transition-all shadow-sm">🙈 Stealth Hide</button>
+                                        <button onClick={() => setActionModal('DELETE_AD')} className="p-4 bg-white text-red-600 rounded-2xl font-black text-[10px] uppercase border-2 border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm">🗑️ Terminate Ad</button>
+                                        <button onClick={() => setActionModal('SUSPEND')} className="p-4 bg-white text-purple-600 rounded-2xl font-black text-[10px] uppercase border-2 border-purple-100 hover:bg-purple-600 hover:text-white transition-all shadow-sm">⏸️ Suspense Acc</button>
+                                        <button onClick={() => setActionModal('BAN')} className="p-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-red-600 transition-all shadow-xl shadow-gray-200">🚫 Perm Ban</button>
+                                        <button onClick={() => handleAction({ actionType: 'DISMISS' })} className="p-4 bg-gray-100 text-gray-400 rounded-2xl font-black text-[10px] uppercase hover:bg-gray-800 hover:text-white transition-all">✓ Dismiss</button>
                                     </div>
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl bg-white space-y-4">
-                            <FaFlag size={50} className="text-gray-200 animate-bounce" />
-                            <p className="font-bold text-lg">Select a report from the list to begin investigation</p>
-                            <p className="text-xs">Rezon StrongZoom Protection is Active 🛡️</p>
+                        <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-[3rem] bg-white space-y-6">
+                            <div className="bg-gray-50 p-10 rounded-full animate-pulse">
+                                <FaFlag size={60} className="text-gray-200" />
+                            </div>
+                            <div className="text-center">
+                                <p className="font-black text-xl text-gray-800 uppercase tracking-tighter">System Idle</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1">Select a report to begin investigation</p>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* --- AD PREVIEW MODAL (FULL DETAILS) --- */}
-            {adPreviewModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
-                    <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl relative animate-in zoom-in-95 duration-200">
-                        <button 
-                            onClick={() => setAdPreviewModal(null)} 
-                            className="absolute top-5 right-5 p-2 bg-gray-100 rounded-full hover:bg-red-500 hover:text-white transition-all z-10"
-                        >
-                            <FaTimes size={20} />
-                        </button>
-                        
-                        <div className="p-8">
-                            <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
-                                <FaBox className="text-pink-600" /> Full Ad Preview
-                            </h3>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-4">
-                                    <div className="relative group">
-                                        <img 
-                                            src={adPreviewModal.images?.[0] || '/placeholder.jpg'} 
-                                            className="w-full h-80 object-cover rounded-2xl shadow-lg border-4 border-gray-50" 
-                                            alt="Ad main"
-                                        />
-                                        <div className="absolute bottom-4 left-4 bg-black/60 text-white px-3 py-1 rounded-lg text-[10px] font-bold">
-                                            {adPreviewModal.images?.length || 1} Images Total
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2 overflow-x-auto pb-2">
-                                        {adPreviewModal.images?.slice(1).map((img, i) => (
-                                            <img key={i} src={img} className="w-16 h-16 rounded-lg object-cover border" alt="thumb" />
-                                        ))}
-                                    </div>
-                                </div>
-                                
-                                <div className="space-y-6">
-                                    <div>
-                                        <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">{adPreviewModal.title}</h2>
-                                        <p className="text-4xl font-black text-pink-600 mt-2">Rs {adPreviewModal.price?.toLocaleString()}</p>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="bg-pink-50/50 p-4 rounded-xl border border-pink-100">
-                                            <h4 className="text-[10px] font-black text-pink-600 uppercase tracking-widest mb-1">Item Description</h4>
-                                            <p className="text-gray-700 text-sm leading-relaxed max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                                {adPreviewModal.description || "No description provided."}
-                                            </p>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                <p className="text-[8px] font-bold text-gray-400 uppercase">Category</p>
-                                                <p className="text-xs font-bold text-gray-800">{adPreviewModal.category}</p>
-                                            </div>
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                <p className="text-[8px] font-bold text-gray-400 uppercase">Condition</p>
-                                                <p className="text-xs font-bold text-gray-800">{adPreviewModal.condition}</p>
-                                            </div>
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                <p className="text-[8px] font-bold text-gray-400 uppercase">Location</p>
-                                                <p className="text-xs font-bold text-gray-800">{adPreviewModal.location}</p>
-                                            </div>
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                <p className="text-[8px] font-bold text-gray-400 uppercase">Posted Date</p>
-                                                <p className="text-xs font-bold text-gray-800">{new Date(adPreviewModal.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex justify-end">
-                                <button 
-                                    onClick={() => setAdPreviewModal(null)} 
-                                    className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-pink-600 transition-all shadow-lg"
-                                >
-                                    Close Preview
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Other Modals */}
+            {/* Modals */}
             {profileModal && (
                 <UserProfileModal 
                     user={profileModal}

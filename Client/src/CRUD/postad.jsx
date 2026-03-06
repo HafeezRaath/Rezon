@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { FaTimesCircle, FaSpinner, FaMagic, FaCamera, FaTimes } from "react-icons/fa";
 import LocationDropdown from "../Components/LocationDropdown";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 const CATEGORY_FIELDS = {
     Mobile: [

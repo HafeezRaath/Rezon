@@ -7,7 +7,7 @@ import PostAd from "./postad";
 import UpdateAd from "./updatead"; 
 import CategorySelector from "../Components/CategorySelector"; 
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 const Ads = ({ onClose, user }) => {
     const [ads, setAds] = useState([]);

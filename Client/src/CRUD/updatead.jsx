@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { FaTimes, FaSpinner, FaCamera, FaTrash, FaSave } from "react-icons/fa";
 import LocationDropdown from "../Components/LocationDropdown";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 

@@ -9,9 +9,10 @@ const HeroSection = ({ setShowLogin, setShowAds, setShowVerification }) => {
     const navigate = useNavigate();
 
     // ✅ Dynamic API URL for Local and Live
-    const API_URL = window.location.hostname === "localhost" 
-        ? "http://localhost:8000/api" 
-        : "https://api.raathdeveloper.com/api";
+   // ✅ Railway Live URL Update
+const API_URL = window.location.hostname === "localhost" 
+    ? "http://localhost:8000/api" 
+    : "https://rezon.up.railway.app/api"; // Naya Railway URL
 
     // ✅ Reusable Sell Logic (Navbar jaisa)
     const handleStartSelling = async () => {

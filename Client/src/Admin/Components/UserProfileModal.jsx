@@ -8,8 +8,8 @@ const UserProfileModal = ({ user, onClose }) => {
     const [userReports, setUserReports] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // 🔥 LIVE API URL logic Hostinger ke liye
-    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    // ✅ UPDATED: RAILWAY LIVE API URL
+    const API_BASE_URL = "https://rezon.up.railway.app/api";
     const API_URL = `${API_BASE_URL}/admin`;
 
     const getAuthHeaders = () => ({
@@ -18,17 +18,18 @@ const UserProfileModal = ({ user, onClose }) => {
 
     useEffect(() => {
         if (user?._id) fetchUserDetails();
-    }, [user._id]);
+    }, [user?._id]);
 
     const fetchUserDetails = async () => {
         try {
             setLoading(true);
-            // User ki ads
-            const adsRes = await axios.get(`${API_URL}/users/${user._id}/ads`, getAuthHeaders());
+            // Parallel API calls for faster loading
+            const [adsRes, reportsRes] = await Promise.all([
+                axios.get(`${API_URL}/users/${user._id}/ads`, getAuthHeaders()),
+                axios.get(`${API_URL}/users/${user._id}/report-history`, getAuthHeaders())
+            ]);
+
             setUserAds(adsRes.data?.ads || []);
-            
-            // User ki report history
-            const reportsRes = await axios.get(`${API_URL}/users/${user._id}/report-history`, getAuthHeaders());
             setUserReports(reportsRes.data?.reports || []);
         } catch (err) {
             console.error("Failed to fetch user details:", err);
@@ -120,7 +121,7 @@ const UserProfileModal = ({ user, onClose }) => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                                 {userAds.map(ad => (
                                     <div key={ad._id} className="border border-gray-100 rounded-2xl p-3 flex gap-4 hover:bg-gray-50 transition-all cursor-pointer group">
-                                        <img src={ad.images?.[0] || '/placeholder.jpg'} alt="" className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm group-hover:scale-105 transition-transform" />
+                                        <img src={ad.images?.[0] || 'https://via.placeholder.com/150'} alt="" className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm group-hover:scale-105 transition-transform" />
                                         <div className="overflow-hidden flex-1">
                                             <p className="font-bold text-gray-800 text-sm truncate uppercase tracking-tight">{ad.title}</p>
                                             <p className="text-pink-600 font-black text-sm">Rs {ad.price?.toLocaleString()}</p>

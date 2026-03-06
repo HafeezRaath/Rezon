@@ -7,8 +7,8 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
-// Live API URL setup - Hostinger par jo variable dala tha wahi use hoga
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// ✅ UPDATED: RAILWAY LIVE API URL
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 const MAIN_CATEGORIES = [
     { code: "All", name: "🏠 All" },
@@ -104,12 +104,13 @@ const AllAds = ({ user }) => {
     const startChat = async (isReport = false) => {
         if (!user) return toast.error("Please login first!");
         try {
+            const token = localStorage.getItem('firebaseIdToken') || user?.accessToken;
             const res = await axios.post(`${API_BASE_URL}/chat/start`, {
                 buyerId: user.uid, 
                 sellerId: selectedAd.posted_by_uid, 
                 adId: selectedAd._id
             }, { 
-                headers: { Authorization: `Bearer ${user.accessToken}` } 
+                headers: { Authorization: `Bearer ${token}` } 
             });
             if (res.data.chatId) {
                 navigate(`/chat/${res.data.chatId}`, { state: { isReportRequest: isReport } });
@@ -121,7 +122,7 @@ const AllAds = ({ user }) => {
 
     return (
         <div className="w-full min-h-screen bg-gray-50 pb-10">
-            {/* 1. Header & 14 Filters */}
+            {/* Header & Filters */}
             <div className="p-4 md:p-8 bg-white border-b shadow-sm">
                 <div className="relative max-w-4xl mx-auto mb-6">
                     <input 
@@ -146,7 +147,7 @@ const AllAds = ({ user }) => {
                 </div>
             </div>
 
-            {/* 2. Ads Grid */}
+            {/* Ads Grid */}
             <div className="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {filteredAds.map((ad) => (
                     <div 
@@ -170,7 +171,7 @@ const AllAds = ({ user }) => {
                 ))}
             </div>
 
-            {/* 3. Ad Detail Modal */}
+            {/* Ad Detail Modal */}
             {selectedAd && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-[100] p-2 md:p-10">
                     <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:max-w-6xl md:rounded-[2rem] shadow-2xl relative flex flex-col overflow-hidden">
@@ -278,10 +279,10 @@ const AllAds = ({ user }) => {
                 </div>
             )}
 
-            {/* 4. PREMIUM PROFILE MODAL */}
+            {/* Premium Profile Modal */}
             {profileModalUid && (
                 <div className="fixed inset-0 bg-black/90 z-[120] flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden relative flex flex-col max-h-[85vh] shadow-2xl animate-in slide-in-from-bottom duration-300">
+                    <div className="bg-white w-full h-full md:h-auto md:max-h-[85vh] md:max-w-lg md:rounded-[2.5rem] overflow-hidden relative flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
                         <div className="bg-pink-600 p-8 text-white text-center relative">
                             <button 
                                 onClick={() => setProfileModalUid(null)} 

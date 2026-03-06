@@ -14,7 +14,7 @@ export default function PhoneLogin({ onAuthSuccess }) {
     setLoading(true);
     try {
       // Backend Login API Call
-      const response = await fetch("http://localhost:5000/api/users/login-phone", {
+      const response = await fetch("https://rezon.up.railway.app/api/users/login-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -8,8 +8,8 @@ const UsersManagement = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // 🔥 LIVE API URL: Hostinger deployment ke liye automatically set hoga
-    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    // ✅ UPDATED: RAILWAY LIVE API URL
+    const API_BASE_URL = "https://rezon.up.railway.app/api";
     const API_URL = `${API_BASE_URL}/admin/users`;
 
     const getAuthHeaders = () => ({
@@ -27,7 +27,7 @@ const UsersManagement = () => {
             setUsers(res.data);
         } catch (err) {
             console.error("Fetch Error:", err);
-            toast.error("Users load nahi ho sakay. Backend connection check karein!");
+            toast.error("Users load nahi ho sakay. Railway connection check karein!");
         } finally {
             setLoading(false);
         }
@@ -54,7 +54,6 @@ const UsersManagement = () => {
         }
     };
 
-    // ✅ FIXED: Filter logic multiple fields check karega (name, displayName, fullName)
     const filteredUsers = users.filter(user => {
         const nameToSearch = (user.displayName || user.name || user.fullName || "No Name").toLowerCase();
         const emailToSearch = (user.email || "").toLowerCase();
@@ -79,7 +78,7 @@ const UsersManagement = () => {
                     <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input 
                         type="text" 
-                        placeholder="Name ya email se search karein..." 
+                        placeholder="Search by name or email..." 
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none transition-all font-medium text-sm"
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -132,6 +131,7 @@ const UsersManagement = () => {
                                                 ? 'bg-green-50 text-green-600 hover:bg-green-100' 
                                                 : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
                                             }`}
+                                            title={user.isBlocked ? 'Unblock User' : 'Block User'}
                                         >
                                             {user.isBlocked ? <FaUserCheck size={18} /> : <FaUserSlash size={18} />}
                                         </button>
@@ -139,6 +139,7 @@ const UsersManagement = () => {
                                         <button 
                                             onClick={() => handleAction(user._id, 'delete')}
                                             className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-90 shadow-sm"
+                                            title="Delete User"
                                         >
                                             <FaTrashAlt size={16} />
                                         </button>

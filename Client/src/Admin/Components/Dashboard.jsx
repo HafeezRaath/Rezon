@@ -2,20 +2,13 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { 
-    FaAd, 
-    FaCheckCircle, 
-    FaUsers, 
-    FaExclamationTriangle, 
-    FaChartLine,
-    FaSpinner,
-    FaRedo,
-    FaShieldAlt,
-    FaArrowUp,
-    FaArrowDown
+    FaAd, FaCheckCircle, FaUsers, FaExclamationTriangle, FaChartLine,
+    FaSpinner, FaRedo, FaShieldAlt, FaArrowUp, FaArrowDown
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// ✅ UPDATED: RAILWAY LIVE API URL
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -39,11 +32,11 @@ const Dashboard = () => {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 15000 // 15 second timeout
+            timeout: 15000 
         };
     }, [navigate]);
 
-    // 📊 Fetch dashboard data with error handling
+    // 📊 Fetch dashboard data from Railway
     const fetchDashboardData = useCallback(async (isRefresh = false) => {
         const authHeaders = getAuthHeaders();
         if (!authHeaders) return;
@@ -53,7 +46,7 @@ const Dashboard = () => {
         setError(null);
 
         try {
-            // Parallel API calls
+            // Parallel API calls to Railway backend
             const [statsRes, activityRes] = await Promise.allSettled([
                 axios.get(`${API_BASE_URL}/admin/dashboard`, authHeaders),
                 axios.get(`${API_BASE_URL}/admin/recent-activity`, authHeaders).catch(() => null)
@@ -62,82 +55,43 @@ const Dashboard = () => {
             if (statsRes.status === 'fulfilled') {
                 setStats(statsRes.value.data?.stats || statsRes.value.data || {});
             } else {
-                throw new Error(statsRes.reason?.response?.data?.message || "Failed to load stats");
+                throw new Error(statsRes.reason?.response?.data?.message || "Railway server not responding");
             }
 
-            // Use real activity data if available, else fallback
             if (activityRes.status === 'fulfilled' && activityRes.value?.data) {
                 setRecentActivity(activityRes.value.data);
             } else {
-                // Fallback mock data with proper structure
+                // Fallback placeholder data
                 setRecentActivity([
-                    { 
-                        type: 'report', 
-                        message: 'New scam report on Mobile Ad', 
-                        time: '5 min ago',
-                        severity: 'high',
-                        id: '1'
-                    },
-                    { 
-                        type: 'ad', 
-                        message: 'New ad posted in Cars category', 
-                        time: '12 min ago',
-                        severity: 'low',
-                        id: '2'
-                    },
-                    { 
-                        type: 'user', 
-                        message: 'New user registered', 
-                        time: '1 hour ago',
-                        severity: 'low',
-                        id: '3'
-                    },
+                    { type: 'report', message: 'New scam report on Mobile Ad', time: '5 min ago', severity: 'high', id: '1' },
+                    { type: 'ad', message: 'New ad posted in Cars category', time: '12 min ago', severity: 'low', id: '2' },
+                    { type: 'user', message: 'New user registered', time: '1 hour ago', severity: 'low', id: '3' },
                 ]);
             }
 
             setLastUpdated(new Date());
-            
-            if (isRefresh) {
-                toast.success("Dashboard updated!");
-            }
+            if (isRefresh) toast.success("Dashboard synced with Railway!");
         } catch (err) {
             console.error("Dashboard Error:", err);
-            setError(err.message || "Failed to load dashboard data");
-            
-            if (err.response?.status === 401 || err.response?.status === 403) {
-                toast.error("Access denied. Please login again.");
-                navigate('/login');
-            } else {
-                toast.error(err.response?.data?.message || "Dashboard data load failed");
-            }
+            setError(err.message || "Failed to load Railway data");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [getAuthHeaders, navigate]);
+    }, [getAuthHeaders]);
 
     useEffect(() => {
         fetchDashboardData();
-        
-        // Auto-refresh every 5 minutes
-        const interval = setInterval(() => {
-            fetchDashboardData(true);
-        }, 300000);
-
+        const interval = setInterval(() => fetchDashboardData(true), 300000);
         return () => clearInterval(interval);
     }, [fetchDashboardData]);
 
-    // 📈 Calculate trends (mock calculation - replace with real data)
     const calculateTrend = useCallback((current, previous) => {
         if (!previous || previous === 0) return { value: 0, isPositive: true };
         const change = ((current - previous) / previous) * 100;
-        return {
-            value: Math.abs(change).toFixed(1),
-            isPositive: change >= 0
-        };
+        return { value: Math.abs(change).toFixed(1), isPositive: change >= 0 };
     }, []);
 
-    // 🎨 Memoized stat cards data
     const statCardsData = useMemo(() => [
         {
             icon: <FaAd className="text-2xl" />,
@@ -180,172 +134,80 @@ const Dashboard = () => {
     if (loading) {
         return (
             <div className="flex flex-col justify-center items-center h-96 space-y-4">
-                <div className="relative">
-                    <div className="animate-spin h-16 w-16 border-4 border-pink-200 border-t-pink-600 rounded-full"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <FaShieldAlt className="text-pink-600 text-xl" />
-                    </div>
-                </div>
-                <p className="text-gray-600 font-medium animate-pulse">Loading dashboard...</p>
+                <div className="animate-spin h-16 w-16 border-4 border-pink-200 border-t-pink-600 rounded-full"></div>
+                <p className="text-gray-600 font-bold uppercase tracking-widest text-xs">Syncing with Railway...</p>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col justify-center items-center h-96 space-y-4 p-4">
-                <div className="bg-red-50 p-6 rounded-2xl border border-red-200 text-center max-w-md">
-                    <FaExclamationTriangle className="text-4xl text-red-500 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-red-800 mb-2">Failed to load dashboard</h3>
-                    <p className="text-red-600 text-sm mb-4">{error}</p>
-                    <button 
-                        onClick={() => fetchDashboardData()}
-                        className="bg-red-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-red-700 transition flex items-center gap-2 mx-auto"
-                    >
-                        <FaRedo /> Try Again
-                    </button>
-                </div>
+            <div className="flex flex-col justify-center items-center h-96 space-y-4 p-4 text-center">
+                <FaExclamationTriangle className="text-5xl text-red-500 mb-2" />
+                <h3 className="text-xl font-black text-gray-900 uppercase">Railway Connection Failed</h3>
+                <p className="text-red-600 text-sm max-w-xs">{error}</p>
+                <button onClick={() => fetchDashboardData()} className="bg-gray-900 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2">
+                    <FaRedo /> Try Sync Again
+                </button>
             </div>
         );
     }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 p-4 md:p-6">
-            {/* Header with Refresh */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-black text-gray-900">Admin Dashboard</h1>
-                    <p className="text-gray-500 text-sm mt-1">
-                        {lastUpdated && `Last updated: ${lastUpdated.toLocaleTimeString()}`}
+                    <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">Command Center</h1>
+                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">
+                        {lastUpdated && `Last Sync: ${lastUpdated.toLocaleTimeString()}`}
                     </p>
                 </div>
-                <button 
-                    onClick={() => fetchDashboardData(true)}
-                    disabled={refreshing}
-                    className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
-                >
+                <button onClick={() => fetchDashboardData(true)} disabled={refreshing} className="bg-white border-2 border-gray-100 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-600 hover:border-pink-500 transition-all flex items-center gap-2">
                     <FaSpinner className={`${refreshing ? 'animate-spin' : ''}`} />
-                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                    {refreshing ? 'Syncing...' : 'Sync Data'}
                 </button>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {statCardsData.map((card, index) => (
                     <StatCard key={index} {...card} />
                 ))}
             </div>
 
-            {/* Charts & Activity Section */}
             <div className="grid lg:grid-cols-3 gap-6">
-                {/* Activity Chart */}
-                <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
-                            <FaChartLine className="text-pink-600" /> 
-                            Activity Overview
+                <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
+                    <div className="flex items-center justify-between mb-8">
+                        <h3 className="font-black text-xs uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
+                            <FaChartLine className="text-pink-600" /> Platform Velocity
                         </h3>
-                        <select className="text-sm border border-gray-200 rounded-lg px-3 py-1 outline-none focus:border-pink-500">
-                            <option>Last 7 Days</option>
-                            <option>Last 30 Days</option>
-                            <option>This Month</option>
-                        </select>
                     </div>
-                    
-                    {/* Chart */}
-                    <div className="h-64 flex items-end justify-around gap-2 md:gap-4">
+                    <div className="h-64 flex items-end justify-around gap-4">
                         {(stats?.weeklyActivity || [40, 65, 45, 80, 55, 90, 70]).map((h, i) => (
-                            <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                                <div 
-                                    className="w-full bg-gradient-to-t from-pink-100 to-pink-500 rounded-2xl relative transition-all duration-300 hover:from-pink-200 hover:to-pink-600 cursor-pointer shadow-sm"
-                                    style={{height: `${h}%`, minHeight: '20px'}}
-                                >
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition shadow-xl whitespace-nowrap z-10">
-                                        {h} Ads
-                                    </div>
+                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                                <div className="w-full bg-gray-50 rounded-2xl relative transition-all duration-500 hover:bg-pink-50 cursor-crosshair h-full flex items-end">
+                                    <div className="w-full bg-gradient-to-t from-pink-500 to-rose-400 rounded-2xl shadow-lg group-hover:from-pink-600 transition-all duration-500" style={{height: `${h}%`}}></div>
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 text-white text-[10px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">{h} Ads</div>
                                 </div>
-                                <span className="text-xs font-medium text-gray-400">
-                                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
-                                </span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Recent Activity Feed */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-xl text-gray-900">Recent Activity</h3>
-                        <button className="text-pink-600 text-sm font-semibold hover:underline">
-                            View All
-                        </button>
-                    </div>
-                    
-                    <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                        {recentActivity.length > 0 ? (
-                            recentActivity.map((activity) => (
-                                <div 
-                                    key={activity.id || Math.random()} 
-                                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all cursor-pointer border border-transparent hover:border-gray-100"
-                                >
-                                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                                        activity.severity === 'high' ? 'bg-red-500 animate-pulse' :
-                                        activity.type === 'ad' ? 'bg-blue-500' : 
-                                        activity.type === 'user' ? 'bg-green-500' : 'bg-gray-400'
-                                    }`} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-800 line-clamp-2">
-                                            {activity.message}
-                                        </p>
-                                        <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
-                                    </div>
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 flex flex-col">
+                    <h3 className="font-black text-xs uppercase tracking-[0.2em] text-gray-400 mb-6">Real-time Stream</h3>
+                    <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2">
+                        {recentActivity.map((activity) => (
+                            <div key={activity.id || Math.random()} className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-transparent hover:border-gray-200 transition-all cursor-pointer">
+                                <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${activity.severity === 'high' ? 'bg-red-500 animate-ping' : activity.type === 'ad' ? 'bg-blue-500' : 'bg-green-500'}`} />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold text-gray-800 leading-tight">{activity.message}</p>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase mt-1">{activity.time}</p>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-8 text-gray-400">
-                                <p className="text-sm">No recent activity</p>
                             </div>
-                        )}
+                        ))}
                     </div>
                 </div>
-            </div>
-
-            {/* Critical Alert Banner */}
-            {(stats?.pendingReports || 0) > 5 && (
-                <div className="bg-red-50 border-2 border-red-200 p-6 rounded-2xl shadow-sm animate-pulse">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-red-500 p-3 rounded-xl text-white shadow-lg">
-                            <FaExclamationTriangle size={24} />
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-red-900 text-lg">Critical Alert!</h4>
-                            <p className="text-red-700 text-sm">
-                                {stats.pendingReports} pending reports need immediate attention to maintain platform safety.
-                            </p>
-                        </div>
-                        <button className="bg-red-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-red-700 transition shadow-md">
-                            Review Now
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Quick Actions Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                    { label: 'Manage Ads', color: 'blue', icon: FaAd },
-                    { label: 'User Reports', color: 'red', icon: FaExclamationTriangle },
-                    { label: 'Verified Users', color: 'green', icon: FaCheckCircle },
-                    { label: 'Analytics', color: 'purple', icon: FaChartLine },
-                ].map((action, idx) => (
-                    <button 
-                        key={idx}
-                        className={`bg-${action.color}-50 hover:bg-${action.color}-100 border border-${action.color}-200 p-4 rounded-2xl transition-all hover:shadow-md text-left group`}
-                    >
-                        <action.icon className={`text-2xl text-${action.color}-500 mb-2 group-hover:scale-110 transition-transform`} />
-                        <span className={`font-bold text-${action.color}-900 text-sm`}>{action.label}</span>
-                    </button>
-                ))}
             </div>
         </div>
     );
@@ -353,45 +215,26 @@ const Dashboard = () => {
 
 const StatCard = ({ icon, title, value, trend, subtext, color, alert }) => {
     const colorClasses = {
-        blue: { bg: 'bg-blue-50', icon: 'text-blue-500', border: 'border-blue-200', text: 'text-blue-900' },
-        green: { bg: 'bg-green-50', icon: 'text-green-500', border: 'border-green-200', text: 'text-green-900' },
-        purple: { bg: 'bg-purple-50', icon: 'text-purple-500', border: 'border-purple-200', text: 'text-purple-900' },
-        red: { bg: 'bg-red-50', icon: 'text-red-500', border: 'border-red-200', text: 'text-red-900' }
+        blue: { bg: 'bg-blue-50', icon: 'text-blue-500', text: 'text-blue-900' },
+        green: { bg: 'bg-green-50', icon: 'text-green-500', text: 'text-green-900' },
+        purple: { bg: 'bg-purple-50', icon: 'text-purple-500', text: 'text-purple-900' },
+        red: { bg: 'bg-red-50', icon: 'text-red-500', text: 'text-red-900' }
     };
-
     const theme = colorClasses[color] || colorClasses.blue;
 
     return (
-        <div className={`bg-white rounded-2xl shadow-sm p-6 border-2 transition-all hover:shadow-lg ${alert ? 'border-red-500 bg-red-50/30' : `border-transparent hover:border-${color}-200`}`}>
-            <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-xl ${theme.bg}`}>
-                    <div className={theme.icon}>{icon}</div>
-                </div>
-                {alert && (
-                    <span className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                    </span>
-                )}
+        <div className={`bg-white rounded-[2rem] shadow-sm p-7 border-2 transition-all hover:shadow-xl ${alert ? 'border-red-500' : 'border-transparent hover:border-gray-100'}`}>
+            <div className="flex items-start justify-between mb-5">
+                <div className={`p-3 rounded-2xl ${theme.bg} ${theme.icon}`}>{icon}</div>
                 {trend && (
-                    <div className={`flex items-center gap-1 text-xs font-bold ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                        {trend.isPositive ? <FaArrowUp /> : <FaArrowDown />}
-                        {trend.value}%
+                    <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full ${trend.isPositive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                        {trend.isPositive ? <FaArrowUp /> : <FaArrowDown />} {trend.value}%
                     </div>
                 )}
             </div>
-            
-            <div>
-                <h3 className={`text-3xl font-black ${theme.text} tracking-tight`}>
-                    {value?.toLocaleString() || 0}
-                </h3>
-                <p className="text-gray-500 font-medium text-xs uppercase tracking-wider mt-1">
-                    {title}
-                </p>
-                <p className={`text-xs font-semibold mt-2 ${alert ? 'text-red-600' : 'text-gray-400'}`}>
-                    {subtext}
-                </p>
-            </div>
+            <h3 className={`text-4xl font-black ${theme.text} tracking-tighter`}>{value?.toLocaleString()}</h3>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{title}</p>
+            <p className={`text-[10px] font-bold mt-3 ${alert ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>{subtext}</p>
         </div>
     );
 };
