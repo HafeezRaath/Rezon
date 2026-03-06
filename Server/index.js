@@ -9,29 +9,36 @@ import { Server } from "socket.io";
 import admin from "firebase-admin";
 import { createRequire } from "module";
 
+// Routes imports
 import route from "./Routes/userRoutes.js";
 import adminRoutes from "./Routes/adminRoutes.js";
 
+// Models imports
 import Chat from "./model/chat.js";
 import User from "./model/user.js";
 
 // ==========================================
-// 🔐 ENV CONFIG
+// 🔐 CONFIGURATIONS
 // ==========================================
 dotenv.config();
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ==========================================
 // 🔐 Firebase Admin Setup
 // ==========================================
-const require = createRequire(import.meta.url);
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+try {
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+  console.log("✅ Firebase Admin SDK Initialized!");
+} catch (error) {
+  console.error("❌ Firebase Initialization Error:", error.message);
 }
-console.log("✅ Firebase Admin SDK Initialized!");
 
 // ==========================================
 // 🚀 App & Server Setup
@@ -55,24 +62,21 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
+// SOCKET.IO WITH OPTIMIZED SETTINGS
 const io = new Server(httpServer, {
   path: "/socket.io/", 
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
+    credentials: true
   },
-  transports: ['websocket', 'polling'], 
+  // Production mein polling aur websocket dono allow rakhein
+  transports: ['polling', 'websocket'], 
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  connectTimeout: 45000,
+  allowEIO3: true // Compatibility ke liye
 });
-
-// ==========================================
-// 📂 Path Helpers
-// ==========================================
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ==========================================
 // 🧩 Middlewares
@@ -88,7 +92,12 @@ app.use("/api", route);
 app.use("/api/admin", adminRoutes);
 
 app.get("/health", (req, res) => {
-  res.json({ status: "OK", socket: "running", timestamp: new Date() });
+  res.json({ 
+    status: "OK", 
+    socket: "running", 
+    environment: process.env.NODE_ENV || "development",
+    timestamp: new Date() 
+  });
 });
 
 // ==========================================
@@ -100,7 +109,8 @@ let onlineUsers = new Map();
 // 🔌 Socket Events
 // ==========================================
 io.on("connection", (socket) => {
-  console.log("✅ Socket Connected:", socket.id, "Transport:", socket.conn.transport.name);
+  // Transport log karne se debug asaan hota hai
+  console.log(`✅ Socket Connected: ${socket.id} | Mode: ${socket.conn.transport.name}`);
 
   socket.on("setup", (userId) => {
     if (!userId) return;
@@ -127,16 +137,15 @@ io.on("connection", (socket) => {
   socket.on("join_chat", (chatId) => {
     if (!chatId) return;
     socket.join(chatId);
+    console.log(`User joined chat: ${chatId}`);
   });
 
   socket.on("typing", (data) => {
-    const { chatId, userId } = data;
-    socket.to(chatId).emit("typing", { chatId, userId });
+    socket.to(data.chatId).emit("typing", data);
   });
 
   socket.on("stop_typing", (data) => {
-    const { chatId, userId } = data;
-    socket.to(chatId).emit("stop_typing", { chatId, userId });
+    socket.to(data.chatId).emit("stop_typing", data);
   });
 
   socket.on("send_message", async (data) => {
@@ -160,12 +169,16 @@ io.on("connection", (socket) => {
       );
 
       if (updatedChat) {
+        const savedMsg = updatedChat.messages[updatedChat.messages.length - 1];
+        
+        // Chat room mein message bhejna
         io.to(chatId).emit("receive_message", {
           ...data,
-          _id: updatedChat.messages[updatedChat.messages.length - 1]._id,
+          _id: savedMsg._id,
           timestamp: newMessage.timestamp
         });
 
+        // Notifications bhejna
         const chat = await Chat.findById(chatId).populate('participants', 'uid');
         chat.participants.forEach(participant => {
           if (participant.uid !== senderId) {
@@ -212,7 +225,7 @@ io.on("connection", (socket) => {
         await User.findOneAndUpdate({ uid: disconnectedUser }, { isOnline: false, lastSeen });
         onlineUsers.delete(disconnectedUser);
         io.emit("status_change", { userId: disconnectedUser, isOnline: false, lastSeen });
-        console.log(`🔴 User ${disconnectedUser} is Offline`);
+        console.log(`🔴 User ${disconnectedUser} Offline (Reason: ${reason})`);
       } catch (error) {
         console.error("Disconnect update error:", error);
       }
@@ -230,24 +243,33 @@ const MONGO_URL = process.env.MONGO_URI;
 
 const connectDB = async (retries = 5) => {
   try {
-    await mongoose.connect(MONGO_URL, { serverSelectionTimeoutMS: 5000 });
+    mongoose.set('strictQuery', false);
+    await mongoose.connect(MONGO_URL, { 
+      serverSelectionTimeoutMS: 5000 
+    });
     console.log("✅ MongoDB Connected Successfully");
     
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port: ${PORT}`);
     });
   } catch (error) {
-    console.error(`❌ MongoDB Error (retries: ${retries}):`, error.message);
-    if (retries > 0) setTimeout(() => connectDB(retries - 1), 5000);
-    else process.exit(1);
+    console.error(`❌ MongoDB Error (retries left: ${retries}):`, error.message);
+    if (retries > 0) {
+      setTimeout(() => connectDB(retries - 1), 5000);
+    } else {
+      process.exit(1);
+    }
   }
 };
 
 connectDB();
 
+// Graceful Shutdown
 process.on('SIGTERM', () => {
-  httpServer.close(() => mongoose.connection.close(false, () => process.exit(0)));
-});
-process.on('SIGINT', () => {
-  httpServer.close(() => mongoose.connection.close(false, () => process.exit(0)));
+  httpServer.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('Process terminated');
+      process.exit(0);
+    });
+  });
 });
