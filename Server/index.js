@@ -226,7 +226,7 @@ io.on("connection", (socket) => {
 // 🗄️ Database & Startup
 // ==========================================
 const PORT = process.env.PORT || 8000;
-const MONGO_URL = process.env.MONGO_URL;
+const MONGO_URL = process.env.MONGO_URI;
 
 const connectDB = async (retries = 5) => {
   try {
