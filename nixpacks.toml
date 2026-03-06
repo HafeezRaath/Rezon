@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs"]
 
 [phases.build]
-cmds = ["npm install"]
+cmds = ["cd Server && npm install"]
 
 [start]
-cmd = "node index.js"
+cmd = "cd Server && node index.js"
