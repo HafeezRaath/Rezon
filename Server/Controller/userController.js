@@ -13,6 +13,11 @@ import OpenAI from "openai";
 dotenv.config();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// 🔧 FIX 1: BASE_URL added for production
+const BASE_URL = process.env.NODE_ENV === 'production' 
+    ? 'https://rezon.up.railway.app' 
+    : 'http://localhost:8000';
+
 const CATEGORY_FIELD_MAP = {
     "Mobile": ['brand', 'model', 'warranty', 'warrantyDuration', 'storage', 'ram', 'batteryHealth', 'ptaStatus', 'accessories'],
     "Car": ['make', 'carModel', 'year', 'mileage', 'fuelType', 'transmission', 'registrationCity'],
@@ -222,7 +227,8 @@ export const create = async (req, res) => {
             const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname) || '.jpg'}`;
             const filePath = path.join(uploadDir, fileName);
             fs.writeFileSync(filePath, file.buffer);
-            imageUrls.push(`${req.protocol}://${req.get("host")}/uploads/${fileName}`);
+            // 🔧 FIX 2: Use BASE_URL instead of req.protocol/host
+            imageUrls.push(`${BASE_URL}/uploads/${fileName}`);
         }
 
         const { title, description, price, location, condition, category } = req.body;
@@ -311,7 +317,8 @@ export const updateAd = async (req, res) => {
             for (const file of req.files) {
                 const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname) || '.jpg'}`;
                 fs.writeFileSync(path.join('uploads/', fileName), file.buffer);
-                newImageUrls.push(`${req.protocol}://${req.get("host")}/uploads/${fileName}`);
+                // 🔧 FIX 2: Use BASE_URL
+                newImageUrls.push(`${BASE_URL}/uploads/${fileName}`);
             }
             updateData.images = [...(currentAd.images || []), ...newImageUrls];
         }
@@ -645,12 +652,13 @@ export const verifyIdentity = async (req, res) => {
         if (verdict.isMatched && verdict.confidence >= 75) {
             const uploadDir = 'uploads/';
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
+            
             const fileName = `profile-${userUid}-${Date.now()}.jpg`;
             const filePath = path.join(uploadDir, fileName);
             fs.writeFileSync(filePath, req.files.liveSelfie[0].buffer);
             
-            const profileUrl = `${req.protocol}://${req.get("host")}/uploads/${fileName}`;
+            // 🔧 FIX 2: Use BASE_URL
+            const profileUrl = `${BASE_URL}/uploads/${fileName}`;
 
             await User.findOneAndUpdate(
                 { uid: userUid },
@@ -695,5 +703,25 @@ export const me = async (req, res) => {
     } catch (error) {
         console.error("🔥 Me API Error:", error);
         res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+// 🔧 FIX 3: ADDED - Update Ad Status for Admin
+export const updateAdStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        
+        if (!['Active', 'Reserved', 'Sold', 'Hidden'].includes(status)) {
+            return res.status(400).json({ message: "Invalid status" });
+        }
+        
+        const ad = await Ad.findByIdAndUpdate(id, { status }, { new: true });
+        if (!ad) return res.status(404).json({ message: "Ad not found" });
+        
+        res.status(200).json({ message: "Status updated successfully", ad });
+    } catch (error) {
+        console.error("Update Status Error:", error);
+        res.status(500).json({ message: "Error updating status", error: error.message });
     }
 };

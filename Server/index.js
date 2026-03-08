@@ -49,8 +49,9 @@ const httpServer = createServer(app);
 // ==========================================
 // 🌐 CORS & Socket Setup
 // ==========================================
+// 🔧 FIX: Space removed from origin
 const allowedOrigins = [
-  "https://rezon.raathdeveloper.com", 
+  "https://rezon.raathdeveloper.com",  // ✅ Space hatadein
   "http://localhost:5173",
   "http://localhost:3000"
 ];
@@ -70,12 +71,11 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  // Production mein polling aur websocket dono allow rakhein
   transports: ['polling', 'websocket'], 
   pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 45000,
-  allowEIO3: true // Compatibility ke liye
+  allowEIO3: true
 });
 
 // ==========================================
@@ -83,7 +83,7 @@ const io = new Server(httpServer, {
 // ==========================================
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
 // 🛣️ Routes
@@ -109,7 +109,6 @@ let onlineUsers = new Map();
 // 🔌 Socket Events
 // ==========================================
 io.on("connection", (socket) => {
-  // Transport log karne se debug asaan hota hai
   console.log(`✅ Socket Connected: ${socket.id} | Mode: ${socket.conn.transport.name}`);
 
   socket.on("setup", (userId) => {
@@ -171,14 +170,12 @@ io.on("connection", (socket) => {
       if (updatedChat) {
         const savedMsg = updatedChat.messages[updatedChat.messages.length - 1];
         
-        // Chat room mein message bhejna
         io.to(chatId).emit("receive_message", {
           ...data,
           _id: savedMsg._id,
           timestamp: newMessage.timestamp
         });
 
-        // Notifications bhejna
         const chat = await Chat.findById(chatId).populate('participants', 'uid');
         chat.participants.forEach(participant => {
           if (participant.uid !== senderId) {

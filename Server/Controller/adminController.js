@@ -149,7 +149,7 @@ export const getAllUsers = async (req, res) => {
 export const getFlaggedUsers = async (req, res) => {
     try {
         const users = await User.find({ 
-            $or: [{ warningCount: { $gt: 0 } }, { isFlagged: true }]
+            $or: [{ warningCount: { $gt: 0 } }, { isFlagged: true }, { isBanned: true }]
         }).sort({ warningCount: -1 });
         res.status(200).json({ success: true, users });
     } catch (error) {
@@ -189,7 +189,11 @@ export const getUserReportHistory = async (req, res) => {
 
 export const warnUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndUpdate(req.params.userId, { $inc: { warningCount: 1 }, isFlagged: true }, { new: true });
+        const user = await User.findByIdAndUpdate(
+            req.params.userId, 
+            { $inc: { warningCount: 1 }, isFlagged: true }, 
+            { new: true }
+        );
         res.status(200).json({ success: true, message: "User ko warning de di gayi hai", user });
     } catch (error) {
         res.status(500).json({ success: false, message: "Action failed" });
@@ -198,7 +202,11 @@ export const warnUser = async (req, res) => {
 
 export const suspendUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndUpdate(req.params.userId, { status: 'Suspended' }, { new: true });
+        const user = await User.findByIdAndUpdate(
+            req.params.userId, 
+            { status: 'Suspended', isActive: false }, 
+            { new: true }
+        );
         res.status(200).json({ success: true, message: "User account suspend kar diya gaya", user });
     } catch (error) {
         res.status(500).json({ success: false, message: "Action failed" });
@@ -208,22 +216,38 @@ export const suspendUser = async (req, res) => {
 export const banUser = async (req, res) => {
     try {
         const { isBanned } = req.body;
-        const user = await User.findByIdAndUpdate(req.params.userId, { isBanned, status: isBanned ? 'Banned' : 'Active' }, { new: true });
-        res.status(200).json({ success: true, message: isBanned ? "User ban ho gaya" : "User unban ho gaya", user });
+        const user = await User.findByIdAndUpdate(
+            req.params.userId, 
+            { 
+                isBanned, 
+                status: isBanned ? 'Banned' : 'Active',
+                isActive: !isBanned
+            }, 
+            { new: true }
+        );
+        res.status(200).json({ 
+            success: true, 
+            message: isBanned ? "User ban ho gaya" : "User unban ho gaya", 
+            user 
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: "Action failed" });
     }
 };
 
+// 🔧 FIXED: Use isActive instead of isBlocked
 export const toggleBlockUser = async (req, res) => {
     try {
         const { userId } = req.body;
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        user.isBlocked = !user.isBlocked;
+        user.isActive = !user.isActive;
         await user.save();
-        res.status(200).json({ success: true, message: `User ${user.isBlocked ? 'Blocked' : 'Unblocked'}` });
+        res.status(200).json({ 
+            success: true, 
+            message: `User ${user.isActive ? 'Activated' : 'Deactivated'}` 
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

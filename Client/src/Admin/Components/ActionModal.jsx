@@ -9,7 +9,8 @@ import {
     FaCheckCircle,
     FaTimes,
     FaSpinner,
-    FaEnvelope
+    FaEnvelope,
+    FaShieldAlt
 } from 'react-icons/fa';
 
 const ActionModal = ({ type, report, onClose, onConfirm }) => {
@@ -52,7 +53,7 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
             icon: <FaExclamationTriangle className="text-2xl" />,
             desc: `Send warning to ${report?.reportedUserId?.name || 'user'}`,
             showDuration: false,
-            color: "yellow",
+            color: "amber",
             confirmText: "Send Warning",
             requiresReason: true,
             minReasonLength: 10
@@ -72,7 +73,7 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
             icon: <FaTrash className="text-2xl" />,
             desc: "This ad will be permanently deleted",
             showDuration: false,
-            color: "red",
+            color: "rose",
             confirmText: "Delete Ad",
             requiresReason: false,
             minReasonLength: 0
@@ -125,7 +126,7 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
         // Double confirmation for dangerous actions
         if (config.dangerConfirm) {
             const confirmed = window.confirm(
-                `WARNING: This will PERMANENTLY ban ${report?.reportedUserId?.name || 'this user'}.\n\nThis action cannot be undone. Are you absolutely sure?`
+                `⚠️ WARNING: This will PERMANENTLY ban ${report?.reportedUserId?.name || 'this user'}.\n\nThis action cannot be undone. Are you absolutely sure?`
             );
             if (!confirmed) return;
         }
@@ -150,34 +151,47 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
         }
     };
 
+    // 🔥 Dark theme color classes
     const colorClasses = {
-        yellow: {
-            bg: 'bg-yellow-50',
-            border: 'border-yellow-200',
-            icon: 'text-yellow-600',
-            button: 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200',
-            text: 'text-yellow-900'
+        amber: {
+            bg: 'bg-amber-500/10',
+            border: 'border-amber-500/30',
+            icon: 'text-amber-400',
+            button: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20',
+            text: 'text-amber-400',
+            glow: 'shadow-amber-500/10'
         },
         purple: {
-            bg: 'bg-purple-50',
-            border: 'border-purple-200',
-            icon: 'text-purple-600',
-            button: 'bg-purple-600 hover:bg-purple-700 shadow-purple-200',
-            text: 'text-purple-900'
+            bg: 'bg-purple-500/10',
+            border: 'border-purple-500/30',
+            icon: 'text-purple-400',
+            button: 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/20',
+            text: 'text-purple-400',
+            glow: 'shadow-purple-500/10'
+        },
+        rose: {
+            bg: 'bg-rose-500/10',
+            border: 'border-rose-500/30',
+            icon: 'text-rose-400',
+            button: 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20',
+            text: 'text-rose-400',
+            glow: 'shadow-rose-500/10'
         },
         red: {
-            bg: 'bg-red-50',
-            border: 'border-red-200',
-            icon: 'text-red-600',
-            button: 'bg-red-600 hover:bg-red-700 shadow-red-200',
-            text: 'text-red-900'
+            bg: 'bg-red-500/10',
+            border: 'border-red-500/30',
+            icon: 'text-red-400',
+            button: 'bg-red-600 hover:bg-red-700 shadow-red-500/20',
+            text: 'text-red-400',
+            glow: 'shadow-red-500/10'
         },
         orange: {
-            bg: 'bg-orange-50',
-            border: 'border-orange-200',
-            icon: 'text-orange-600',
-            button: 'bg-orange-600 hover:bg-orange-700 shadow-orange-200',
-            text: 'text-orange-900'
+            bg: 'bg-orange-500/10',
+            border: 'border-orange-500/30',
+            icon: 'text-orange-400',
+            button: 'bg-orange-600 hover:bg-orange-700 shadow-orange-500/20',
+            text: 'text-orange-400',
+            glow: 'shadow-orange-500/10'
         }
     };
 
@@ -185,38 +199,38 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
 
     const modalContent = (
         <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200"
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
         >
-            <div className={`bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border-2 ${theme.border} relative`}>
+            <div className={`bg-slate-900 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl border ${theme.border} ${theme.glow} relative`}>
                 {/* Close Button */}
                 <button 
                     onClick={() => !loading && onClose()}
                     disabled={loading}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                    className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors disabled:opacity-50"
                 >
                     <FaTimes />
                 </button>
 
                 {/* Header */}
-                <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-3 rounded-2xl ${theme.bg} ${theme.icon}`}>
+                <div className="flex items-center gap-4 mb-6">
+                    <div className={`p-4 rounded-xl ${theme.bg} ${theme.icon} border ${theme.border}`}>
                         {config.icon}
                     </div>
                     <div>
-                        <h3 id="modal-title" className={`text-xl font-bold ${theme.text}`}>
+                        <h3 id="modal-title" className={`text-xl font-black ${theme.text} uppercase tracking-tight`}>
                             {config.title}
                         </h3>
-                        <p className="text-gray-500 text-sm mt-0.5">{config.desc}</p>
+                        <p className="text-slate-400 text-sm mt-1">{config.desc}</p>
                     </div>
                 </div>
 
                 {/* Error Display */}
                 {errors.submit && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-center gap-2">
+                    <div className="mb-5 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-sm flex items-center gap-3">
                         <FaExclamationTriangle />
                         {errors.submit}
                     </div>
@@ -225,7 +239,7 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                 {/* Duration Selector */}
                 {config.showDuration && (
                     <div className="mb-5">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">
                             Suspension Duration
                         </label>
                         <select 
@@ -235,8 +249,8 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                                 setErrors(prev => ({ ...prev, duration: null }));
                             }}
                             disabled={loading}
-                            className={`w-full p-3.5 bg-gray-50 border-2 rounded-xl outline-none transition-all font-medium ${
-                                errors.duration ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-purple-500'
+                            className={`w-full p-3.5 bg-slate-800 border-2 rounded-xl outline-none transition-all font-medium text-slate-200 ${
+                                errors.duration ? 'border-rose-500 focus:border-rose-400' : 'border-slate-700 focus:border-purple-500'
                             }`}
                         >
                             <option value="1">1 Day</option>
@@ -247,7 +261,7 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                             <option value="90">3 Months</option>
                         </select>
                         {errors.duration && (
-                            <p className="text-red-500 text-xs mt-1">{errors.duration}</p>
+                            <p className="text-rose-400 text-xs mt-2 font-medium">{errors.duration}</p>
                         )}
                     </div>
                 )}
@@ -255,12 +269,12 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                 {/* Reason Input */}
                 <div className="mb-5">
                     <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm font-semibold text-gray-700">
+                        <label className="text-sm font-bold text-slate-300 uppercase tracking-wider">
                             Reason / Message
-                            {config.requiresReason && <span className="text-red-500 ml-1">*</span>}
+                            {config.requiresReason && <span className="text-rose-400 ml-1">*</span>}
                         </label>
-                        <span className={`text-xs ${reason.length < config.minReasonLength ? 'text-gray-400' : 'text-green-500'}`}>
-                            {reason.length}/{config.minReasonLength} chars
+                        <span className={`text-xs font-bold ${reason.length < config.minReasonLength ? 'text-slate-500' : 'text-emerald-400'}`}>
+                            {reason.length}/{config.minReasonLength}
                         </span>
                     </div>
                     <textarea
@@ -270,37 +284,37 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                             setErrors(prev => ({ ...prev, reason: null }));
                         }}
                         disabled={loading}
-                        className={`w-full p-3.5 bg-gray-50 border-2 rounded-xl outline-none transition-all resize-none ${
-                            errors.reason ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
+                        className={`w-full p-3.5 bg-slate-800 border-2 rounded-xl outline-none transition-all resize-none text-slate-200 placeholder:text-slate-600 ${
+                            errors.reason ? 'border-rose-500 focus:border-rose-400' : 'border-slate-700 focus:border-emerald-500'
                         }`}
                         rows="3"
                         placeholder={config.requiresReason ? "Explain why this action is being taken..." : "Optional message to user..."}
                     />
                     {errors.reason && (
-                        <p className="text-red-500 text-xs mt-1">{errors.reason}</p>
+                        <p className="text-rose-400 text-xs mt-2 font-medium">{errors.reason}</p>
                     )}
                 </div>
 
                 {/* Notify Checkbox */}
-                <label className="flex items-start gap-3 mb-6 cursor-pointer group">
-                    <div className="relative flex items-center">
+                <label className="flex items-start gap-3 mb-6 cursor-pointer group p-3 rounded-xl bg-slate-800/50 border border-slate-700 hover:border-slate-600 transition-all">
+                    <div className="relative flex items-center mt-0.5">
                         <input 
                             type="checkbox" 
                             checked={notifyUser} 
                             onChange={(e) => setNotifyUser(e.target.checked)}
                             disabled={loading}
-                            className="w-5 h-5 rounded border-2 border-gray-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                            className="w-5 h-5 rounded border-2 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20 transition-all cursor-pointer"
                         />
                         {notifyUser && (
-                            <FaCheckCircle className="absolute inset-0 m-auto text-blue-600 text-xs pointer-events-none" />
+                            <FaCheckCircle className="absolute inset-0 m-auto text-emerald-500 text-xs pointer-events-none" />
                         )}
                     </div>
                     <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors flex items-center gap-2">
-                            <FaEnvelope className="text-gray-400" />
+                        <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                            <FaEnvelope className="text-slate-500" />
                             Notify user via Email/App
                         </span>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-1">
                             User will receive notification about this action
                         </p>
                     </div>
@@ -311,14 +325,14 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
                     <button 
                         onClick={onClose} 
                         disabled={loading}
-                        className="flex-1 py-3.5 border-2 border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-50"
+                        className="flex-1 py-3.5 border-2 border-slate-700 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-all disabled:opacity-50 uppercase tracking-wider text-sm"
                     >
                         Cancel
                     </button>
                     <button 
                         onClick={handleConfirm}
                         disabled={loading}
-                        className={`flex-1 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${theme.button}`}
+                        className={`flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-wider text-sm ${theme.button}`}
                     >
                         {loading ? (
                             <>
@@ -333,13 +347,13 @@ const ActionModal = ({ type, report, onClose, onConfirm }) => {
 
                 {/* Report Info Footer */}
                 {report && (
-                    <div className="mt-6 pt-4 border-t border-gray-100">
-                        <p className="text-xs text-gray-400">
-                            Report ID: <span className="font-mono">{report._id?.slice(-8)}</span>
+                    <div className="mt-6 pt-4 border-t border-slate-800">
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span className="font-mono">ID: {report._id?.slice(-8)}</span>
                             {report.createdAt && (
-                                <> • Submitted: {new Date(report.createdAt).toLocaleDateString()}</>
+                                <span>Submitted: {new Date(report.createdAt).toLocaleDateString()}</span>
                             )}
-                        </p>
+                        </div>
                     </div>
                 )}
             </div>

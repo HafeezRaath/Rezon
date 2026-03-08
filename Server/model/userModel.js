@@ -5,7 +5,7 @@ const adSchema = new mongoose.Schema(
     posted_by_uid: {
       type: String,
       required: true,
-      index: true, // User ads filter karne ke liye fast index
+      index: true,
     },
     images: {
       type: [String],
@@ -20,7 +20,7 @@ const adSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      index: 'text', // ✅ Atlas Text Search support ke liye
+      index: 'text',
     },
     description: {
       type: String,
@@ -29,12 +29,12 @@ const adSchema = new mongoose.Schema(
     price: {
       type: Number,
       required: true,
-      index: true, // Price range filtering ke liye
+      index: true,
     },
     location: {
       type: String,
       required: true,
-      index: true, // City-wise filtering ke liye
+      index: true,
     },
     condition: {
       type: String,
@@ -49,7 +49,7 @@ const adSchema = new mongoose.Schema(
         "Bikes", "Business", "Services", "Jobs", "Animals", "Furniture",
         "Fashion", "Books", "Kids",
       ],
-      index: true, // Category-wise filter fast karne ke liye
+      index: true,
     },
     details: {
       type: mongoose.Schema.Types.Mixed,
@@ -72,8 +72,10 @@ const adSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
-    
-    // Soft delete fields for TTL
+    soldPrice: {
+      type: Number,
+      default: null
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -83,20 +85,32 @@ const adSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
-
     isVerified: {
       type: Boolean,
       default: false,
     },
+    views: {
+      type: Number,
+      default: 0
+    },
+    favorites: {
+      type: Number,
+      default: 0
+    },
+    negotiable: {
+      type: Boolean,
+      default: false
+    }
   },
   { timestamps: true }
 );
 
-// ✅ TTL Index: Auto-delete setup
+// TTL Index
 adSchema.index({ deleteAfter: 1 }, { expireAfterSeconds: 0 });
 
-// ✅ Composite index: Live production queries ko optimize karne ke liye
+// Performance Indexes
 adSchema.index({ category: 1, status: 1, isDeleted: 1 });
 adSchema.index({ posted_by_uid: 1, isDeleted: 1, createdAt: -1 });
+adSchema.index({ location: 1, category: 1, status: 1 });
 
 export default mongoose.model("Ad", adSchema);

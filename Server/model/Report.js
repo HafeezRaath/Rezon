@@ -5,7 +5,7 @@ const reportSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true // Admin panel search fast karne ke liye
+        index: true
     },
     reportedUserId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -42,13 +42,26 @@ const reportSchema = new mongoose.Schema({
         default: 'Pending',
         index: true
     },
-    evidenceImage: {
-        type: String 
+    // Multiple evidence images
+    evidenceImages: [{ type: String }],
+    
+    // Admin action tracking
+    adminAction: {
+        action: { 
+            type: String, 
+            enum: ['Warned', 'Suspended', 'Banned', 'Ad Removed', 'Dismissed', 'None'],
+            default: 'None'
+        },
+        comment: { type: String, maxlength: 500 },
+        takenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        takenAt: { type: Date }
     }
+
 }, { timestamps: true });
 
-// ✅ Composite index: Pending reports ko date ke mutabiq dekhne ke liye
+// Indexes
 reportSchema.index({ status: 1, createdAt: -1 });
+reportSchema.index({ reportedUserId: 1, status: 1 });
 
 const Report = mongoose.model('Report', reportSchema);
 export default Report;

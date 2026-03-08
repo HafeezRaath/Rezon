@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { FcGoogle } from "react-icons/fc";
-import { FaApple, FaFacebook, FaSpinner } from "react-icons/fa";
+import { FaApple, FaFacebook, FaSpinner, FaTimes } from "react-icons/fa";
 import Signin from "../loginsetup/signnumber";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -8,36 +8,75 @@ import { createPortal } from "react-dom";
 import { auth } from "../firebase.config";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
+// 🔧 FIXED: Space removed
+const API_BASE_URL = "https://rezon.up.railway.app/api";
+
 const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
   const [showSignin, setShowSignin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
 
-  // API URL
-  const API_BASE_URL = "https://rezon.up.railway.app/api";
+  // 🔧 FIXED: Stable callback references
+  const stableOnClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
-  // Prevent background scroll
+  const stableOnSwitchToLogin = useCallback(() => {
+    onSwitchToLogin?.();
+  }, [onSwitchToLogin]);
+
+  // Prevent background scroll - 🔧 FIXED: Proper cleanup
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = 'unset';
-      };
-    }
+    if (!isOpen) return;
+
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
   }, [isOpen]);
 
-  // Close on Escape key
+  // 🔧 FIXED: Focus trap and escape key
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    
-    if (isOpen) {
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen, onClose]);
+    if (!isOpen) return;
 
-  // Google Sign In Handler
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        stableOnClose();
+        return;
+      }
+
+      // Focus trap
+      if (e.key === 'Tab') {
+        const focusableElements = modalRef.current?.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        
+        if (!focusableElements?.length) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    // Focus close button on open
+    closeButtonRef.current?.focus();
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, stableOnClose]);
+
+  // Google Sign In Handler - 🔧 FIXED: Dependencies
   const handleGoogleSignIn = useCallback(async () => {
     if (isLoading) return;
     
@@ -69,39 +108,37 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
           }
         });
         
-        toast.success(`Welcome ${user.displayName || "User"}!`);
+        toast.success(`Welcome ${user.displayName || "User"}! 🎉`);
       } catch (dbError) {
         console.error("MongoDB Sync Error:", dbError);
-        // Don't block login if DB sync fails, but warn user
         toast.success("Logged in! (Profile sync pending)");
       }
 
-      onClose();
+      stableOnClose();
     } catch (error) {
       console.error("Google Sign-In Error:", error);
       
-      let errorMessage = "Google Sign-In failed.";
-      if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = "Sign-in cancelled.";
-      } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = "Popup blocked! Please allow popups.";
-      } else if (error.code === 'auth/account-exists-with-different-credential') {
-        errorMessage = "Account exists with different login method.";
-      }
+      const errorMessages = {
+        'auth/popup-closed-by-user': "Sign-in cancelled.",
+        'auth/popup-blocked': "Popup blocked! Please allow popups.",
+        'auth/account-exists-with-different-credential': "Account exists with different login method.",
+        'auth/network-request-failed': "Network error. Check your connection.",
+        'auth/invalid-credential': "Invalid credentials. Try again."
+      };
       
-      toast.error(errorMessage);
+      toast.error(errorMessages[error.code] || "Google Sign-In failed.");
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, API_BASE_URL, onClose]);
+  }, [isLoading, stableOnClose]);
 
   // Placeholder handlers
   const handleAppleSignIn = useCallback(() => {
-    toast.info("Apple Sign-in coming soon!");
+    toast.info("Apple Sign-in coming soon! 🍎");
   }, []);
 
   const handleFacebookSignIn = useCallback(() => {
-    toast.info("Facebook Sign-in coming soon!");
+    toast.info("Facebook Sign-in coming soon! 📘");
   }, []);
 
   const handleShowPhoneSignin = useCallback(() => {
@@ -115,41 +152,49 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
   // Handle login link click
   const handleLoginClick = useCallback((e) => {
     e.preventDefault();
-    if (onSwitchToLogin) {
-      onSwitchToLogin();
+    if (stableOnSwitchToLogin) {
+      stableOnSwitchToLogin();
     } else {
-      onClose();
+      stableOnClose();
     }
-  }, [onSwitchToLogin, onClose]);
+  }, [stableOnSwitchToLogin, stableOnClose]);
+
+  // 🔧 FIXED: Backdrop click handler
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      stableOnClose();
+    }
+  }, [stableOnClose]);
 
   if (!isOpen) return null;
 
   const popupContent = (
     <div 
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 z-[1000] animate-in fade-in duration-200"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-[1000] animate-in fade-in duration-200"
+      onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-labelledby="signup-title"
     >
-      {/* Close Button - Moved inside for better positioning */}
-      <div className="relative w-full max-w-[500px]">
+      <div className="relative w-full max-w-[500px]" ref={modalRef}>
+        {/* 🔧 FIXED: Better close button with icon */}
         <button
-          onClick={onClose}
-          className="absolute -top-12 right-0 text-white hover:text-pink-400 text-3xl font-bold transition-colors z-10 focus:outline-none"
+          ref={closeButtonRef}
+          onClick={stableOnClose}
+          className="absolute -top-12 right-0 text-white hover:text-rose-400 transition-colors z-10 focus:outline-none focus:ring-2 focus:ring-white/50 rounded-full p-1"
           aria-label="Close popup"
         >
-          &times;
+          <FaTimes size={28} />
         </button>
 
-        <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-y-auto">
           <h2 
             id="signup-title"
-            className="text-3xl font-extrabold text-center bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-transparent bg-clip-text mb-1 pt-2"
+            className="text-3xl font-black text-center bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-transparent bg-clip-text mb-1 pt-2"
           >
             USP
           </h2>
-          <h4 className="text-lg md:text-xl font-bold text-center text-pink-600 mb-6">
+          <h4 className="text-lg md:text-xl font-bold text-center text-emerald-600 mb-6">
             Create a New Account on <span className="font-black">USP</span>
           </h4>
 
@@ -158,10 +203,10 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
             <button
               onClick={handleGoogleSignIn}
               disabled={isLoading}
-              className="flex items-center justify-center gap-3 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-pink-500 py-3.5 rounded-xl text-gray-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed group"
+              className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-emerald-500 py-3.5 rounded-xl text-slate-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed group"
             >
               {isLoading ? (
-                <FaSpinner className="animate-spin text-pink-600" size={22} />
+                <FaSpinner className="animate-spin text-emerald-600" size={22} />
               ) : (
                 <FcGoogle size={22} className="group-hover:scale-110 transition-transform" />
               )}
@@ -173,7 +218,7 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
             {/* Apple Sign In */}
             <button 
               onClick={handleAppleSignIn}
-              className="flex items-center justify-center gap-3 bg-black hover:bg-gray-900 border-2 border-black py-3.5 rounded-xl text-white transition-all shadow-sm hover:shadow-md group"
+              className="flex items-center justify-center gap-3 bg-slate-900 hover:bg-slate-800 border-2 border-slate-900 py-3.5 rounded-xl text-white transition-all shadow-sm hover:shadow-md group"
             >
               <FaApple size={22} className="group-hover:scale-110 transition-transform" />
               <span className="text-sm font-semibold">Sign up with Apple</span>
@@ -191,17 +236,17 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
             {/* Divider */}
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
+                <div className="w-full border-t border-slate-200"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500 font-medium">OR</span>
+                <span className="px-4 bg-white text-slate-500 font-medium">OR</span>
               </div>
             </div>
 
             {/* Phone Sign In */}
             <button
               onClick={handleShowPhoneSignin}
-              className="flex items-center justify-center gap-3 bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600 py-3.5 rounded-xl text-white transition-all shadow-md hover:shadow-lg font-semibold"
+              className="flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 py-3.5 rounded-xl text-white transition-all shadow-md hover:shadow-lg font-semibold active:scale-[0.98]"
             >
               <span className="text-sm">Sign up with Phone Number</span>
             </button>
@@ -216,18 +261,18 @@ const Signinpopup = ({ onClose, isOpen, onSwitchToLogin }) => {
 
           {/* Footer */}
           <div className="mt-8 space-y-3">
-            <p className="text-xs text-center text-gray-500 leading-relaxed">
+            <p className="text-xs text-center text-slate-500 leading-relaxed">
               By creating an account, you agree to USP's{" "}
-              <a href="/terms" className="text-pink-600 hover:underline font-medium">Terms of Service</a>
+              <a href="/terms" className="text-emerald-600 hover:underline font-medium">Terms of Service</a>
               {" "}and{" "}
-              <a href="/privacy" className="text-pink-600 hover:underline font-medium">Privacy Policy</a>
+              <a href="/privacy" className="text-emerald-600 hover:underline font-medium">Privacy Policy</a>
             </p>
             
-            <p className="text-sm text-center text-gray-600">
+            <p className="text-sm text-center text-slate-600">
               Already have an account?{" "}
               <button
                 onClick={handleLoginClick}
-                className="font-semibold text-pink-600 hover:text-pink-700 hover:underline transition-colors"
+                className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
               >
                 Log in
               </button>

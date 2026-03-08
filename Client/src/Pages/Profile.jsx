@@ -1,10 +1,31 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { FaStar, FaUserCircle, FaAd, FaShieldAlt, FaSpinner, FaExclamationTriangle, FaEdit, FaCheckCircle } from "react-icons/fa";
+import { 
+  FaStar, 
+  FaUserCircle, 
+  FaAd, 
+  FaShieldAlt, 
+  FaSpinner, 
+  FaExclamationTriangle, 
+  FaEdit, 
+  FaCheckCircle,
+  FaMapMarkerAlt,
+  FaPhone,
+  FaEnvelope
+} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 
-const API_BASE_URL = "https://rezon.up.railway.app/api";
+// 🔧 FIXED: API Config
+const API_BASE_URL = "https://rezon.up.railway.app/api";  // ← Space hatadein
+const BASE_URL = "https://rezon.up.railway.app";
+
+// 🔧 Image URL Helper
+const getImageUrl = (path) => {
+  if (!path) return '/default-avatar.png';
+  if (path.startsWith('http')) return path;
+  return `${BASE_URL}${path}`;
+};
 
 const Profile = ({ user }) => {
   const navigate = useNavigate();
@@ -16,10 +37,12 @@ const Profile = ({ user }) => {
     totalAds: 0,
     totalSold: 0,
     memberSince: "Jan 2025",
-    verified: false
+    verified: false,
+    phone: "",
+    email: ""
   });
 
-  // 🔒 Secure API call with error handling
+  // 🔧 FIXED: API calls with correct endpoints
   const fetchProfileData = useCallback(async () => {
     if (!user?.uid) {
       setError("User not authenticated");
@@ -31,55 +54,49 @@ const Profile = ({ user }) => {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('firebaseIdToken') || user?.accessToken;
+      const token = localStorage.getItem('firebaseIdToken');
       if (!token) {
         throw new Error("Authentication required");
       }
 
-      // Parallel API calls for better performance
+      // 🔧 FIXED: Correct endpoints
       const [reviewsRes, adsRes, userRes] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/reviews/seller/${user.uid}`, {
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000
         }),
-        axios.get(`${API_BASE_URL}/myads`, {
+        axios.get(`${API_BASE_URL}/myads`, {  // ← Correct endpoint
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000
         }),
-        axios.get(`${API_BASE_URL}/users/${user.uid}`, {
+        axios.get(`${API_BASE_URL}/users/me`, {  // ← /me use karein
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000
-        }).catch(() => ({ data: null })) // Optional call
+        })
       ]);
 
-      // Process reviews
       let reviewsData = [];
       let sellerData = {};
       if (reviewsRes.status === 'fulfilled') {
         reviewsData = reviewsRes.value.data?.reviews || [];
         sellerData = reviewsRes.value.data?.seller || {};
-      } else {
-        console.error("Reviews fetch failed:", reviewsRes.reason);
       }
 
-      // Process ads
       let adsData = [];
       if (adsRes.status === 'fulfilled') {
-        adsData = adsRes.value.data?.ads || adsRes.value.data || [];
+        adsData = adsRes.value.data || [];  // ← Direct array
       }
 
-      // Process user data
       let userData = {};
-      if (userRes.status === 'fulfilled' && userRes.value.data) {
-        userData = userRes.value.data;
+      if (userRes.status === 'fulfilled') {
+        userData = userRes.value.data || {};
       }
 
-      // Calculate stats
       const avgRating = sellerData.rating || (reviewsData.length > 0 
         ? (reviewsData.reduce((acc, r) => acc + r.rating, 0) / reviewsData.length).toFixed(1)
         : "0.0");
 
-      const soldAds = adsData.filter(ad => ad.status === 'sold').length;
+      const soldAds = adsData.filter(ad => ad.status === 'Sold').length;
 
       setReviews(reviewsData);
       setSellerStats({
@@ -89,7 +106,9 @@ const Profile = ({ user }) => {
         memberSince: userData.createdAt 
           ? new Date(userData.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
           : "Jan 2025",
-        verified: userData.isVerified || user?.emailVerified || false
+        verified: userData.isVerified || false,
+        phone: userData.phoneNumber || "",
+        email: userData.email || user?.email || ""
       });
 
     } catch (error) {
@@ -108,13 +127,13 @@ const Profile = ({ user }) => {
     fetchProfileData();
   }, [fetchProfileData]);
 
-  // 🎨 Memoized star rating component
+  // 🎨 FIXED: Professional Color Scheme - Emerald + Slate
   const StarRating = useMemo(() => ({ rating }) => (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
         <FaStar 
           key={star} 
-          className={`text-sm ${star <= rating ? "text-yellow-400" : "text-gray-200"}`} 
+          className={`text-sm ${star <= rating ? "text-amber-400" : "text-slate-200"}`} 
         />
       ))}
     </div>
@@ -122,22 +141,22 @@ const Profile = ({ user }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <FaSpinner className="animate-spin text-4xl text-pink-600 mb-4" />
-        <p className="text-gray-600 font-medium">Loading your profile...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <FaSpinner className="animate-spin text-4xl text-emerald-600 mb-4" />
+        <p className="text-slate-600 font-medium">Loading your profile...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <FaExclamationTriangle className="text-4xl text-red-500 mb-4" />
-        <p className="text-gray-800 font-bold mb-2">Oops! Something went wrong</p>
-        <p className="text-gray-500 text-sm mb-4 text-center">{error}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <FaExclamationTriangle className="text-4xl text-rose-500 mb-4" />
+        <p className="text-slate-800 font-bold mb-2">Oops! Something went wrong</p>
+        <p className="text-slate-500 text-sm mb-4 text-center">{error}</p>
         <button 
           onClick={fetchProfileData}
-          className="bg-pink-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-pink-700 transition"
+          className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700 transition"
         >
           Try Again
         </button>
@@ -147,12 +166,12 @@ const Profile = ({ user }) => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <FaUserCircle className="text-6xl text-gray-300 mb-4" />
-        <p className="text-gray-800 font-bold mb-2">Not logged in</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <FaUserCircle className="text-6xl text-slate-300 mb-4" />
+        <p className="text-slate-800 font-bold mb-2">Not logged in</p>
         <button 
           onClick={() => navigate('/login')}
-          className="bg-pink-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-pink-700 transition"
+          className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700 transition"
         >
           Login
         </button>
@@ -161,21 +180,21 @@ const Profile = ({ user }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
-      {/* Cover Banner */}
-      <div className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 h-48 w-full relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/20 to-transparent"></div>
+    <div className="min-h-screen bg-slate-50 pb-10">
+      {/* 🎨 FIXED: Professional Cover - Slate Gradient */}
+      <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 h-48 w-full relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-50 to-transparent"></div>
       </div>
       
-      <div className="max-w-5xl mx-auto px-4 -mt-20 relative z-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-10">
         {/* Profile Card */}
-        <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 border border-gray-100">
+        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 border border-slate-100">
           <div className="relative">
-            <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden bg-gray-100">
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-white shadow-lg overflow-hidden bg-slate-100">
               {user?.photoURL ? (
                 <img 
-                  src={user.photoURL} 
+                  src={getImageUrl(user.photoURL)}  // 🔧 Helper use kiya
                   alt="Profile" 
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -185,12 +204,12 @@ const Profile = ({ user }) => {
                 />
               ) : null}
               <div className={`w-full h-full items-center justify-center ${user?.photoURL ? 'hidden' : 'flex'}`}>
-                <FaUserCircle className="w-full h-full text-gray-300" />
+                <FaUserCircle className="w-full h-full text-slate-300" />
               </div>
             </div>
             
             {/* Online Status */}
-            <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 rounded-full border-3 border-white shadow-sm flex items-center justify-center">
+            <div className="absolute bottom-2 right-2 w-5 h-5 bg-emerald-500 rounded-full border-3 border-white shadow-sm flex items-center justify-center">
               <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             </div>
 
@@ -203,49 +222,65 @@ const Profile = ({ user }) => {
           </div>
 
           <div className="flex-1 text-center md:text-left">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-800">
               {user?.displayName || user?.name || "Rezon Member"}
             </h1>
-            <p className="text-gray-500 flex items-center justify-center md:justify-start gap-2 mt-1 text-sm">
-              <FaShieldAlt className={sellerStats.verified ? "text-blue-500" : "text-gray-400"} /> 
+            
+            {/* 🔧 ADDED: Contact Info */}
+            <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-2 sm:gap-4 mt-2 text-sm text-slate-500">
+              <span className="flex items-center gap-1">
+                <FaEnvelope className="text-slate-400" />
+                {sellerStats.email}
+              </span>
+              {sellerStats.phone && (
+                <span className="flex items-center gap-1">
+                  <FaPhone className="text-slate-400" />
+                  {sellerStats.phone}
+                </span>
+              )}
+            </div>
+
+            <p className="text-slate-500 flex items-center justify-center md:justify-start gap-2 mt-2 text-sm">
+              <FaShieldAlt className={sellerStats.verified ? "text-blue-500" : "text-slate-400"} /> 
               {sellerStats.verified ? "Rezon Verified" : "Member"} • Joined {sellerStats.memberSince}
             </p>
             
-            {/* Stats Grid */}
+            {/* 🎨 FIXED: Stats Grid - Emerald Theme */}
             <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 px-4 py-3 rounded-xl border border-orange-200 text-center min-w-[100px]">
-                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Rating</p>
-                <p className="text-xl font-black text-orange-600 flex items-center justify-center gap-1">
-                  {sellerStats.avgRating} <FaStar className="text-yellow-400 text-sm" />
+              <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 text-center min-w-[90px]">
+                <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Rating</p>
+                <p className="text-xl font-black text-emerald-700 flex items-center justify-center gap-1">
+                  {sellerStats.avgRating} <FaStar className="text-amber-400 text-sm" />
                 </p>
               </div>
               
-              <div className="bg-gradient-to-br from-pink-50 to-pink-100 px-4 py-3 rounded-xl border border-pink-200 text-center min-w-[100px]">
-                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Active Ads</p>
-                <p className="text-xl font-black text-pink-600">
+              <div className="bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center min-w-[90px]">
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Active Ads</p>
+                <p className="text-xl font-black text-slate-700">
                   {sellerStats.totalAds}
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-green-50 to-green-100 px-4 py-3 rounded-xl border border-green-200 text-center min-w-[100px]">
-                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Sold</p>
-                <p className="text-xl font-black text-green-600">
+              <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 text-center min-w-[90px]">
+                <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Sold</p>
+                <p className="text-xl font-black text-emerald-700">
                   {sellerStats.totalSold}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 w-full md:w-auto">
+          {/* 🔧 FIXED: Buttons - Responsive */}
+          <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto">
             <button 
               onClick={() => navigate('/profile/edit')}
-              className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              className="bg-slate-800 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-slate-900 transition shadow-md active:scale-95 flex items-center justify-center gap-2 text-sm"
             >
-              <FaEdit size={16} /> Edit Profile
+              <FaEdit size={14} /> Edit Profile
             </button>
             <button 
               onClick={() => navigate('/myads')}
-              className="bg-pink-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-pink-700 transition shadow-lg active:scale-95"
+              className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-700 transition shadow-md active:scale-95 text-sm"
             >
               My Ads
             </button>
@@ -256,33 +291,33 @@ const Profile = ({ user }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           {/* Reviews Section */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="bg-pink-100 p-2 rounded-lg">
-                  <FaStar className="text-pink-600" />
+                <div className="bg-emerald-100 p-2 rounded-lg">
+                  <FaStar className="text-emerald-600" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-800">Reviews & Feedback</h2>
+                <h2 className="text-lg font-bold text-slate-800">Reviews & Feedback</h2>
               </div>
-              <span className="bg-pink-100 text-pink-600 px-3 py-1 rounded-full text-xs font-bold">
+              <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold">
                 {reviews.length} {reviews.length === 1 ? 'Review' : 'Reviews'}
               </span>
             </div>
             
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
               {reviews.length > 0 ? (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-slate-100">
                   {reviews.map((rev, index) => (
-                    <div key={rev._id || index} className="p-6 hover:bg-gray-50 transition-colors">
+                    <div key={rev._id || index} className="p-5 hover:bg-slate-50 transition-colors">
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-sm">
                             {(rev.buyerId?.name || "B").charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-bold text-sm text-gray-800">
+                            <p className="font-bold text-sm text-slate-800">
                               {rev.buyerId?.name || "Verified Buyer"}
                             </p>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-slate-400">
                               {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : "Recently"}
                             </p>
                           </div>
@@ -290,14 +325,14 @@ const Profile = ({ user }) => {
                         <StarRating rating={rev.rating} />
                       </div>
                       
-                      <p className="text-gray-600 text-sm leading-relaxed mb-3">
+                      <p className="text-slate-600 text-sm leading-relaxed mb-3">
                         "{rev.comment || "Great transaction!"}"
                       </p>
                       
                       {rev.adId?.title && (
                         <div className="flex items-center gap-2 text-xs">
-                          <span className="text-gray-400">Purchased:</span>
-                          <span className="text-pink-600 font-semibold bg-pink-50 px-2 py-1 rounded">
+                          <span className="text-slate-400">Purchased:</span>
+                          <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded">
                             {rev.adId.title}
                           </span>
                         </div>
@@ -307,11 +342,11 @@ const Profile = ({ user }) => {
                 </div>
               ) : (
                 <div className="text-center py-16 px-4">
-                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FaStar className="text-3xl text-gray-300" />
+                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FaStar className="text-3xl text-slate-300" />
                   </div>
-                  <p className="text-gray-800 font-bold mb-1">No reviews yet</p>
-                  <p className="text-gray-400 text-sm">Complete sales to get reviews from buyers</p>
+                  <p className="text-slate-800 font-bold mb-1">No reviews yet</p>
+                  <p className="text-slate-400 text-sm">Complete sales to get reviews from buyers</p>
                 </div>
               )}
             </div>
@@ -320,46 +355,41 @@ const Profile = ({ user }) => {
           {/* Sidebar */}
           <div className="space-y-4">
             {/* Trust Tips */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="bg-gradient-to-r from-orange-500 to-pink-500 p-4 text-white">
-                <h3 className="font-bold flex items-center gap-2">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 text-white">
+                <h3 className="font-bold flex items-center gap-2 text-sm">
                   <FaShieldAlt /> Seller Tips
                 </h3>
               </div>
               <div className="p-4">
-                <ul className="space-y-3 text-sm text-gray-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-500 mt-0.5">✓</span>
-                    <span>Respond to messages quickly</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-500 mt-0.5">✓</span>
-                    <span>Use clear, high-quality photos</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-500 mt-0.5">✓</span>
-                    <span>Be honest about item condition</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-500 mt-0.5">✓</span>
-                    <span>Meet in safe, public places</span>
-                  </li>
+                <ul className="space-y-3 text-sm text-slate-600">
+                  {[
+                    "Respond to messages quickly",
+                    "Use clear, high-quality photos",
+                    "Be honest about item condition",
+                    "Meet in safe, public places"
+                  ].map((tip, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-emerald-500 mt-0.5">✓</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
 
             {/* Verification Status */}
-            <div className={`rounded-2xl p-6 text-white shadow-xl ${
+            <div className={`rounded-xl p-5 text-white shadow-lg ${
               sellerStats.verified 
                 ? 'bg-gradient-to-br from-blue-600 to-blue-700' 
-                : 'bg-gradient-to-br from-gray-600 to-gray-700'
+                : 'bg-gradient-to-br from-slate-600 to-slate-700'
             }`}>
               <div className="flex items-center gap-3 mb-3">
                 <div className={`p-2 rounded-lg ${sellerStats.verified ? 'bg-white/20' : 'bg-white/10'}`}>
-                  {sellerStats.verified ? <FaCheckCircle size={24} /> : <FaShieldAlt size={24} />}
+                  {sellerStats.verified ? <FaCheckCircle size={20} /> : <FaShieldAlt size={20} />}
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg">
+                  <h4 className="font-bold">
                     {sellerStats.verified ? "Identity Verified" : "Get Verified"}
                   </h4>
                   <p className="text-xs opacity-80">
@@ -373,7 +403,7 @@ const Profile = ({ user }) => {
               {!sellerStats.verified && (
                 <button 
                   onClick={() => navigate('/verify')}
-                  className="w-full mt-2 bg-white text-gray-800 py-2 rounded-lg font-bold text-sm hover:bg-gray-100 transition"
+                  className="w-full mt-2 bg-white text-slate-800 py-2 rounded-lg font-bold text-sm hover:bg-slate-100 transition"
                 >
                   Start Verification
                 </button>
@@ -381,21 +411,19 @@ const Profile = ({ user }) => {
             </div>
 
             {/* Quick Stats */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-              <h4 className="font-bold text-gray-800 mb-4 text-sm">Quick Stats</h4>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+              <h4 className="font-bold text-slate-800 mb-4 text-sm">Quick Stats</h4>
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">Response Rate</span>
-                  <span className="font-bold text-green-600">98%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">Avg. Response</span>
-                  <span className="font-bold text-gray-800">15 min</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">Member For</span>
-                  <span className="font-bold text-gray-800">{sellerStats.memberSince}</span>
-                </div>
+                {[
+                  { label: "Response Rate", value: "98%", color: "text-emerald-600" },
+                  { label: "Avg. Response", value: "15 min", color: "text-slate-800" },
+                  { label: "Member For", value: sellerStats.memberSince, color: "text-slate-800" }
+                ].map((stat, i) => (
+                  <div key={i} className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500">{stat.label}</span>
+                    <span className={`font-bold ${stat.color}`}>{stat.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

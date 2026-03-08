@@ -2,19 +2,22 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { FcGoogle } from "react-icons/fc";
-import { FaEye, FaEyeSlash, FaSpinner, FaTimes } from "react-icons/fa";
+import { FaEye, FaEyeSlash, FaSpinner, FaTimes, FaEnvelope, FaPhone, FaLock } from "react-icons/fa";
 import Signinpopup from "../Components/Signinpopup";
 import PhoneLogin from "../Components/PhoneLogin";
 import { auth, google } from "../firebase.config";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import toast from "react-hot-toast";
+import axios from "axios";
+
+// 🔧 API Config
+const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loginMethod, setLoginMethod] = useState("email");
   const [showSignin, setShowSignin] = useState(false);
   
-  // Form States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,29 +25,39 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
 
   const navigate = useNavigate();
 
-  // Prevent background scroll
+  // Prevent scroll
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = 'unset';
-      };
+      return () => { document.body.style.overflow = 'unset'; };
     }
   }, [isOpen]);
 
-  // Close on Escape key
+  // Escape key
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    
+    const handleEscape = (e) => { if (e.key === 'Escape') onClose(); };
     if (isOpen) {
       window.addEventListener('keydown', handleEscape);
       return () => window.removeEventListener('keydown', handleEscape);
     }
   }, [isOpen, onClose]);
 
-  // Email/Password Login
+  // 🔧 FIXED: Register user in backend after Firebase login
+  const registerInBackend = async (firebaseUser) => {
+    try {
+      const token = await firebaseUser.getIdToken();
+      await axios.post(`${API_BASE_URL}/register`, {
+        uid: firebaseUser.uid,
+        name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+        email: firebaseUser.email
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.log("Backend register error (might already exist):", err.message);
+    }
+  };
+
   const handleEmailLogin = useCallback(async (e) => {
     e.preventDefault();
     
@@ -53,7 +66,6 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
       return;
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       toast.error("Please enter a valid email address");
@@ -67,6 +79,9 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
       if (result.user) {
         const token = await result.user.getIdToken();
         localStorage.setItem('firebaseIdToken', token);
+        
+        // 🔧 Register in backend
+        await registerInBackend(result.user);
         
         toast.success("Welcome back! Login successful.");
         onClose();
@@ -102,7 +117,6 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
     }
   }, [email, password, onClose, navigate]);
 
-  // Google Login
   const handleGoogleLogin = useCallback(async () => {
     if (googleLoading) return;
     
@@ -113,6 +127,9 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
       if (result.user) {
         const token = await result.user.getIdToken();
         localStorage.setItem('firebaseIdToken', token);
+        
+        // 🔧 Register in backend
+        await registerInBackend(result.user);
         
         toast.success("Welcome! Google login successful.");
         onClose();
@@ -156,7 +173,6 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
 
   const switchMethod = useCallback((method) => {
     setLoginMethod(method);
-    // Clear fields when switching
     if (method === "phone") {
       setEmail("");
       setPassword("");
@@ -165,39 +181,47 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
 
   if (!isOpen) return null;
 
+  // 🎨 FIXED: Emerald + Slate Theme
   const modalContent = (
     <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-[450px] bg-white shadow-2xl rounded-3xl p-6 md:p-8 border-t-4 border-pink-600 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-md bg-white shadow-2xl rounded-2xl p-6 md:p-8 border-t-4 border-emerald-600 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-pink-600 transition-all text-xl"
+          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-all text-xl"
           aria-label="Close"
         >
           <FaTimes />
         </button>
 
-        <h2 className="text-3xl font-black text-center bg-gradient-to-r from-orange-500 via-pink-600 to-purple-600 text-transparent bg-clip-text mb-2">
-          Rezon Login
-        </h2>
-        <p className="text-center text-gray-500 text-sm mb-6">Welcome back! Please login to continue</p>
+        {/* 🎨 FIXED: Emerald Logo */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg mb-4">
+            <span className="text-white text-2xl font-black">R</span>
+          </div>
+          <h2 className="text-2xl font-black text-slate-800">
+            Welcome to <span className="text-emerald-600">Rezon</span>
+          </h2>
+          <p className="text-slate-500 text-sm mt-1">Login to continue buying & selling</p>
+        </div>
 
         {/* Toggle Buttons */}
-        <div className="flex mb-6 bg-gray-100 p-1 rounded-2xl">
+        <div className="flex mb-6 bg-slate-100 p-1 rounded-xl">
           {["email", "phone"].map((method) => (
             <button
               key={method}
               onClick={() => switchMethod(method)}
-              className={`flex-1 py-2.5 rounded-xl capitalize font-bold text-sm transition-all ${
+              className={`flex-1 py-2.5 rounded-lg capitalize font-bold text-sm transition-all flex items-center justify-center gap-2 ${
                 loginMethod === method
-                  ? "bg-white text-pink-600 shadow-md"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white text-emerald-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
               }`}
             >
+              {method === "email" ? <FaEnvelope size={14} /> : <FaPhone size={14} />}
               {method === "email" ? "Email" : "Phone"}
             </button>
           ))}
@@ -205,33 +229,34 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
 
         {loginMethod === "email" ? (
           <form onSubmit={handleEmailLogin} className="space-y-4">
-            <div>
+            <div className="relative">
+              <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="email"
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-pink-500 focus:bg-white rounded-2xl outline-none transition-all"
+                className="w-full p-4 pl-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all"
                 required
                 autoComplete="email"
               />
             </div>
 
             <div className="relative">
+              <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-pink-500 focus:bg-white rounded-2xl outline-none transition-all pr-12"
+                className="w-full p-4 pl-12 pr-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all"
                 required
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-600 transition-colors"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors"
               >
                 {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
               </button>
@@ -241,7 +266,7 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
               <button 
                 type="button"
                 onClick={() => toast.info("Password reset coming soon!")}
-                className="text-xs text-pink-600 font-semibold hover:underline"
+                className="text-xs text-emerald-600 font-semibold hover:underline"
               >
                 Forgot Password?
               </button>
@@ -250,7 +275,7 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
             <button 
               type="submit"
               disabled={loading}
-              className="w-full bg-pink-600 text-white py-4 rounded-2xl font-black shadow-lg hover:shadow-pink-200 hover:bg-pink-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -263,23 +288,23 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
             </button>
 
             <div className="flex items-center my-6">
-              <div className="flex-1 h-px bg-gray-200"></div>
-              <span className="px-4 text-gray-400 text-xs font-bold uppercase tracking-widest">Or</span>
-              <div className="flex-1 h-px bg-gray-200"></div>
+              <div className="flex-1 h-px bg-slate-200"></div>
+              <span className="px-4 text-slate-400 text-xs font-bold uppercase">Or</span>
+              <div className="flex-1 h-px bg-slate-200"></div>
             </div>
 
             <button 
               type="button"
               onClick={handleGoogleLogin}
               disabled={googleLoading}
-              className="w-full bg-white border-2 border-gray-200 py-3.5 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+              className="w-full bg-white border-2 border-slate-200 py-3.5 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
             >
               {googleLoading ? (
-                <FaSpinner className="animate-spin text-gray-600" />
+                <FaSpinner className="animate-spin text-slate-600" />
               ) : (
                 <FcGoogle size={22} />
               )}
-              <span className="text-gray-700">
+              <span className="text-slate-700">
                 {googleLoading ? "Connecting..." : "Continue with Google"}
               </span>
             </button>
@@ -290,11 +315,11 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
           </div>
         )}
 
-        <p className="mt-8 text-sm text-center text-gray-600">
+        <p className="mt-8 text-sm text-center text-slate-600">
           Don't have an account?{" "}
           <button
             onClick={handleShowSignin}
-            className="text-pink-600 font-black hover:underline underline-offset-4 transition-colors"
+            className="text-emerald-600 font-bold hover:underline underline-offset-4 transition-colors"
           >
             Sign Up
           </button>
@@ -305,9 +330,7 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
           <Signinpopup 
             onClose={handleCloseSignin} 
             isOpen={showSignin}
-            onSwitchToLogin={() => {
-              setShowSignin(false);
-            }}
+            onSwitchToLogin={() => setShowSignin(false)}
           />
         )}
       </div>

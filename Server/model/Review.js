@@ -5,7 +5,7 @@ const reviewSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: [true, 'Buyer ID is required'],
-        index: true // Atlas search optimization ke liye
+        index: true
     },
     sellerId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -30,15 +30,23 @@ const reviewSchema = new mongoose.Schema({
         type: String,
         trim: true,
         maxlength: [500, 'Comment cannot exceed 500 characters']
+    },
+    // Optional: Anonymous review
+    isAnonymous: {
+        type: Boolean,
+        default: false
+    },
+    // Optional: Seller reply
+    sellerReply: {
+        comment: { type: String, maxlength: 500 },
+        repliedAt: { type: Date }
     }
 }, {
     timestamps: true
 });
 
-// ✅ Seller profile par reviews fast load karne ke liye index
+// Indexes
 reviewSchema.index({ sellerId: 1, createdAt: -1 });
-
-// ✅ Prevent Duplicate Reviews: Aik buyer aik ad par aik hi review de sakay
 reviewSchema.index({ buyerId: 1, adId: 1 }, { unique: true });
 
 const Review = mongoose.model('Review', reviewSchema);
