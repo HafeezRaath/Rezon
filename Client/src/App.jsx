@@ -3,22 +3,20 @@ import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase.config";
 
+// Components & Pages Imports
+import Navbar from "./Components/Navbar";
 import Home from "./Pages/Home";
 import Profile from "./Pages/Profile";
-import AdDetails from "./Pages/AdDetails";                    // ✅ ADDED
 import LoginPopup from "./Components/Loginpopup";
 import SigninPopup from "./Components/Signinpopup";
 import Ads from "./CRUD/ads";
-import PostAd from "./CRUD/postad";                          // ✅ ADDED
-import UpdateAd from "./CRUD/updatead";                      // ✅ ADDED (optional)
+import PostAd from "./CRUD/postad";
+import UpdateAd from "./CRUD/updatead";
 import CategoryAds from "./Components/Categoryads"; 
 import ConversationList from "./Components/ConservationList"; 
 import ChatRoom from "./Components/ChatRoom";
-import Navbar from "./Components/Navbar";
 import PhoneLogin from "./Components/PhoneLogin";
-import VerificationFlow from "./loginsetup/VerificationFlow"; // ✅ ADDED
-
-// Admin Import
+import VerificationFlow from "./loginsetup/VerificationFlow";
 import AdminPanel from "./Admin";
 
 function App() {
@@ -26,7 +24,13 @@ function App() {
   const navigate = useNavigate();
   const background = location.state?.backgroundLocation;
 
+  // --- 🔐 AUTH STATE ---
   const [user, setUser] = useState(null);
+
+  // --- ⚙️ UI STATES (Hero & Navbar Logic) ---
+  const [showLogin, setShowLogin] = useState(false);
+  const [showAds, setShowAds] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -35,27 +39,45 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- 🔍 HANDLERS ---
+  const handleSearch = (query) => {
+    navigate(`/?search=${encodeURIComponent(query)}`);
+  };
+
+  const handleLocationChange = (loc) => {
+    navigate(`/?city=${encodeURIComponent(loc)}`);
+  };
+
   const isAdmin = (userUid) => {
-    const ADMIN_UIDS = [
-      "btVq523cTvh4pTUS7AErSyVNER53", // Your UID
-    ];
+    const ADMIN_UIDS = ["btVq523cTvh4pTUS7AErSyVNER53"];
     return ADMIN_UIDS.includes(userUid);
   };
 
   return (
     <>
-      <Navbar user={user} /> 
+      {/* 🟢 NAVBAR: Passing all required props */}
+      <Navbar 
+        user={user} 
+        onSearch={handleSearch} 
+        onLocationChange={handleLocationChange} 
+      /> 
 
       <Routes location={background || location}>
-        <Route path="/" element={<Home user={user} />} />
+        {/* 🏠 HOME: Passing states to trigger HeroSection logic */}
+        <Route path="/" element={
+          <Home 
+            user={user} 
+            setShowLogin={setShowLogin} 
+            setShowAds={setShowAds} 
+            setShowVerification={setShowVerification} 
+          />
+        } />
+        
         <Route path="/profile" element={<Profile user={user}/>}/>
+        <Route path="/post-ad" element={<PostAd user={user} />} />
+        <Route path="/update-ad/:id" element={<UpdateAd user={user} />} />
         
-        {/* Ad Routes - ✅ FIXED */}
-        <Route path="/ad/:id" element={<AdDetails />} />           // ✅ ADDED
-        <Route path="/post-ad" element={<PostAd user={user} />} /> // ✅ ADDED
-        <Route path="/update-ad/:id" element={<UpdateAd user={user} />} /> // ✅ ADDED
-        
-        {/* Category Routes */}
+        {/* 📱 CATEGORIES */}
         <Route path="/mobiles" element={<CategoryAds user={user} category="Mobile" />} /> 
         <Route path="/vehicles" element={<CategoryAds user={user} category="Car" />} /> 
         <Route path="/property-for-sale" element={<CategoryAds user={user} category="PropertySale" />} />
@@ -64,52 +86,49 @@ function App() {
         <Route path="/furniture" element={<CategoryAds user={user} category="Furniture" />} />
         <Route path="/category/:slug" element={<CategoryAds user={user} />} /> 
 
-        {/* Chat Routes */}
+        {/* 💬 CHAT */}
         <Route path="/conversations" element={<ConversationList user={user} />} />
         <Route path="/chat/:conversationId" element={<ChatRoom user={user} />} />
         
-        {/* Auth Routes */}
+        {/* 🔑 AUTH */}
         <Route path="/PhoneLogin" element={<PhoneLogin user={user}/>}/>
-        <Route path="/verify" element={<VerificationFlow user={user} />} /> // ✅ ADDED
+        <Route path="/verify" element={<VerificationFlow user={user} />} />
         
-        {/* Admin Route */}
-        <Route 
-          path="/admin/*" 
-          element={
-            user && isAdmin(user.uid) ? (
-              <AdminPanel />
-            ) : (
-              <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="text-center">
-                  <h1 className="text-4xl font-bold text-red-600 mb-4">🚫 Access Denied</h1>
-                  <p className="text-gray-600 mb-4">Sirf admin is page ko access kar sakta hai</p>
-                  <button 
-                    onClick={() => navigate('/')}
-                    className="bg-pink-600 text-white px-6 py-2 rounded-lg font-bold"
-                  >
-                    Home Par Jao
-                  </button>
-                </div>
+        {/* 🛡️ ADMIN */}
+        <Route path="/admin/*" element={
+          user && isAdmin(user.uid) ? (
+            <AdminPanel />
+          ) : (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+              <div className="text-center p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
+                <h1 className="text-5xl font-black text-rose-600 mb-4">🚫 Access Denied</h1>
+                <p className="text-slate-500 mb-8 font-medium">Sirf admin is page ko access kar sakta hai.</p>
+                <button 
+                  onClick={() => navigate('/')}
+                  className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+                >
+                  Home Par Jao
+                </button>
               </div>
-            )
-          } 
-        />
+            </div>
+          )
+        } />
         
-        {/* 404 Route - ✅ ADDED */}
+        {/* ⚠️ 404 */}
         <Route path="*" element={
-          <div className="min-h-screen flex items-center justify-center">
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
             <div className="text-center">
-              <h1 className="text-4xl font-bold mb-4">404</h1>
-              <p>Page not found</p>
-              <button onClick={() => navigate('/')} className="mt-4 text-blue-600">
-                Go Home
+              <h1 className="text-9xl font-black text-slate-200">404</h1>
+              <p className="text-xl font-bold text-slate-600 -mt-6">Page nahi mila!</p>
+              <button onClick={() => navigate('/')} className="mt-6 text-emerald-600 font-bold hover:underline">
+                Wapas Home Par Chalein
               </button>
             </div>
           </div>
         } />
       </Routes>
 
-      {/* Popup / Modal routes */}
+      {/* 📦 MODAL ROUTES (background state) */}
       {background && (
         <Routes>
           <Route path="/login" element={<LoginPopup onClose={() => navigate(-1)} />} />
@@ -117,6 +136,9 @@ function App() {
           <Route path="/ads" element={<Ads onClose={() => navigate(-1)} user={user} />} />
         </Routes>
       )}
+
+      {/* 🛠️ MANUAL POPUP TRIGGER (Optional: if not using /login route) */}
+      {showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
     </>
   );
 }
