@@ -1,5 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { 
+    useState, 
+    useEffect, 
+    useCallback, 
+    useRef, 
+    useMemo 
+} from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
     FaComments,
     FaRegBell,
@@ -10,21 +16,46 @@ import {
     FaSpinner,
     FaBars,
     FaTimes,
-    FaSearch
+    FaSearch,
+    FaChevronDown,
+    FaStore,
+    FaUserShield,
+    FaSignOutAlt,
+    FaCog,
+    FaQuestionCircle,
+    FaInfoCircle,
+    FaUserEdit,
+    FaBellSlash
 } from "react-icons/fa";
 import axios from "axios"; 
 import { auth } from "../firebase.config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import toast, { Toaster } from "react-hot-toast";
 
+// ==========================================
+// 🛡️ COMPONENT IMPORTS
+// ==========================================
+import LoginPopup from "./Loginpopup";
+import LocationDropdown from "./LocationDropdown";
+
+/**
+ * Navbar Component - REZON Marketplace
+ * Handles Navigation, Auth State, and Seller Verification Flow
+ */
 const Navbar = ({ onSearch, onLocationChange }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    
+    // --- 🔗 REFS ---
     const dropdownRef = useRef(null);
     const notifRef = useRef(null);
     const mobileMenuRef = useRef(null);
+    const searchInputRef = useRef(null);
     
+    // --- 📊 UI STATES ---
     const [selectedLocation, setSelectedLocation] = useState("Pakistan");
     const [showLogin, setShowLogin] = useState(false);
+    const [showLocDropdown, setShowLocDropdown] = useState(false);
     const [user, setUser] = useState(null);
     const [showDropdown, setShowDropdown] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -34,71 +65,73 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [scrolled, setScrolled] = useState(false);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-    // 🔧 FIXED: Proper API URL without trailing space
+    // --- 🌍 API CONFIGURATION ---
     const API_URL = window.location.hostname === "localhost" 
         ? "http://localhost:8000/api" 
         : "https://rezon.up.railway.app/api";
 
-    // 🎨 Professional Color Scheme - Emerald + Slate
-    const colors = {
-        primary: "emerald",      // Main brand color
-        secondary: "slate",      // Dark backgrounds
-        accent: "teal",          // Highlights
-        danger: "rose",        // Errors/Notifications
-    };
-
-    // 📱 Handle Scroll Effect
+    // ==========================================
+    // 📱 SCROLL EVENT LISTENER
+    // ==========================================
     useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 10);
+        const handleScrollEffect = () => {
+            if (window.scrollY > 30) {
+                setScrolled(true);
+            } else {
+                setScrolled(false);
+            }
         };
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
+        window.addEventListener("scroll", handleScrollEffect);
+        return () => window.removeEventListener("scroll", handleScrollEffect);
     }, []);
 
-    // 🔒 Click outside to close dropdowns
+    // ==========================================
+    // 🔒 CLICK OUTSIDE HANDLER
+    // ==========================================
     useEffect(() => {
-        const handleClickOutside = (event) => {
+        const handleGlobalClick = (event) => {
+            // Dropdown Close Logic
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setShowDropdown(false);
             }
+            // Notification Close Logic
             if (notifRef.current && !notifRef.current.contains(event.target)) {
                 setShowNotifications(false);
             }
+            // Mobile Menu Close Logic
             if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
                 setShowMobileMenu(false);
             }
         };
 
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
+        document.addEventListener("mousedown", handleGlobalClick);
+        return () => document.removeEventListener("mousedown", handleGlobalClick);
     }, []);
 
-    // 👤 Auth State Management
+    // ==========================================
+    // 👤 AUTHENTICATION STATE TRACKER
+    // ==========================================
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 try {
-                    const token = await currentUser.getIdToken(true);
-                    localStorage.setItem('firebaseIdToken', token);
+                    const idToken = await currentUser.getIdToken(true);
+                    localStorage.setItem('firebaseIdToken', idToken);
                     
-                    const tokenRefreshInterval = setInterval(async () => {
-                        const newToken = await currentUser.getIdToken(true);
-                        localStorage.setItem('firebaseIdToken', newToken);
-                    }, 3300000);
-
                     setUser({
                         uid: currentUser.uid,
                         displayName: currentUser.displayName || currentUser.email?.split('@')[0] || "User",
                         email: currentUser.email,
                         photoURL: currentUser.photoURL || "/default-avatar.png",
-                        emailVerified: currentUser.emailVerified,
-                        tokenRefreshInterval
+                        emailVerified: currentUser.emailVerified
                     });
-                } catch (error) {
-                    console.error("Auth error:", error);
-                    toast.error("Authentication failed");
+
+                    // Start notification polling if needed
+                    fetchNotificationsData(idToken);
+                } catch (err) {
+                    console.error("Auth sync failed in Navbar");
                 }
             } else {
                 setUser(null);
@@ -106,420 +139,356 @@ const Navbar = ({ onSearch, onLocationChange }) => {
             }
         });
 
-        return () => {
-            unsubscribe();
-            if (user?.tokenRefreshInterval) {
-                clearInterval(user.tokenRefreshInterval);
-            }
-        };
+        return () => unsubscribeAuth();
     }, []);
 
-    // 🔔 Notifications Fetching
-    useEffect(() => {
-        let interval;
-        if (user) {
-            fetchNotifications();
-            interval = setInterval(fetchNotifications, 30000);
-        }
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [user]);
-
-    // 🎯 SELL Button Logic
+    // ==========================================
+    // ➕ THE MAIN SELL LOGIC (SEQUENCE FIX)
+    // ==========================================
     const handleSellClick = useCallback(async () => {
+        console.log("Start Selling Triggered...");
+
+        // 1. PHASE ONE: LOGIN CHECK
         if (!user) {
-            setShowLogin(true);
+            toast("Identity hidden! Please login first. 🔒", {
+                icon: '🔑',
+                duration: 3000,
+                position: 'top-center'
+            });
+            setShowLogin(true); // Open Popup
             return;
         }
 
+        // 2. PHASE TWO: DATABASE VERIFICATION CHECK
         setIsVerifying(true);
+        const toastLoadingId = toast.loading("Checking verification status...");
+
         try {
             const token = localStorage.getItem('firebaseIdToken');
-            if (!token) throw new Error("No auth token");
+            if (!token) throw new Error("No secure token found");
 
-            const res = await axios.get(`${API_URL}/users/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const response = await axios.get(`${API_URL}/users/me`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                timeout: 10000
             });
 
-            if (!res.data?.isVerified) {
-                navigate('/verify');
+            toast.dismiss(toastLoadingId);
+
+            // 3. PHASE THREE: REDIRECTION LOGIC
+            if (!response.data?.isVerified) {
+                toast("Verification pending. Please complete your profile 🛡️", { icon: '⚠️' });
+                navigate('/verify'); // REDIRECT TO VERIFICATION
             } else {
-                navigate('/post-ad');
+                toast.success("Ready to sell!");
+                navigate('/post-ad'); // REDIRECT TO POST AD
             }
-        } catch (err) {
-            console.error("Verification check failed:", err);
-            navigate('/verify');
+        } catch (error) {
+            toast.dismiss(toastLoadingId);
+            console.error("Verification system error:", error);
+            
+            if (error.response?.status === 401) {
+                toast.error("Session expired. Please re-login.");
+                setShowLogin(true);
+            } else {
+                // Fallback to verify page if server check fails
+                navigate('/verify'); 
+            }
         } finally {
             setIsVerifying(false);
         }
     }, [user, API_URL, navigate]);
 
-    const fetchNotifications = useCallback(async () => {
+    // ==========================================
+    // 🔔 NOTIFICATIONS FETCHER
+    // ==========================================
+    const fetchNotificationsData = async (token) => {
         try {
-            const token = localStorage.getItem('firebaseIdToken');
-            if (!token) return;
-
             const res = await axios.get(`${API_URL}/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
-            const notifs = res.data?.notifications || [];
-            setNotifications(notifs);
-            setUnreadCount(notifs.filter(n => !n.read).length);
-        } catch (err) {
-            console.log("Notifications fetch failed");
+            const data = res.data?.notifications || [];
+            setNotifications(data);
+            setUnreadCount(data.filter(n => !n.read).length);
+        } catch (e) {
+            console.log("Notification fetch skipped");
         }
-    }, [API_URL]);
+    };
 
-    const handleSearch = (e) => {
+    // ==========================================
+    // 👤 USER INTERACTION HANDLERS
+    // ==========================================
+    const handleUserIconAction = () => {
+        if (!user) {
+            setShowLogin(true); // If no user, show login popup
+        } else {
+            setShowDropdown(prev => !prev); // Toggle profile menu
+        }
+    };
+
+    const handleLocationClick = () => {
+        setShowLocDropdown(true); // Open Location Selection Popup
+    };
+
+    const handleSearchSubmit = (e) => {
         e.preventDefault();
-        if (onSearch && searchQuery.trim()) {
-            onSearch(searchQuery);
+        if (searchQuery.trim()) {
+            onSearch?.(searchQuery);
             navigate(`/?search=${encodeURIComponent(searchQuery)}`);
         }
     };
 
-    const handleLocationSelect = (location) => {
-        setSelectedLocation(location);
-        if (onLocationChange) onLocationChange(location);
-        navigate(`/?city=${encodeURIComponent(location)}`);
-        setShowMobileMenu(false);
-    };
-
-    const handleLogout = useCallback(async () => {
+    const performLogout = async () => {
         try {
-            if (user?.tokenRefreshInterval) {
-                clearInterval(user.tokenRefreshInterval);
-            }
-            
+            const confirmLogout = window.confirm("Are you sure you want to sign out?");
+            if (!confirmLogout) return;
+
             await signOut(auth);
             setUser(null);
             setShowDropdown(false);
-            setNotifications([]);
-            setUnreadCount(0);
             localStorage.removeItem('firebaseIdToken');
-            toast.success("Logged out successfully");
+            toast.success("Signed out successfully!");
             navigate('/');
-        } catch (error) { 
-            toast.error("Logout failed");
+        } catch (err) {
+            toast.error("Logout process failed");
         }
-    }, [navigate, user]);
+    };
 
-    const getNotificationIcon = useCallback((type) => {
-        const icons = {
-            'WARNING': '⚠️',
-            'AD_DELETED': '🗑️',
-            'AD_REJECTED': '❌',
-            'ACCOUNT_SUSPENDED': '⏸️',
-            'ACCOUNT_BANNED': '🚫',
-            'REPORT_RESOLVED': '✅',
-            'MESSAGE': '💬',
-            'VERIFICATION': '✔️'
-        };
-        return icons[type] || '📢';
-    }, []);
-
+    // ==========================================
+    // 🎨 RENDER SECTION
+    // ==========================================
     return (
         <>
-            <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-                scrolled 
-                    ? 'bg-slate-900/95 backdrop-blur-md shadow-2xl border-b border-slate-700/50' 
-                    : 'bg-slate-900 border-b border-slate-800'
-            }`}>
-                <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
-                    <div className="flex items-center justify-between h-14 sm:h-16">
+            <header 
+                className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-700 ease-in-out ${
+                    scrolled 
+                    ? 'bg-slate-900/95 backdrop-blur-xl shadow-[0_10px_30px_-15px_rgba(0,0,0,0.5)] py-2' 
+                    : 'bg-slate-900 py-5'
+                } border-b border-slate-800/60`}
+            >
+                <div className="max-w-[1500px] mx-auto px-5 md:px-10">
+                    <div className="flex items-center justify-between gap-6">
                         
-                        {/* Left: Logo & Mobile Menu Button */}
-                        <div className="flex items-center gap-2 sm:gap-4">
+                        {/* --- LEFT: BRANDING --- */}
+                        <div className="flex items-center gap-5 shrink-0">
                             <button 
-                                className="lg:hidden p-2 text-slate-400 hover:text-emerald-400 transition-colors"
+                                className="lg:hidden p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-2xl transition-all"
                                 onClick={() => setShowMobileMenu(!showMobileMenu)}
                             >
-                                {showMobileMenu ? <FaTimes size={20} /> : <FaBars size={20} />}
+                                {showMobileMenu ? <FaTimes size={24} /> : <FaBars size={24} />}
                             </button>
                             
-                            <Link to="/" className="flex items-center gap-1 group">
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-emerald-500/25 transition-all">
-                                    <span className="text-white font-black text-sm sm:text-base">R</span>
+                            <Link to="/" className="flex items-center gap-3 group">
+                                <div className="w-11 h-11 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:rotate-12 group-hover:scale-110 transition-all duration-500">
+                                    <span className="text-white font-black text-2xl tracking-tighter">R</span>
                                 </div>
-                                <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                                    RE<span className="text-emerald-400 group-hover:text-emerald-300 transition-colors">ZON</span>
-                                </span>
+                                <div className="flex flex-col leading-none hidden xs:block">
+                                    <span className="text-2xl font-black text-white tracking-tighter">
+                                        RE<span className="text-emerald-400 group-hover:text-emerald-300 transition-colors">ZON</span>
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Marketplace</span>
+                                </div>
                             </Link>
                         </div>
 
-                        {/* Center: Search Bar (Hidden on mobile, visible on sm+) */}
-                        <div className="hidden sm:flex flex-1 max-w-xl mx-4 lg:mx-8">
-                            <form onSubmit={handleSearch} className="w-full relative">
+                        {/* --- CENTER: ADVANCED SEARCH --- */}
+                        <div className="hidden md:flex flex-1 max-w-3xl">
+                            <form 
+                                onSubmit={handleSearchSubmit}
+                                className={`w-full relative group transition-all duration-500 ${isSearchFocused ? 'translate-y-[-2px]' : ''}`}
+                            >
+                                <div className={`absolute inset-0 bg-emerald-500/10 rounded-2xl blur-xl transition-opacity duration-500 ${isSearchFocused ? 'opacity-100' : 'opacity-0'}`}></div>
                                 <input
+                                    ref={searchInputRef}
                                     type="text"
-                                    placeholder="Search ads..."
+                                    placeholder="Looking for a specific car or mobile? Search here..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                                    onFocus={() => setIsSearchFocused(true)}
+                                    onBlur={() => setIsSearchFocused(false)}
+                                    className="w-full bg-slate-800/40 border-2 border-slate-700/50 rounded-2xl py-3.5 pl-14 pr-6 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:bg-slate-800/90 transition-all relative z-10"
                                 />
-                                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
+                                <FaSearch className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors duration-300 z-20 ${isSearchFocused ? 'text-emerald-400 scale-110' : 'text-slate-500'}`} size={20} />
                             </form>
                         </div>
 
-                        {/* Right: Actions */}
-                        <div className="flex items-center gap-1 sm:gap-3">
+                        {/* --- RIGHT: ACTIONS & AUTH --- */}
+                        <div className="flex items-center gap-3 sm:gap-6">
                             
-                            {/* Location - Hidden on small mobile */}
-                            <button 
-                                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-slate-300 hover:text-emerald-400 transition-colors text-sm font-medium"
-                                onClick={() => navigate('/locations')}
-                            >
-                                <FaMapMarkerAlt size={14} />
-                                <span className="max-w-[80px] truncate">{selectedLocation}</span>
-                            </button>
-
-                            {/* Messages - Only if logged in */}
-                            {user && (
-                                <Link 
-                                    to="/conversations" 
-                                    className="relative p-2 text-slate-400 hover:text-emerald-400 transition-all hover:bg-slate-800 rounded-full"
-                                >
-                                    <FaComments className="text-lg sm:text-xl" />
-                                    <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900">
-                                        2
-                                    </span>
-                                </Link>
-                            )}
-
-                            {/* Notifications */}
-                            <div className="relative" ref={notifRef}>
+                            {/* 📍 GEOLOCATION SELECTOR */}
+                            <div className="relative shrink-0">
                                 <button 
-                                    className="relative p-2 text-slate-400 hover:text-emerald-400 transition-all hover:bg-slate-800 rounded-full"
-                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    onClick={handleLocationClick}
+                                    className="hidden lg:flex items-center gap-3 px-5 py-3 bg-slate-800/20 hover:bg-slate-800 rounded-2xl border border-slate-700/30 text-slate-300 hover:text-emerald-400 transition-all duration-300 font-black text-xs uppercase tracking-widest"
                                 >
-                                    <FaRegBell className="text-lg sm:text-xl" />
-                                    {unreadCount > 0 && (
-                                        <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
-                                            {unreadCount > 9 ? '9+' : unreadCount}
-                                        </span>
-                                    )}
+                                    <FaMapMarkerAlt className="text-emerald-500 animate-pulse" />
+                                    <span className="max-w-[110px] truncate">{selectedLocation}</span>
+                                    <FaChevronDown size={12} className="opacity-30" />
                                 </button>
-
-                                {/* Notifications Dropdown */}
-                                {showNotifications && (
-                                    <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl py-2 z-50 border border-slate-200 max-h-[80vh] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
-                                        <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                                            <h3 className="font-bold text-slate-800">Notifications</h3>
-                                            {unreadCount > 0 && (
-                                                <button 
-                                                    onClick={() => {}} 
-                                                    className="text-xs text-emerald-600 font-semibold hover:text-emerald-700 transition-colors"
-                                                >
-                                                    Mark all read
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="overflow-y-auto flex-1">
-                                            {notifications.length === 0 ? (
-                                                <div className="p-8 text-center text-slate-400">
-                                                    <FaRegBell className="mx-auto mb-3 text-4xl text-slate-300" />
-                                                    <p className="text-sm">No notifications yet</p>
-                                                </div>
-                                            ) : (
-                                                notifications.map((notif) => (
-                                                    <div 
-                                                        key={notif._id} 
-                                                        className={`px-4 py-3 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${!notif.read ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500' : ''}`}
-                                                    >
-                                                        <div className="flex gap-3">
-                                                            <span className="text-xl">{getNotificationIcon(notif.type)}</span>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="font-semibold text-sm text-slate-800 truncate">{notif.title}</p>
-                                                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
-                                                                <p className="text-[10px] text-slate-400 mt-1">
-                                                                    {new Date(notif.createdAt).toLocaleDateString()}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
+                                
+                                {showLocDropdown && (
+                                    <LocationDropdown 
+                                        onSelect={(loc) => { setSelectedLocation(loc); setShowLocDropdown(false); onLocationChange?.(loc); }} 
+                                        onClose={() => setShowLocDropdown(false)} 
+                                    />
                                 )}
                             </div>
 
-                            {/* Profile */}
-                            <div className="relative" ref={dropdownRef}>
-                                {user ? (
-                                    <button 
-                                        onClick={() => setShowDropdown(!showDropdown)}
-                                        className="flex items-center gap-2 p-1 pr-2 sm:pr-3 rounded-full hover:bg-slate-800 transition-all"
-                                    >
-                                        <img 
-                                            src={user.photoURL} 
-                                            alt="profile" 
-                                            className="w-8 h-8 rounded-full border-2 border-slate-600 hover:border-emerald-500 transition-colors object-cover"
-                                            onError={(e) => {
-                                                e.target.src = "/default-avatar.png";
-                                            }}
-                                        />
-                                        <span className="hidden sm:block text-sm font-medium text-slate-300 max-w-[80px] truncate">
-                                            {user.displayName}
-                                        </span>
-                                    </button>
-                                ) : (
-                                    <button 
-                                        onClick={() => setShowLogin(true)} 
-                                        className="p-2 text-slate-400 hover:text-emerald-400 transition-all hover:bg-slate-800 rounded-full"
-                                    >
-                                        <FaUserCircle className="text-2xl sm:text-3xl" />
-                                    </button>
-                                )}
+                            {/* 💬 SMART CHAT (HIDDEN IF LOGGED OUT) */}
+                            {user && (
+                                <Link 
+                                    to="/conversations" 
+                                    className="p-3.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-2xl transition-all relative group shadow-lg"
+                                >
+                                    <FaComments size={24} />
+                                    <span className="absolute top-2.5 right-2.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-emerald-500/50 group-hover:scale-125 transition-transform"></span>
+                                    <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Messages</div>
+                                </Link>
+                            )}
 
-                                {/* Profile Dropdown */}
-                                {showDropdown && user && (
-                                    <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-2xl py-2 z-50 border border-slate-200 animate-in fade-in slide-in-from-top-2">
-                                        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                                            <p className="font-bold text-slate-800 truncate">{user.displayName}</p>
-                                            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                            {/* 🔔 NOTIFICATION ENGINE */}
+                            <div className="relative shrink-0" ref={notifRef}>
+                                <button 
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    className="p-3.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-2xl transition-all group"
+                                >
+                                    <FaRegBell size={24} className="group-hover:rotate-12 transition-transform" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute top-2 right-2 w-5 h-5 bg-rose-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-slate-900 animate-bounce">
+                                            {unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+
+                            {/* 👤 AVATAR & DROPDOWN ENGINE */}
+                            <div className="relative shrink-0" ref={dropdownRef}>
+                                <button 
+                                    onClick={handleUserIconAction}
+                                    className="flex items-center gap-3 p-1.5 pr-3 rounded-2xl hover:bg-slate-800/80 border border-slate-800/0 hover:border-slate-700/50 transition-all duration-300 group"
+                                >
+                                    {user ? (
+                                        <>
+                                            <div className="relative">
+                                                <img 
+                                                    src={user.photoURL} 
+                                                    alt="User Profile" 
+                                                    className="w-10 h-10 rounded-xl border-2 border-emerald-500/20 object-cover group-hover:border-emerald-500 transition-colors shadow-lg" 
+                                                />
+                                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900"></div>
+                                            </div>
+                                            <div className="hidden xl:flex flex-col items-start leading-none">
+                                                <span className="text-xs font-black text-white">{user.displayName}</span>
+                                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Member</span>
+                                            </div>
+                                            <FaChevronDown size={10} className="text-slate-600 group-hover:text-emerald-400" />
+                                        </>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <FaUserCircle size={32} className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
+                                            <span className="hidden sm:block text-xs font-black text-slate-400 uppercase tracking-widest">Sign In</span>
                                         </div>
-                                        <Link 
-                                            to="/profile"
-                                            onClick={() => setShowDropdown(false)}
-                                            className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
-                                        >
-                                            My Profile
-                                        </Link>
-                                        <Link 
-                                            to="/my-ads"
-                                            onClick={() => setShowDropdown(false)}
-                                            className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
-                                        >
-                                            My Ads
-                                        </Link>
+                                    )}
+                                </button>
+
+                                {/* --- DROPDOWN BOX --- */}
+                                {showDropdown && user && (
+                                    <div className="absolute right-0 mt-4 w-72 bg-white rounded-[2rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] py-4 border border-slate-100 animate-in fade-in slide-in-from-top-5 overflow-hidden z-[100]">
+                                        <div className="px-6 py-5 bg-slate-50/80 border-b border-slate-100 mb-3 mx-2 rounded-3xl">
+                                            <p className="font-black text-slate-900 text-lg truncate leading-tight">{user.displayName}</p>
+                                            <p className="text-[11px] text-slate-400 truncate font-bold uppercase tracking-tight">{user.email}</p>
+                                        </div>
+                                        
+                                        <div className="px-2 space-y-1">
+                                            <Link to="/profile" className="flex items-center gap-4 px-6 py-3.5 text-sm text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-2xl font-black transition-all group">
+                                                <FaUserCircle size={18} className="text-slate-400 group-hover:text-emerald-500" /> Profile Overview
+                                            </Link>
+                                            <Link to="/my-ads" className="flex items-center gap-4 px-6 py-3.5 text-sm text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-2xl font-black transition-all group">
+                                                <FaStore size={18} className="text-slate-400 group-hover:text-emerald-500" /> Listing Manager
+                                            </Link>
+                                            <Link to="/settings" className="flex items-center gap-4 px-6 py-3.5 text-sm text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-2xl font-black transition-all group">
+                                                <FaCog size={18} className="text-slate-400 group-hover:text-emerald-500" /> Account Settings
+                                            </Link>
+                                        </div>
+
                                         <button 
-                                            onClick={handleLogout} 
-                                            className="w-full text-left px-4 py-2.5 text-sm text-rose-600 font-semibold hover:bg-rose-50 transition-colors border-t border-slate-100 mt-1"
+                                            onClick={performLogout} 
+                                            className="w-[90%] mx-auto flex items-center justify-center gap-3 py-4 text-sm text-rose-600 hover:bg-rose-50 rounded-2xl font-black border-t border-slate-100 mt-4 transition-all"
                                         >
-                                            Sign Out
+                                            <FaSignOutAlt /> Sign Out Safely
                                         </button>
                                     </div>
                                 )}
                             </div>
 
-                            {/* SELL Button */}
+                            {/* --- 🔥 CALL TO ACTION: SELL BUTTON --- */}
                             <button
                                 onClick={handleSellClick}
                                 disabled={isVerifying}
-                                className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-xs sm:text-sm px-3 sm:px-5 py-2 rounded-full hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ml-1 sm:ml-2"
+                                className="group flex items-center gap-3 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 text-white font-black text-sm px-8 py-4 rounded-2xl hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] hover:scale-[1.03] hover:-translate-y-1 transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                             >
                                 {isVerifying ? (
-                                    <FaSpinner className="animate-spin" size={12} />
+                                    <FaSpinner className="animate-spin" size={18} />
                                 ) : (
-                                    <FaPlus size={12} />
+                                    <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/40 transition-colors">
+                                        <FaPlus className="text-[10px]" />
+                                    </div>
                                 )}
-                                <span className="hidden xs:inline">SELL</span>
+                                <span className="hidden sm:inline tracking-widest uppercase">Sell Item</span>
                             </button>
-                        </div>
-                    </div>
 
-                    {/* Mobile Search Bar */}
-                    <div className="sm:hidden pb-3">
-                        <form onSubmit={handleSearch} className="relative">
-                            <input
-                                type="text"
-                                placeholder="Search ads..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-slate-800/50 border border-slate-700 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-all"
-                            />
-                            <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
-                        </form>
+                        </div>
                     </div>
                 </div>
+            </header>
 
-                {/* Mobile Menu */}
-                {showMobileMenu && (
-                    <div 
-                        ref={mobileMenuRef}
-                        className="lg:hidden absolute top-full left-0 right-0 bg-slate-900 border-b border-slate-800 shadow-2xl animate-in slide-in-from-top-2"
-                    >
-                        <div className="px-4 py-4 space-y-3">
-                            {/* Mobile Location */}
-                            <button 
-                                className="flex items-center gap-3 w-full px-4 py-3 text-slate-300 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all"
-                                onClick={() => navigate('/locations')}
-                            >
-                                <FaMapMarkerAlt size={18} />
-                                <span className="font-medium">{selectedLocation}</span>
+            {/* SPACER (Crucial for fixed header) */}
+            <div className={`transition-all duration-500 ${scrolled ? 'h-20' : 'h-24'}`} />
+
+            {/* ==========================================
+                🛡️ POPUP RENDERING ENGINE
+            ========================================== */}
+            
+            {/* 1. Login/Signup Flow */}
+            {showLogin && (
+                <LoginPopup 
+                    onClose={() => setShowLogin(false)} 
+                    onSuccess={() => { setShowLogin(false); toast.success("Welcome back!"); }}
+                />
+            )}
+
+            {/* 2. Location Selection Overlay */}
+            {showLocDropdown && (
+                <div className="lg:hidden fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm p-5 flex items-center justify-center">
+                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl overflow-hidden">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-slate-900 text-xl tracking-tighter">Select City</h3>
+                            <button onClick={() => setShowLocDropdown(false)} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                <FaTimes />
                             </button>
-
-                            {/* Mobile Navigation Links */}
-                            {user ? (
-                                <>
-                                    <Link 
-                                        to="/profile"
-                                        onClick={() => setShowMobileMenu(false)}
-                                        className="flex items-center gap-3 w-full px-4 py-3 text-slate-300 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all"
-                                    >
-                                        <FaUserCircle size={18} />
-                                        <span className="font-medium">My Profile</span>
-                                    </Link>
-                                    <Link 
-                                        to="/conversations"
-                                        onClick={() => setShowMobileMenu(false)}
-                                        className="flex items-center gap-3 w-full px-4 py-3 text-slate-300 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all"
-                                    >
-                                        <FaComments size={18} />
-                                        <span className="font-medium">Messages</span>
-                                        <span className="ml-auto bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">2</span>
-                                    </Link>
-                                    <Link 
-                                        to="/my-ads"
-                                        onClick={() => setShowMobileMenu(false)}
-                                        className="flex items-center gap-3 w-full px-4 py-3 text-slate-300 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all"
-                                    >
-                                        <FaPlus size={18} />
-                                        <span className="font-medium">My Ads</span>
-                                    </Link>
-                                    <button 
-                                        onClick={() => {
-                                            handleLogout();
-                                            setShowMobileMenu(false);
-                                        }}
-                                        className="flex items-center gap-3 w-full px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
-                                    >
-                                        <FaTimes size={18} />
-                                        <span className="font-medium">Sign Out</span>
-                                    </button>
-                                </>
-                            ) : (
-                                <button 
-                                    onClick={() => {
-                                        setShowLogin(true);
-                                        setShowMobileMenu(false);
-                                    }}
-                                    className="flex items-center gap-3 w-full px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-all"
-                                >
-                                    <FaUserCircle size={18} />
-                                    <span className="font-medium">Login / Register</span>
-                                </button>
-                            )}
                         </div>
+                        <LocationDropdown 
+                            onSelect={(loc) => { setSelectedLocation(loc); setShowLocDropdown(false); onLocationChange?.(loc); }} 
+                            onClose={() => setShowLocDropdown(false)} 
+                        />
                     </div>
-                )}
-            </nav>
-
-            {/* Spacer for fixed navbar */}
-            <div className="h-[60px] sm:h-[64px]" />
-
+                </div>
+            )}
+            
+            {/* GLOBAL TOAST SYSTEM */}
             <Toaster 
-                position="bottom-right"
-                toastOptions={{
-                    style: {
-                        background: '#1e293b',
+                position="bottom-right" 
+                reverseOrder={false}
+                toastOptions={{ 
+                    style: { 
+                        borderRadius: '24px', 
+                        background: '#0f172a', 
                         color: '#fff',
-                        border: '1px solid #334155'
+                        padding: '16px 24px',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        border: '1px solid rgba(255,255,255,0.1)'
                     }
-                }}
+                }} 
             />
         </>
     );
