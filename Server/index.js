@@ -1,3 +1,4 @@
+// index.js
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -29,7 +30,6 @@ const __dirname = path.dirname(__filename);
 // 🔐 Firebase Admin Setup
 // ==========================================
 try {
-  // Check if env variable exists
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     if (!admin.apps.length) {
@@ -50,38 +50,42 @@ const app = express();
 const httpServer = createServer(app);
 
 // ==========================================
-// 🌐 CORS & Socket Setup
+// 🌐 CORS & Socket Setup (FIXED FOR PRODUCTION)
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
   "https://raathdeveloper.com",
-  "https://rezon-production.up.railway.app", // Railway default domain bhi add rakhen
+  "https://rezon-production.up.railway.app",
   "http://localhost:5173"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      return callback(new Error('CORS Policy violation'), false);
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    console.error(`🚫 Origin Blocked by CORS: ${origin}`);
+    return callback(new Error('CORS Policy violation'), false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 }));
 
-// SOCKET.IO WITH PRODUCTION OPTIMIZATIONS
+// 🔧 Pre-flight support
+app.options("*", cors());
+
+// ==========================================
+// 🔌 Socket.IO WITH PRODUCTION OPTIMIZATIONS
+// ==========================================
 const io = new Server(httpServer, {
-  path: "/socket.io/", 
+  path: "/socket.io/",
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling'], // Websocket priority
+  transports: ['websocket', 'polling'],
   pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 45000,
@@ -94,7 +98,7 @@ const io = new Server(httpServer, {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Static uploads (Purani local images ke liye, naye Cloudinary links pe iski zaroorat nahi)
+// Static uploads folder (legacy local storage)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
@@ -103,20 +107,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use("/api", route);
 app.use("/api/admin", adminRoutes);
 
-// Health Check for Railway/Uptime Monitoring
+// Health check
 app.get("/health", (req, res) => {
-  res.json({ 
-    status: "OK", 
-    socket: "running", 
+  res.json({
+    status: "OK",
+    socket: "running",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-    timestamp: new Date() 
+    timestamp: new Date()
   });
 });
 
 // ==========================================
 // 🟢 Online Users Tracker
 // ==========================================
-let onlineUsers = new Map(); 
+let onlineUsers = new Map();
 
 // ==========================================
 // 🔌 Socket Events
@@ -136,7 +140,7 @@ io.on("connection", (socket) => {
     try {
       onlineUsers.set(userId, { socketId: socket.id, lastSeen: new Date() });
       await User.findOneAndUpdate(
-        { uid: userId }, 
+        { uid: userId },
         { isOnline: true, lastSeen: new Date() }
       );
       io.emit("status_change", { userId, isOnline: true });
@@ -181,15 +185,13 @@ io.on("connection", (socket) => {
 
       if (updatedChat) {
         const savedMsg = updatedChat.messages[updatedChat.messages.length - 1];
-        
-        // Emit message to the chat room
+
         io.to(chatId).emit("receive_message", {
           ...data,
           _id: savedMsg._id,
           timestamp: newMessage.timestamp
         });
 
-        // Notify other participants
         updatedChat.participants.forEach(participantUid => {
           if (participantUid !== senderId) {
             io.to(participantUid).emit("new_message_notification", {
@@ -220,7 +222,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", async (reason) => {
+  socket.on("disconnect", async () => {
     let disconnectedUser = null;
     for (const [userId, data] of onlineUsers.entries()) {
       if (data.socketId === socket.id) {
@@ -253,8 +255,7 @@ const connectDB = async (retries = 5) => {
     mongoose.set('strictQuery', false);
     await mongoose.connect(MONGO_URL);
     console.log("✅ MongoDB Connected Successfully");
-    
-    // Listen on all interfaces for Railway
+
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Rezon Server running on port: ${PORT}`);
     });
@@ -270,7 +271,7 @@ const connectDB = async (retries = 5) => {
 
 connectDB();
 
-// Graceful Shutdown for Railway
+// Graceful shutdown for Railway
 process.on('SIGTERM', () => {
   httpServer.close(() => {
     mongoose.connection.close(false, () => {
