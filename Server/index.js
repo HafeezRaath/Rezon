@@ -29,13 +29,16 @@ const __dirname = path.dirname(__filename);
 // 🔐 Firebase Admin Setup
 // ==========================================
 try {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+  // Check if env variable exists
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    }
+    console.log("✅ Firebase Admin SDK Initialized!");
   }
-  console.log("✅ Firebase Admin SDK Initialized!");
 } catch (error) {
   console.error("❌ Firebase Initialization Error:", error.message);
 }
@@ -49,21 +52,28 @@ const httpServer = createServer(app);
 // ==========================================
 // 🌐 CORS & Socket Setup
 // ==========================================
-// 🔧 FIX: Space removed from origin
 const allowedOrigins = [
-  "https://rezon.raathdeveloper.com",  // ✅ Space hatadein
-  "http://localhost:5173",
-  "http://localhost:3000"
+  "https://rezon.raathdeveloper.com",
+  "https://raathdeveloper.com",
+  "https://rezon-production.up.railway.app", // Railway default domain bhi add rakhen
+  "http://localhost:5173"
 ];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(new Error('CORS Policy violation'), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
-// SOCKET.IO WITH OPTIMIZED SETTINGS
+// SOCKET.IO WITH PRODUCTION OPTIMIZATIONS
 const io = new Server(httpServer, {
   path: "/socket.io/", 
   cors: {
@@ -71,7 +81,7 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['polling', 'websocket'], 
+  transports: ['websocket', 'polling'], // Websocket priority
   pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 45000,
@@ -83,6 +93,8 @@ const io = new Server(httpServer, {
 // ==========================================
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Static uploads (Purani local images ke liye, naye Cloudinary links pe iski zaroorat nahi)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
@@ -91,11 +103,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use("/api", route);
 app.use("/api/admin", adminRoutes);
 
+// Health Check for Railway/Uptime Monitoring
 app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     socket: "running", 
-    environment: process.env.NODE_ENV || "development",
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     timestamp: new Date() 
   });
 });
@@ -109,7 +122,7 @@ let onlineUsers = new Map();
 // 🔌 Socket Events
 // ==========================================
 io.on("connection", (socket) => {
-  console.log(`✅ Socket Connected: ${socket.id} | Mode: ${socket.conn.transport.name}`);
+  console.log(`✅ Socket Connected: ${socket.id}`);
 
   socket.on("setup", (userId) => {
     if (!userId) return;
@@ -124,8 +137,7 @@ io.on("connection", (socket) => {
       onlineUsers.set(userId, { socketId: socket.id, lastSeen: new Date() });
       await User.findOneAndUpdate(
         { uid: userId }, 
-        { isOnline: true, lastSeen: new Date() },
-        { upsert: true }
+        { isOnline: true, lastSeen: new Date() }
       );
       io.emit("status_change", { userId, isOnline: true });
     } catch (error) {
@@ -170,16 +182,17 @@ io.on("connection", (socket) => {
       if (updatedChat) {
         const savedMsg = updatedChat.messages[updatedChat.messages.length - 1];
         
+        // Emit message to the chat room
         io.to(chatId).emit("receive_message", {
           ...data,
           _id: savedMsg._id,
           timestamp: newMessage.timestamp
         });
 
-        const chat = await Chat.findById(chatId).populate('participants', 'uid');
-        chat.participants.forEach(participant => {
-          if (participant.uid !== senderId) {
-            io.to(participant.uid).emit("new_message_notification", {
+        // Notify other participants
+        updatedChat.participants.forEach(participantUid => {
+          if (participantUid !== senderId) {
+            io.to(participantUid).emit("new_message_notification", {
               chatId,
               senderId,
               message: message.substring(0, 50),
@@ -222,14 +235,11 @@ io.on("connection", (socket) => {
         await User.findOneAndUpdate({ uid: disconnectedUser }, { isOnline: false, lastSeen });
         onlineUsers.delete(disconnectedUser);
         io.emit("status_change", { userId: disconnectedUser, isOnline: false, lastSeen });
-        console.log(`🔴 User ${disconnectedUser} Offline (Reason: ${reason})`);
       } catch (error) {
         console.error("Disconnect update error:", error);
       }
     }
   });
-
-  socket.on("error", (err) => console.error("Socket error:", err));
 });
 
 // ==========================================
@@ -241,13 +251,12 @@ const MONGO_URL = process.env.MONGO_URI;
 const connectDB = async (retries = 5) => {
   try {
     mongoose.set('strictQuery', false);
-    await mongoose.connect(MONGO_URL, { 
-      serverSelectionTimeoutMS: 5000 
-    });
+    await mongoose.connect(MONGO_URL);
     console.log("✅ MongoDB Connected Successfully");
     
+    // Listen on all interfaces for Railway
     httpServer.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port: ${PORT}`);
+      console.log(`🚀 Rezon Server running on port: ${PORT}`);
     });
   } catch (error) {
     console.error(`❌ MongoDB Error (retries left: ${retries}):`, error.message);
@@ -261,11 +270,10 @@ const connectDB = async (retries = 5) => {
 
 connectDB();
 
-// Graceful Shutdown
+// Graceful Shutdown for Railway
 process.on('SIGTERM', () => {
   httpServer.close(() => {
     mongoose.connection.close(false, () => {
-      console.log('Process terminated');
       process.exit(0);
     });
   });

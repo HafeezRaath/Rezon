@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import bcrypt from 'bcrypt'; 
 import { 
     create, 
     deleteAd, 
@@ -16,28 +17,34 @@ import {
     canReview,
     getAISuggestions,
     verifyIdentity,
-    me 
+    me,
+    getChatList,
+    getChatMessages, 
+    sendMessage,
+    deleteChat,
+    startChat
 } from "../Controller/userController.js"; 
 
 import authenticate from '../authMiddleware.js'; 
-import Chat from "../model/chat.js"; 
 import User from "../model/user.js";
+// 👇 Cloudinary Middleware Import (Jo humne cloudinary.js mein banaya tha)
+import { upload as cloudinaryUpload } from "../cloudinary.js";
 
 const route = express.Router();
 
-// Multer Setup - Memory storage
-const storage = multer.memoryStorage();
-const upload = multer({ 
-    storage,
+// 📂 Local Memory Storage (Sirf AI aur KYC ke liye jahan Buffer ki zaroorat hai)
+const memoryStorage = multer.memoryStorage();
+const uploadMemory = multer({ 
+    storage: memoryStorage,
     limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 // ========== USER & AUTH ROUTES ==========
-route.post("/register", registerUser); 
+route.post("/register", registerUser);
 route.get("/users/me", authenticate, me);
 
-// Identity Verification
-route.post("/verify-identity", authenticate, upload.fields([
+// Identity Verification (OpenAI analysis ke liye buffer chahiye, isliye memoryStorage use kiya)
+route.post("/verify-identity", authenticate, uploadMemory.fields([
     { name: 'idFront', maxCount: 1 },
     { name: 'idBack', maxCount: 1 },
     { name: 'liveSelfie', maxCount: 1 }
@@ -55,7 +62,6 @@ route.get("/notifications", authenticate, async (req, res) => {
     }
 });
 
-// Mark single notification as read
 route.put("/notifications/:id/read", authenticate, async (req, res) => {
     try {
         await User.updateOne(
@@ -68,7 +74,6 @@ route.put("/notifications/:id/read", authenticate, async (req, res) => {
     }
 });
 
-// Mark all notifications as read
 route.put("/notifications/read-all", authenticate, async (req, res) => {
     try {
         await User.updateOne(
@@ -81,7 +86,6 @@ route.put("/notifications/read-all", authenticate, async (req, res) => {
     }
 });
 
-// Delete notification
 route.delete("/notifications/:id", authenticate, async (req, res) => {
     try {
         await User.updateOne(
@@ -95,12 +99,20 @@ route.delete("/notifications/:id", authenticate, async (req, res) => {
 });
 
 // ========== AD & AI ROUTES ==========
-route.post("/ad/ai-assist", authenticate, upload.array("images", 10), getAISuggestions);
-route.post("/ad", authenticate, upload.array("images", 10), create);
-route.get("/ads", getAllAds); 
+
+// 🤖 AI Suggestions (Images ko OpenAI analyze karega, isliye Buffer chahiye)
+route.post("/ad/ai-assist", authenticate, uploadMemory.array("images", 10), getAISuggestions);
+
+// ☁️ Create Ad (Images direct Cloudinary par upload hongi)
+route.post("/ad", authenticate, cloudinaryUpload.array("images", 10), create);
+
+route.get("/ads", getAllAds);
 route.get("/ads/:id", getAdById);
-route.get("/myads", authenticate, getMyAds); 
-route.put("/ads/:id", authenticate, upload.array("images", 5), updateAd);
+route.get("/myads", authenticate, getMyAds);
+
+// ☁️ Update Ad (New images bhi Cloudinary par jayengi)
+route.put("/ads/:id", authenticate, cloudinaryUpload.array("images", 5), updateAd);
+
 route.delete("/ads/:id", authenticate, deleteAd);
 
 // ========== SALES & REVIEWS ==========
@@ -114,33 +126,13 @@ route.get("/reviews/seller/:sellerId", getSellerReviews);
 route.post("/reports", authenticate, createReport);
 
 // ========== CHAT SYSTEM ROUTES ==========
-route.post("/chat/start", authenticate, async (req, res) => {
-    try {
-        const { buyerId, sellerId, adId } = req.body;
-        let chat = await Chat.findOne({
-            adId: adId,
-            participants: { $all: [buyerId, sellerId] }
-        });
+route.get("/chat/list/:userId", authenticate, getChatList);
+route.get("/chat/:chatId", authenticate, getChatMessages);
+route.post("/chat/start", authenticate, startChat);
+route.post("/chat/:chatId/message", authenticate, sendMessage);
+route.delete("/chat/:chatId", authenticate, deleteChat);
 
-        if (chat) {
-            chat.deletedBy = []; 
-            await chat.save();
-        } else {
-            chat = new Chat({
-                participants: [buyerId, sellerId],
-                adId: adId,
-                messages: [],
-                lastMessage: "",
-                deletedBy: [] 
-            });
-            await chat.save();
-        }
-        res.status(200).json({ chatId: chat._id });
-    } catch (error) {
-        res.status(500).json({ message: "Chat start karne mein masla hai" });
-    }
-});
-// Phone check endpoint
+// ========== USER PROFILE ROUTES ==========
 route.get("/check-phone", authenticate, async (req, res) => {
     try {
         const { phone } = req.query;
@@ -151,7 +143,6 @@ route.get("/check-phone", authenticate, async (req, res) => {
     }
 });
 
-// Update user profile (phone/password)
 route.put("/users/me", authenticate, async (req, res) => {
     try {
         const { phoneNumber, password, isPhoneVerified } = req.body;
@@ -159,7 +150,6 @@ route.put("/users/me", authenticate, async (req, res) => {
         
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        // Check phone unique
         if (phoneNumber && phoneNumber !== user.phoneNumber) {
             const exists = await User.findOne({ phoneNumber });
             if (exists) return res.status(400).json({ message: "Phone already registered" });
@@ -167,7 +157,6 @@ route.put("/users/me", authenticate, async (req, res) => {
 
         if (phoneNumber) user.phoneNumber = phoneNumber;
         if (isPhoneVerified) user.isPhoneVerified = true;
-        // Password hashing backend mein karein
         if (password) user.password = await bcrypt.hash(password, 10);
 
         await user.save();

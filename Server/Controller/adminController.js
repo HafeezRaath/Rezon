@@ -25,7 +25,10 @@ export const getDashboardStats = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            stats: { totalAds, activeAds, soldAds, totalUsers, totalReports, pendingReports, recentAds, recentReports }
+            stats: { 
+                totalAds, activeAds, soldAds, totalUsers, 
+                totalReports, pendingReports, recentAds, recentReports 
+            }
         });
     } catch (error) {
         res.status(500).json({ success: false, message: "Stats load nahi huay", error: error.message });
@@ -61,6 +64,7 @@ export const deleteAdAdmin = async (req, res) => {
     try {
         const { adId } = req.params;
         await Ad.findByIdAndDelete(adId);
+        // 🔧 Clean up: Ad delete ho toh uske reports bhi delete ho jayen
         await Report.deleteMany({ adId: adId });
         res.status(200).json({ success: true, message: "✅ Ad delete ho gayi" });
     } catch (error) {
@@ -124,6 +128,16 @@ export const updateReportStatus = async (req, res) => {
     }
 };
 
+export const deleteReport = async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        await Report.findByIdAndDelete(reportId);
+        res.status(200).json({ success: true, message: "Report deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 // ==========================================
 // 👤 USER MANAGEMENT
 // ==========================================
@@ -133,7 +147,7 @@ export const getAllUsers = async (req, res) => {
         const sanitizedUsers = users.map(user => {
             let finalName = user.displayName || user.name || user.fullName;
             if (!finalName || finalName === "" || finalName === "Unknown User") {
-                finalName = user.email.split('@')[0]; 
+                finalName = user.email ? user.email.split('@')[0] : "User"; 
             }
             return {
                 ...user._doc,
@@ -187,14 +201,26 @@ export const getUserReportHistory = async (req, res) => {
     }
 };
 
+// ⚠️ Warning with In-App Notification
 export const warnUser = async (req, res) => {
     try {
         const user = await User.findByIdAndUpdate(
             req.params.userId, 
-            { $inc: { warningCount: 1 }, isFlagged: true }, 
+            { 
+                $inc: { warningCount: 1 }, 
+                isFlagged: true,
+                $push: { 
+                    notifications: {
+                        type: 'system',
+                        title: '⚠️ Admin Warning',
+                        message: 'Aapko platform rules violate karne par warning di gayi hai. Ziyada warnings par account ban ho sakta hai.',
+                        createdAt: new Date()
+                    }
+                }
+            }, 
             { new: true }
         );
-        res.status(200).json({ success: true, message: "User ko warning de di gayi hai", user });
+        res.status(200).json({ success: true, message: "User ko warning aur notification bhej di gayi hai", user });
     } catch (error) {
         res.status(500).json({ success: false, message: "Action failed" });
     }
@@ -235,7 +261,6 @@ export const banUser = async (req, res) => {
     }
 };
 
-// 🔧 FIXED: Use isActive instead of isBlocked
 export const toggleBlockUser = async (req, res) => {
     try {
         const { userId } = req.body;
@@ -257,19 +282,14 @@ export const deleteUserAdmin = async (req, res) => {
     try {
         const { userId } = req.params;
         const user = await User.findById(userId);
-        if (user) await Ad.deleteMany({ posted_by_uid: user.uid }); 
-        await User.findByIdAndDelete(userId);
-        res.status(200).json({ success: true, message: "User and their ads deleted" });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-export const deleteReport = async (req, res) => {
-    try {
-        const { reportId } = req.params;
-        await Report.findByIdAndDelete(reportId);
-        res.status(200).json({ success: true, message: "Report deleted successfully" });
+        if (user) {
+            // 🔧 Cascading Delete: User ke Ads, Reports aur Reviews saaf karen
+            await Ad.deleteMany({ posted_by_uid: user.uid });
+            await Report.deleteMany({ $or: [{ reporterId: userId }, { reportedUserId: userId }] });
+            await Review.deleteMany({ $or: [{ buyerId: userId }, { sellerId: userId }] });
+            await User.findByIdAndDelete(userId);
+        }
+        res.status(200).json({ success: true, message: "User aur uska sara data delete kar diya gaya" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
