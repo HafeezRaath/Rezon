@@ -90,7 +90,7 @@ const ChatRoom = ({ user }) => {
         };
     }, [user, conversationId]);
 
-    // Fetch History
+    // 🔧 FIXED: Fetch History with correct endpoint
     useEffect(() => {
         const fetchHistory = async () => {
             if (!user || !conversationId) return;
@@ -98,7 +98,7 @@ const ChatRoom = ({ user }) => {
             try {
                 const token = await user.getIdToken();
                 const res = await axios.get(
-                    `${API_BASE_URL}/chat/history/${conversationId}`,
+                    `${API_BASE_URL}/chat/${conversationId}`,  // ✅ FIXED: Removed "history/"
                     {
                         headers: { Authorization: `Bearer ${token}` },
                         timeout: 10000

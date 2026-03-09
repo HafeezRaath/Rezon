@@ -96,7 +96,6 @@ const Ads = ({ onClose, user }) => {
         if (!authHeaders) return;
 
         // Simple confirm dialog instead of complex toast promise
-        const confirmed = window.confirm("Are you sure you want to delete this ad? This action cannot be undone.");
         
         if (!confirmed) return;
 

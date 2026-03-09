@@ -1,9 +1,9 @@
-import React, { 
-    useState, 
-    useEffect, 
-    useCallback, 
-    useRef, 
-    useMemo 
+import React, {
+    useState,
+    useEffect,
+    useCallback,
+    useRef,
+    useMemo
 } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -33,7 +33,7 @@ import {
     FaThLarge,
     FaArrowLeft
 } from "react-icons/fa";
-import axios from "axios"; 
+import axios from "axios";
 import { auth } from "../firebase.config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import toast, { Toaster } from "react-hot-toast";
@@ -45,12 +45,12 @@ import LocationDropdown from "./LocationDropdown";
 const Navbar = ({ onSearch, onLocationChange }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     const dropdownRef = useRef(null);
     const notifRef = useRef(null);
     const mobileMenuRef = useRef(null);
     const searchInputRef = useRef(null);
-    
+
     const [selectedLocation, setSelectedLocation] = useState("Pakistan");
     const [showLogin, setShowLogin] = useState(false);
     const [showLocDropdown, setShowLocDropdown] = useState(false);
@@ -174,24 +174,21 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     // 🔥 MOBILE MENU COMPONENT
     const MobileMenu = () => (
-        <div 
+        <div
             ref={mobileMenuRef}
-            className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${
-                showMobileMenu ? 'visible' : 'invisible'
-            }`}
+            className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${showMobileMenu ? 'visible' : 'invisible'
+                }`}
         >
             {/* Backdrop */}
-            <div 
-                className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${
-                    showMobileMenu ? 'opacity-100' : 'opacity-0'
-                }`}
+            <div
+                className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showMobileMenu ? 'opacity-100' : 'opacity-0'
+                    }`}
                 onClick={() => setShowMobileMenu(false)}
             />
-            
+
             {/* Menu Panel */}
-            <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ${
-                showMobileMenu ? 'translate-x-0' : '-translate-x-full'
-            }`}>
+            <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'
+                }`}>
                 {/* Header */}
                 <div className="p-6 border-b border-slate-800 flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
@@ -200,7 +197,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                         </div>
                         <span className="text-xl font-black text-white">RE<span className="text-emerald-400">ZON</span></span>
                     </Link>
-                    <button 
+                    <button
                         onClick={() => setShowMobileMenu(false)}
                         className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
                     >
@@ -219,8 +216,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </div>
                         </div>
                         {isAdmin(user.uid) && (
-                            <Link 
-                                to="/admin/dashboard" 
+                            <Link
+                                to="/admin/dashboard"
                                 onClick={() => setShowMobileMenu(false)}
                                 className="flex items-center gap-3 p-3 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold mb-2"
                             >
@@ -230,7 +227,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     </div>
                 ) : (
                     <div className="p-6 border-b border-slate-800">
-                        <button 
+                        <button
                             onClick={() => { setShowMobileMenu(false); setShowLogin(true); }}
                             className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold"
                         >
@@ -273,10 +270,10 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                         <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
                             <FaStore /> My Ads
                         </Link>
-                        <Link to="/conversations" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                        <Link to="/conversationlist" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
                             <FaComments /> Messages
                         </Link>
-                        <button 
+                        <button
                             onClick={() => { setShowMobileMenu(false); handleLogout(); }}
                             className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl"
                         >
@@ -290,11 +287,10 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     // 🔥 MOBILE SEARCH OVERLAY
     const MobileSearch = () => (
-        <div className={`fixed inset-0 z-[100] bg-slate-900 transform transition-transform duration-300 lg:hidden ${
-            showMobileSearch ? 'translate-y-0' : '-translate-y-full'
-        }`}>
+        <div className={`fixed inset-0 z-[100] bg-slate-900 transform transition-transform duration-300 lg:hidden ${showMobileSearch ? 'translate-y-0' : '-translate-y-full'
+            }`}>
             <div className="p-4 border-b border-slate-800 flex items-center gap-4">
-                <button 
+                <button
                     onClick={() => setShowMobileSearch(false)}
                     className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
                 >
@@ -311,14 +307,14 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                         autoFocus
                     />
                 </form>
-                <button 
+                <button
                     onClick={handleSearchSubmit}
                     className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white"
                 >
                     <FaSearch />
                 </button>
             </div>
-            
+
             {/* Recent Searches / Suggestions */}
             <div className="p-4">
                 <p className="text-xs font-bold text-slate-500 uppercase mb-3">Popular Searches</p>
@@ -353,7 +349,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     <FaThLarge size={20} />
                     <span className="text-[10px] font-medium">Categories</span>
                 </Link>
-                <button 
+                <button
                     onClick={handleSellClick}
                     className="flex flex-col items-center -mt-6"
                 >
@@ -362,11 +358,11 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     </div>
                     <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
                 </button>
-                <Link to="/conversations" className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('conversation') ? 'text-emerald-400' : 'text-slate-400'}`}>
+                <Link to="/conversations" className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('conversations') ? 'text-emerald-400' : 'text-slate-400'}`}>
                     <FaComments size={20} />
                     <span className="text-[10px] font-medium">Chat</span>
                 </Link>
-                <button 
+                <button
                     onClick={() => user ? setShowDropdown(true) : setShowLogin(true)}
                     className={`flex flex-col items-center gap-1 p-2 ${user ? 'text-emerald-400' : 'text-slate-400'}`}
                 >
@@ -384,22 +380,21 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     return (
         <>
             {/* 🔥 MAIN HEADER */}
-            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ${
-                scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
-            } border-b border-slate-800/60`}>
-                
+            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
+                } border-b border-slate-800/60`}>
+
                 <div className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-12">
                     <div className="flex items-center justify-between gap-4">
-                        
+
                         {/* LEFT: Logo & Mobile Menu */}
                         <div className="flex items-center gap-3 shrink-0">
-                            <button 
+                            <button
                                 className="lg:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
                                 onClick={() => setShowMobileMenu(true)}
                             >
                                 <FaBars size={20} />
                             </button>
-                            
+
                             <Link to="/" className="flex items-center gap-3 group">
                                 <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all">
                                     <span className="text-white font-black text-xl md:text-2xl">R</span>
@@ -428,7 +423,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                         </div>
 
                         {/* CENTER: Search Button - Mobile */}
-                        <button 
+                        <button
                             className="lg:hidden flex-1 max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-4 text-left text-slate-400 flex items-center gap-3"
                             onClick={() => setShowMobileSearch(true)}
                         >
@@ -438,29 +433,39 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                         {/* RIGHT: Actions */}
                         <div className="flex items-center gap-2 md:gap-4">
-                            
+
                             {/* Location - Desktop */}
                             <div className="hidden xl:block relative">
-                                <button 
-                                    onClick={() => setShowLocDropdown(true)}
+                                <button
+                                    onClick={() => setShowLocDropdown(prev => !prev)}
                                     className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/30 hover:bg-slate-800 rounded-xl border border-slate-700/50 text-slate-300 hover:text-emerald-400 font-bold text-xs uppercase tracking-wider transition-all"
                                 >
                                     <FaMapMarkerAlt className="text-emerald-500" />
                                     <span className="max-w-[100px] truncate">{selectedLocation}</span>
-                                    <FaChevronDown size={10} />
-                                </button>
-                                {showLocDropdown && (
-                                    <LocationDropdown 
-                                        onSelect={(loc) => { setSelectedLocation(loc); setShowLocDropdown(false); onLocationChange?.(loc); }} 
-                                        onClose={() => setShowLocDropdown(false)} 
+                                    <FaChevronDown
+                                        size={10}
+                                        className={`transition-transform duration-200 ${showLocDropdown ? "rotate-180" : ""}`}
                                     />
+                                </button>
+
+                                {showLocDropdown && (
+                                    <div className="absolute top-full left-0 mt-2 z-50">
+                                        <LocationDropdown
+                                            selected={selectedLocation}
+                                            onChange={(loc) => {
+                                                setSelectedLocation(loc);
+                                                setShowLocDropdown(false);
+                                                onLocationChange?.(loc);
+                                            }}
+                                        />
+                                    </div>
                                 )}
                             </div>
 
                             {/* Chat - Desktop */}
                             {user && (
-                                <Link 
-                                    to="/conversations" 
+                                <Link
+                                    to="/conversations"
                                     className="hidden md:flex p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative"
                                 >
                                     <FaComments size={22} />
@@ -470,8 +475,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                             {/* Notifications */}
                             <div className="relative hidden md:block" ref={notifRef}>
-                                <button 
-                                    onClick={() => setShowNotifications(!showNotifications)} 
+                                <button
+                                    onClick={() => setShowNotifications(!showNotifications)}
                                     className="p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative"
                                 >
                                     <FaRegBell size={22} />
@@ -485,8 +490,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                             {/* Profile */}
                             <div className="relative hidden md:block" ref={dropdownRef}>
-                                <button 
-                                    onClick={handleSellClick} 
+                                <button
+                                    onClick={handleSellClick}
                                     className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm px-4 md:px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
                                 >
                                     <FaPlus size={16} />
@@ -495,7 +500,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </div>
 
                             {/* Mobile Profile Button */}
-                            <button 
+                            <button
                                 className="md:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
                                 onClick={() => user ? navigate('/profile') : setShowLogin(true)}
                             >
@@ -520,23 +525,23 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
             {/* Modals */}
             {showLogin && (
-                <LoginPopup 
-                    isOpen={showLogin} 
-                    onClose={() => setShowLogin(false)} 
+                <LoginPopup
+                    isOpen={showLogin}
+                    onClose={() => setShowLogin(false)}
                     onSuccess={() => setShowLogin(false)}
                 />
             )}
-            
-            <Toaster 
+
+            <Toaster
                 position="top-center"
-                toastOptions={{ 
-                    style: { 
-                        background: '#0f172a', 
-                        color: '#fff', 
+                toastOptions={{
+                    style: {
+                        background: '#0f172a',
+                        color: '#fff',
                         borderRadius: '16px',
                         border: '1px solid #334155'
                     }
-                }} 
+                }}
             />
         </>
     );

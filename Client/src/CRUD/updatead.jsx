@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
-import { FaTimes, FaSpinner, FaCamera, FaTrash, FaSave, FaUndo } from "react-icons/fa";
+import { FaTimes, FaSpinner, FaCamera, FaTrash, FaSave, FaUndo, FaMagic } from "react-icons/fa";
 import LocationDropdown from "../Components/LocationDropdown";
 
 // 🔧 FIXED: Space removed
@@ -118,11 +118,13 @@ const getInitialState = () => ({
     description: "",
     price: "",
     location: "",
+    suggestedPriceByAI: null, // 🔧 FIX: AI suggested price track karne ke liye
 });
 
 const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
     const [formData, setFormData] = useState(getInitialState());
     const [loading, setLoading] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false); // 🔧 FIX: AI loading state add ki
 
     // 🔧 FIXED: Proper cleanup - revoke preview URLs
     useEffect(() => {
@@ -147,6 +149,7 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
                 price: adData.price?.toString() || "",
                 location: adData.location || "",
                 category: adData.category,
+                suggestedPriceByAI: adData.suggestedPriceByAI || null, // 🔧 FIX: Load existing AI price if available
             };
             
             // Load category-specific details
@@ -236,6 +239,73 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
         toast.success("Image restored");
     }, []);
 
+    // 🔧 FIXED: AI Assist function add ki UpdateAd mein bhi
+    const handleAiAssist = useCallback(async () => {
+        const allImages = [
+            ...formData.existingImages, 
+            ...formData.images.map(img => img.file)
+        ];
+        
+        if (allImages.length === 0) {
+            toast.error("Please upload images first! 📸");
+            return;
+        }
+        
+        setAiLoading(true);
+        const token = localStorage.getItem("firebaseIdToken");
+        
+        if (!token) {
+            toast.error("Please login first! 🔒");
+            setAiLoading(false);
+            return;
+        }
+
+        const aiData = new FormData();
+        // Sirf new images bhejne hain AI ko analysis ke liye
+        formData.images.forEach(({ file }) => {
+            aiData.append("images", file);
+        });
+        // Existing images URLs bhi bhej sakte hain agar backend support kare
+        if (formData.existingImages.length > 0) {
+            aiData.append("existingImages", JSON.stringify(formData.existingImages));
+        }
+        aiData.append("category", adData.category);
+
+        try {
+            const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
+                headers: { 
+                    "Content-Type": "multipart/form-data",
+                    Authorization: `Bearer ${token}` 
+                },
+                timeout: 30000
+            });
+
+            const { title, condition, description, suggestedPrice, details } = res.data.data || {};
+            
+            setFormData(prev => ({
+                ...prev,
+                title: title || prev.title,
+                condition: condition || prev.condition,
+                description: description || prev.description,
+                price: suggestedPrice?.toString() || prev.price,
+                // 🔧 FIX: Suggested Price ko state mein rakhen backend validation ke liye
+                suggestedPriceByAI: suggestedPrice || prev.suggestedPriceByAI, 
+                ...(details || {})
+            }));
+
+            toast.success("✨ AI has analyzed your images!");
+        } catch (error) {
+            console.error("AI Assist Error:", error);
+            const errorMsg = error.response?.data?.message || 
+                           error.code === 'ECONNABORTED' ? "Request timeout. Try again." :
+                           "AI analysis failed. Please enter details manually.";
+            toast.error(errorMsg);
+        } finally {
+            setAiLoading(false);
+        }
+    }, [formData.images, formData.existingImages, adData.category]);
+
+    // 🔧 FIXED: submitForm mein suggestedPriceByAI bhejna
     const submitForm = useCallback(async (e) => {
         e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
@@ -265,6 +335,11 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
             finalFormData.append("location", formData.location);
             finalFormData.append("category", adData.category);
 
+            // 🔧 FIX: Suggested price bhejna taake Backend ka 25% Guard bypass na ho
+            if (formData.suggestedPriceByAI) {
+                finalFormData.append("suggestedPriceByAI", formData.suggestedPriceByAI);
+            }
+
             // Category-specific fields
             const details = {};
             const numericFields = ['price', 'mileage', 'year', 'batteryHealth', 'investmentRequired', 
@@ -288,7 +363,7 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
                 finalFormData.append("imagesToDelete", JSON.stringify(formData.imagesToDelete));
             }
 
-            // New images
+            // ☁️ CLOUDINARY: New images ko 'images' key ke sath bhejna (Backend matching)
             formData.images.forEach(({ file }) => {
                 finalFormData.append("images", file);
             });
@@ -301,7 +376,7 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
                 finalFormData,
                 { 
                     headers: { 
-                        "Content-Type": "multipart/form-data",
+                        "Content-Type": "multipart/form-data", // Cloudinary/Multer ke liye lazmi
                         "Authorization": `Bearer ${token}`
                     },
                     timeout: 60000
@@ -317,6 +392,7 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
             onClose();
         } catch (error) {
             console.error("Update Error:", error);
+            // 🛡️ Error handle: Agar price 25% range se bahar hui toh backend error dikhayega
             const errorMsg = error.response?.data?.message || 
                            error.code === 'ECONNABORTED' ? "Timeout. Try smaller images." :
                            "Update failed. Try again.";
@@ -486,6 +562,28 @@ const UpdateAd = ({ adData, onClose, onUpdate, user }) => {
                                         ))}
                                     </div>
                                 </div>
+                            )}
+
+                            {/* AI Assist Button - New Images ke liye */}
+                            {formData.images.length > 0 && (
+                                <button 
+                                    type="button"
+                                    onClick={handleAiAssist}
+                                    disabled={aiLoading}
+                                    className="w-full py-3 bg-gradient-to-r from-violet-600 via-emerald-600 to-teal-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {aiLoading ? (
+                                        <>
+                                            <FaSpinner className="animate-spin" />
+                                            Analyzing new images...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaMagic />
+                                            Auto-Fill with AI (New Images)
+                                        </>
+                                    )}
+                                </button>
                             )}
 
                             {/* Upload Button */}

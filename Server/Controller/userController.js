@@ -577,62 +577,48 @@ export const verifyIdentity = async (req, res) => {
     try {
         const userUid = req.user.uid;
 
-        // 🔧 FIXED: Check for all 3 files
+        // 1. Production Improvement: Check if already verified
+        const existingUser = await User.findOne({ uid: userUid });
+        if (existingUser?.isVerified) {
+            return res.status(400).json({ message: "Aapka account pehle se verified hai! ✅" });
+        }
+
+        // 2. Multi-File Check
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
             return res.status(400).json({ 
-                message: "ID Front, ID Back aur Live Selfie teeno lazmi hain." 
+                message: "ID Front, ID Back aur Live Selfie teeno upload karna lazmi hain. 📸" 
             });
         }
 
+        // 3. Image conversion (OpenAI GPT-4o needs high detail for face matching)
         const idFrontBase64 = req.files.idFront[0].buffer.toString('base64');
-        const idBackBase64 = req.files.idBack[0].buffer.toString('base64');  // 🔧 ADDED
+        const idBackBase64 = req.files.idBack[0].buffer.toString('base64');
         const selfieBase64 = req.files.liveSelfie[0].buffer.toString('base64');
 
         const response = await openai.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4o", // High capability model used
             messages: [
                 {
                     role: "user",
                     content: [
                         { 
                             type: "text", 
-                            text: `Task: Compare these 3 images for identity verification.
-                            
-                            Image 1: CNIC Front (Main photo with clear face)
-                            Image 2: CNIC Back (Secondary photo, might be smaller)
-                            Image 3: Live Selfie (Real-time capture)
-                            
-                            Instructions:
-                            1. Compare facial features across ALL 3 images
-                            2. Image 1 and Image 2 should be same person (CNIC validation)
-                            3. Image 3 (Selfie) should match with Image 1 OR Image 2
-                            4. Account for lighting, angle, and quality differences
-                            5. CNIC Back photo might be smaller but same person
-                            
+                            text: `Task: Cross-check identity across 3 images.
+                            1. Compare facial features in Image 1 (CNIC Front) and Image 3 (Live Selfie).
+                            2. Verify if Image 1 and Image 2 belong to the same ID card.
+                            3. Strictly check for any photo-of-a-photo or spoofing attempts.
+
                             Return ONLY a JSON object: 
                             { 
                               "isMatched": boolean, 
-                              "confidence": number (0-100),
-                              "matchDetails": {
-                                "frontAndBack": boolean,
-                                "frontAndSelfie": boolean,
-                                "backAndSelfie": boolean
-                              },
+                              "confidence": number, 
+                              "matchDetails": { "frontAndSelfie": boolean, "idValidity": boolean },
                               "reason": "Short reason in Roman Urdu" 
                             }` 
                         },
-                        { 
-                            type: "image_url", 
-                            image_url: { url: `data:image/jpeg;base64,${idFrontBase64}`, detail: "high" } 
-                        },
-                        { 
-                            type: "image_url", 
-                            image_url: { url: `data:image/jpeg;base64,${idBackBase64}`, detail: "high" }  // 🔧 ADDED
-                        },
-                        { 
-                            type: "image_url", 
-                            image_url: { url: `data:image/jpeg;base64,${selfieBase64}`, detail: "high" } 
-                        },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idFrontBase64}`, detail: "high" } },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idBackBase64}`, detail: "high" } },
+                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${selfieBase64}`, detail: "high" } },
                     ],
                 },
             ],
@@ -640,19 +626,21 @@ export const verifyIdentity = async (req, res) => {
         });
 
         const content = response.choices[0].message.content;
-        if (!content) {
-            return res.status(500).json({ message: "AI response empty hai." });
+        
+        // 4. Security Fix: Safe JSON Parsing
+        let verdict;
+        try {
+            verdict = JSON.parse(content);
+        } catch (parseErr) {
+            return res.status(500).json({ message: "AI response parse nahi ho saka." });
         }
 
-        const verdict = JSON.parse(content);
-
-        // 🔧 FIXED: Better validation logic
-        // Agar Front-Selfie match OR Back-Selfie match, toh pass
-        const isValidMatch = verdict.isMatched && 
-            (verdict.confidence >= 70 || 
-             (verdict.matchDetails?.frontAndSelfie || verdict.matchDetails?.backAndSelfie));
+        // 5. Improved Confidence Rule (Minimum 80% for auto-approve)
+        const isValidMatch = verdict.isMatched && verdict.confidence >= 80;
 
         if (isValidMatch) {
+            // Cloudinary upload setup (Already in your middleware)
+            // But since we need to save the selfie as profile pic:
             const uploadDir = 'uploads/';
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
             
@@ -668,31 +656,30 @@ export const verifyIdentity = async (req, res) => {
                     profilePic: profileUrl, 
                     isVerified: true,
                     verificationStatus: 'Verified',
-                    verifiedAt: new Date()
+                    verifiedAt: new Date(),
+                    kycDetails: {
+                        confidence: verdict.confidence,
+                        aiReason: verdict.reason
+                    }
                 }
             );
 
             return res.status(200).json({ 
                 success: true, 
-                message: "Mubarak ho! Aapki pehchan verify ho gayi hai.", 
-                profilePic: profileUrl,
-                confidence: verdict.confidence
+                message: "Mubarak ho! Aapki pehchan verify ho gayi hai. 🎉", 
+                profilePic: profileUrl 
             });
         } else {
             return res.status(400).json({ 
                 success: false, 
                 message: `Verification Fail: ${verdict.reason}`,
-                confidence: verdict.confidence || 0,
-                suggestion: "Please ensure good lighting and clear face visibility"
+                confidence: verdict.confidence || 0
             });
         }
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
-        res.status(500).json({ 
-            message: "Server error during verification", 
-            error: error.message 
-        });
+        res.status(500).json({ message: "Server error during verification", error: error.message });
     }
 };
 

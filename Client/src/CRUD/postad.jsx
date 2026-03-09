@@ -102,6 +102,7 @@ const getInitialState = (category) => ({
     price: "",
     location: "",
     category: category || "",
+    suggestedPriceByAI: null, // 🔧 FIX: Initial state mein suggestedPriceByAI add kiya
 });
 
 const MAX_IMAGES = 10;
@@ -174,6 +175,7 @@ const PostAd = ({ onClose, onAdAdded, category, user }) => {
         }));
     }, [formData.imagePreviews]);
 
+    // 🔧 FIXED: handleAiAssist mein Suggested Price ko store karna
     const handleAiAssist = useCallback(async () => {
         if (formData.images.length === 0) {
             toast.error("Please upload images first! 📸");
@@ -212,6 +214,8 @@ const PostAd = ({ onClose, onAdAdded, category, user }) => {
                 condition: condition || prev.condition,
                 description: description || prev.description,
                 price: suggestedPrice?.toString() || prev.price,
+                // 🔧 FIX: Suggested Price ko state mein rakhen backend validation ke liye
+                suggestedPriceByAI: suggestedPrice || prev.suggestedPriceByAI, 
                 ...(details || {})
             }));
 
@@ -227,6 +231,7 @@ const PostAd = ({ onClose, onAdAdded, category, user }) => {
         }
     }, [formData.images, category]);
 
+    // 🔧 FIXED: submitForm mein data Cloudinary ke liye bhejna
     const submitForm = useCallback(async (e) => {
         e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
@@ -252,17 +257,23 @@ const PostAd = ({ onClose, onAdAdded, category, user }) => {
             finalFormData.append("location", formData.location);
             finalFormData.append("category", category);
 
+            // 🔧 FIX: Suggested price bhejna taake Backend ka 25% Guard bypass na ho
+            if (formData.suggestedPriceByAI) {
+                finalFormData.append("suggestedPriceByAI", formData.suggestedPriceByAI);
+            }
+
             currentCategoryFields.forEach(field => {
                 if (formData[field.name]) {
                     finalFormData.append(field.name, formData[field.name]);
                 }
             });
 
+            // ☁️ CLOUDINARY: Images ko 'images' key ke sath bhejna (Backend matching)
             formData.images.forEach(file => finalFormData.append("images", file));
 
             const res = await axios.post(`${API_BASE_URL}/ad`, finalFormData, {
                 headers: {
-                    "Content-Type": "multipart/form-data",
+                    "Content-Type": "multipart/form-data", // Cloudinary/Multer ke liye lazmi
                     Authorization: `Bearer ${token}`,
                 },
                 timeout: 60000
@@ -276,6 +287,7 @@ const PostAd = ({ onClose, onAdAdded, category, user }) => {
             if (onAdAdded) onAdAdded(res.data?.data || res.data);
         } catch (error) {
             console.error("Post Ad Error:", error);
+            // 🛡️ Error handle: Agar price 25% range se bahar hui toh backend error dikhayega
             const errorMsg = error.response?.data?.message || 
                            error.code === 'ECONNABORTED' ? "Upload timeout. Try smaller images." :
                            "Failed to post ad. Please try again.";

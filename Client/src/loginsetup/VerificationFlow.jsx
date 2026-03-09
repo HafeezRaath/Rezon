@@ -138,64 +138,63 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
     }, []);
 
     // 🔧 FIXED: Submit with phone/password save
-    const handleFinalSubmit = useCallback(async () => {
-        if (!selfie || !idFront || !idBack) {
-            toast.error("Please complete all steps");
-            return;
-        }
+   // ☁️ FINAL SUBMIT: Updated for 3-Image KYC & Cloudinary
+const handleFinalSubmit = useCallback(async () => {
+    if (!selfie || !idFront || !idBack) {
+        toast.error("Please complete all steps (Front, Back & Selfie) 📸");
+        return;
+    }
 
-        setLoading(true);
-        const toastId = toast.loading("Submitting verification...");
+    setLoading(true);
+    const toastId = toast.loading("Verifying your identity with AI... 🤖");
 
-        try {
-            const token = await auth.currentUser?.getIdToken(true);
-            if (!token) throw new Error("Authentication required");
+    try {
+        const token = await auth.currentUser?.getIdToken(true);
+        if (!token) throw new Error("Session expired. Please login again.");
 
-            // 🔧 STEP 1: Update phone and password first
-            const updateRes = await axios.put(`${API_BASE_URL}/users/me`, {
-                phoneNumber: phone,
-                password: password,  // Backend pe hash hoga
-                isPhoneVerified: true
-            }, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
+        // 1. Pehle Phone/Password update karein
+        await axios.put(`${API_BASE_URL}/users/me`, {
+            phoneNumber: phone,
+            password: password,
+            isPhoneVerified: true
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-            if (!updateRes.data.success) {
-                throw new Error(updateRes.data.message || "Failed to save phone/password");
-            }
+        // 2. KYC Documents upload karein
+        const formData = new FormData();
+        // 🔧 FIXED: Backend keys (idFront, idBack, liveSelfie) ke sath match kiya
+        formData.append('idFront', idFront); 
+        formData.append('idBack', idBack);
+        
+        // Base64 selfie ko blob mein convert karna
+        const selfieBlob = await fetch(selfie).then(r => r.blob());
+        formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
 
-            // 🔧 STEP 2: Upload verification documents
-            const formData = new FormData();
-            formData.append('idFront', idFront);
-            formData.append('idBack', idBack);
+        const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${token}`
+            },
+            timeout: 60000 // AI processing ke liye zyada time diya
+        });
+
+        if (verifyRes.data?.success) {
+            toast.success("Mubarak ho! Verification successful! 🎉", { id: toastId });
             
-            const selfieBlob = await fetch(selfie).then(r => r.blob());
-            formData.append('liveSelfie', selfieBlob, 'selfie.jpg');
-
-            const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
-                headers: { 
-                    'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${token}`
-                },
-                timeout: 60000
-            });
-
-            if (verifyRes.data?.success) {
-                toast.success("Verification completed!", { id: toastId });
-                if (onComplete) onComplete(verifyRes.data.profilePic);
-                setTimeout(() => onClose(), 1500);
-            } else {
-                throw new Error(verifyRes.data?.message || "Verification failed");
-            }
-        } catch (err) {
-            console.error("Verification Error:", err);
-            const errorMsg = err.response?.data?.message || err.message || "Verification failed";
-            toast.error(errorMsg, { id: toastId });
-        } finally {
-            setLoading(false);
+            // UI cleanup
+            if (onComplete) onComplete(verifyRes.data.profilePic);
+            setTimeout(() => onClose(), 2000);
         }
-    }, [selfie, idFront, idBack, password, phone, onComplete, onClose]);
+    } catch (err) {
+        console.error("KYC Error:", err);
+        // AI rejection message dikhayein (e.g., face not matched)
+        const errorMsg = err.response?.data?.message || "Verification failed. Try again with better lighting.";
+        toast.error(errorMsg, { id: toastId });
+    } finally {
+        setLoading(false);
+    }
+}, [selfie, idFront, idBack, password, phone, onComplete, onClose]);
 
     // Escape key
     useEffect(() => {
