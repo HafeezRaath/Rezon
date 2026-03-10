@@ -1,6 +1,6 @@
 // Server/authMiddleware.js
 
-const admin = require("firebase-admin");
+import admin from "firebase-admin";
 
 // 🔐 Firebase Authentication Middleware
 const authenticate = async (req, res, next) => {
@@ -50,4 +50,4 @@ const authenticate = async (req, res, next) => {
 
 };
 
-module.exports = authenticate;
+export default authenticate;
