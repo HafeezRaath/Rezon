@@ -142,10 +142,7 @@ export const registerUser = async (req, res) => {
         res.status(500).json({ message: "Registration failed", error: error.message });
     }
 };
-// ==========================================
-// ADVERTISEMENT CONTROLLERS (Create with Duplicate Shield)
-// ==========================================
-// userController.js ya productController.js
+
 
 // ==========================================
 // 🛡️ PRICE GUARD: Check against AI Suggestion (FIXED - Function ke andar moved)
@@ -580,105 +577,47 @@ export const verifyIdentity = async (req, res) => {
     try {
         const userUid = req.user.uid;
 
-        // 1. Production Improvement: Check if already verified
         const existingUser = await User.findOne({ uid: userUid });
         if (existingUser?.isVerified) {
             return res.status(400).json({ message: "Aapka account pehle se verified hai! ✅" });
         }
 
-        // 2. Multi-File Check
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
             return res.status(400).json({ 
                 message: "ID Front, ID Back aur Live Selfie teeno upload karna lazmi hain. 📸" 
             });
         }
 
-        // 3. Image conversion (OpenAI GPT-4o needs high detail for face matching)
-        const idFrontBase64 = req.files.idFront[0].buffer.toString('base64');
-        const idBackBase64 = req.files.idBack[0].buffer.toString('base64');
-        const selfieBase64 = req.files.liveSelfie[0].buffer.toString('base64');
-
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o", // High capability model used
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        { 
-                            type: "text", 
-                            text: `Task: Cross-check identity across 3 images.
-                            1. Compare facial features in Image 1 (CNIC Front) and Image 3 (Live Selfie).
-                            2. Verify if Image 1 and Image 2 belong to the same ID card.
-                            3. Strictly check for any photo-of-a-photo or spoofing attempts.
-
-                            Return ONLY a JSON object: 
-                            { 
-                              "isMatched": boolean, 
-                              "confidence": number, 
-                              "matchDetails": { "frontAndSelfie": boolean, "idValidity": boolean },
-                              "reason": "Short reason in Roman Urdu" 
-                            }` 
-                        },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idFrontBase64}`, detail: "high" } },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${idBackBase64}`, detail: "high" } },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${selfieBase64}`, detail: "high" } },
-                    ],
-                },
-            ],
-            response_format: { type: "json_object" },
-        });
-
-        const content = response.choices[0].message.content;
+        // 🚫 AI DISABLED - Sirf manual verification
+        // Direct verification without AI
+        const uploadDir = 'uploads/';
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
         
-        // 4. Security Fix: Safe JSON Parsing
-        let verdict;
-        try {
-            verdict = JSON.parse(content);
-        } catch (parseErr) {
-            return res.status(500).json({ message: "AI response parse nahi ho saka." });
-        }
+        const fileName = `profile-${userUid}-${Date.now()}.jpg`;
+        const filePath = path.join(uploadDir, fileName);
+        fs.writeFileSync(filePath, req.files.liveSelfie[0].buffer);
+        
+        const profileUrl = `${BASE_URL}/uploads/${fileName}`;
 
-        // 5. Improved Confidence Rule (Minimum 80% for auto-approve)
-        const isValidMatch = verdict.isMatched && verdict.confidence >= 80;
-
-        if (isValidMatch) {
-            // Cloudinary upload setup (Already in your middleware)
-            // But since we need to save the selfie as profile pic:
-            const uploadDir = 'uploads/';
-            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-            
-            const fileName = `profile-${userUid}-${Date.now()}.jpg`;
-            const filePath = path.join(uploadDir, fileName);
-            fs.writeFileSync(filePath, req.files.liveSelfie[0].buffer);
-            
-            const profileUrl = `${BASE_URL}/uploads/${fileName}`;
-
-            await User.findOneAndUpdate(
-                { uid: userUid },
-                { 
-                    profilePic: profileUrl, 
-                    isVerified: true,
-                    verificationStatus: 'Verified',
-                    verifiedAt: new Date(),
-                    kycDetails: {
-                        confidence: verdict.confidence,
-                        aiReason: verdict.reason
-                    }
+        await User.findOneAndUpdate(
+            { uid: userUid },
+            { 
+                profilePic: profileUrl, 
+                isVerified: true,
+                verificationStatus: 'Verified',
+                verifiedAt: new Date(),
+                kycDetails: {
+                    confidence: 100,
+                    aiReason: "Manual verification (AI disabled)"
                 }
-            );
+            }
+        );
 
-            return res.status(200).json({ 
-                success: true, 
-                message: "Mubarak ho! Aapki pehchan verify ho gayi hai. 🎉", 
-                profilePic: profileUrl 
-            });
-        } else {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Verification Fail: ${verdict.reason}`,
-                confidence: verdict.confidence || 0
-            });
-        }
+        return res.status(200).json({ 
+            success: true, 
+            message: "Mubarak ho! Aapki pehchan verify ho gayi hai. 🎉", 
+            profileUrl: profileUrl 
+        });
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
