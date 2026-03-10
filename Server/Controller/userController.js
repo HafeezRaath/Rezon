@@ -588,27 +588,51 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🚫 AI DISABLED - Sirf manual verification
-        // Direct verification without AI
-        const uploadDir = 'uploads/';
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+        // 🚫 AI COMPLETELY DISABLED - No face matching, no ID comparison
+        // Sirf files save karna, koi verification nahi
         
-        const fileName = `profile-${userUid}-${Date.now()}.jpg`;
-        const filePath = path.join(uploadDir, fileName);
-        fs.writeFileSync(filePath, req.files.liveSelfie[0].buffer);
+        const uploadDir = 'uploads/verification/';
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
         
-        const profileUrl = `${BASE_URL}/uploads/${fileName}`;
+        // ID Front save
+        const idFrontName = `idFront-${userUid}-${Date.now()}.jpg`;
+        const idFrontPath = path.join(uploadDir, idFrontName);
+        fs.writeFileSync(idFrontPath, req.files.idFront[0].buffer);
+        
+        // ID Back save  
+        const idBackName = `idBack-${userUid}-${Date.now()}.jpg`;
+        const idBackPath = path.join(uploadDir, idBackName);
+        fs.writeFileSync(idBackPath, req.files.idBack[0].buffer);
+        
+        // Selfie save
+        const selfieName = `selfie-${userUid}-${Date.now()}.jpg`;
+        const selfiePath = path.join(uploadDir, selfieName);
+        fs.writeFileSync(selfiePath, req.files.liveSelfie[0].buffer);
 
+        // URLs generate karna
+        const idFrontUrl = `${BASE_URL}/uploads/verification/${idFrontName}`;
+        const idBackUrl = `${BASE_URL}/uploads/verification/${idBackName}`;
+        const selfieUrl = `${BASE_URL}/uploads/verification/${selfieName}`;
+
+        // Direct verification - No AI check
         await User.findOneAndUpdate(
             { uid: userUid },
             { 
-                profilePic: profileUrl, 
+                profilePic: selfieUrl,
                 isVerified: true,
                 verificationStatus: 'Verified',
                 verifiedAt: new Date(),
+                kycDocuments: {
+                    idFront: idFrontUrl,
+                    idBack: idBackUrl,
+                    selfie: selfieUrl
+                },
                 kycDetails: {
-                    confidence: 100,
-                    aiReason: "Manual verification (AI disabled)"
+                    method: "Manual verification",
+                    aiCheck: false,
+                    faceMatch: null,
+                    idOcr: null,
+                    verifiedBy: "system_auto"
                 }
             }
         );
@@ -616,7 +640,7 @@ export const verifyIdentity = async (req, res) => {
         return res.status(200).json({ 
             success: true, 
             message: "Mubarak ho! Aapki pehchan verify ho gayi hai. 🎉", 
-            profileUrl: profileUrl 
+            profileUrl: selfieUrl 
         });
 
     } catch (error) {
