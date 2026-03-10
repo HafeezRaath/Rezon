@@ -76,7 +76,7 @@ app.use(cors({
 }));
 
 // 🔧 Pre-flight support
-app.options("*", cors());
+app.options("/*", cors());
 
 // ==========================================
 // 🔌 Socket.IO WITH PRODUCTION OPTIMIZATIONS
