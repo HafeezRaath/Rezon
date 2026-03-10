@@ -147,6 +147,13 @@ export const registerUser = async (req, res) => {
 // ==========================================
 // userController.js ya productController.js
 
+// ==========================================
+// 🛡️ PRICE GUARD: Check against AI Suggestion (FIXED - Function ke andar moved)
+// ==========================================
+
+// Yeh function create ke andar hona chahiye, file level pe nahi
+// Isliye is code ko create function mein move karo
+
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -156,7 +163,7 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // 🛡️ PRICE GUARD: Check against AI Suggestion
+        // 🛡️ PRICE GUARD: Check against AI Suggestion (YAHAN MOVE KIYA)
         // ==========================================
         const { price, suggestedPriceByAI, title, description, location, condition, category } = req.body;
         const aiSuggested = Number(suggestedPriceByAI);
@@ -194,13 +201,9 @@ export const create = async (req, res) => {
             });
         }
 
-        // AI Comparison Logic (Simplified for brevity, uses recentAds as reference)
-        // ... (AI comparison logic from your original code remains here) ...
-
         // ==========================================
         // ☁️ CLOUDINARY URLS (Data Storage)
         // ==========================================
-        // Multer-storage-cloudinary uploads files and returns 'path'
         const imageUrls = req.files.map(file => file.path);
 
         const categoryDetails = {};
@@ -210,7 +213,7 @@ export const create = async (req, res) => {
         }
 
         const newAd = new Ad({
-            images: imageUrls, // Store Cloudinary HTTPS links
+            images: imageUrls,
             imageHashes: currentHashes,
             title, description, price: Number(price), location, condition, category,
             details: categoryDetails,
@@ -965,31 +968,3 @@ export const startChat = async (req, res) => {
         res.status(500).json({ message: "Chat start nahi ho saki", error: error.message });
     }
 };
-// ... (Purana code images aur duplicate check tak wahi rahega)
-
-// ==========================================
-// 🛡️ PRICE GUARD: Check against AI Suggestion
-// ==========================================
-
-const { price, category } = req.body;
-
-// 1. AI se mashwara len (Ya jo pehle fetch kiya tha usay use karen)
-// Note: Behtar hai ke front-end se 'suggestedPrice' bhi as a hidden field bhej dein
-// Ya phir yahan dubara calculate karen agar security tight karni hai.
-
-const suggestedPrice = Number(req.body.suggestedPriceByAI); // Frontend se suggest ki gayi price pakrein
-
-if (suggestedPrice) {
-    const minAllowed = suggestedPrice * 0.75; // 25% kam
-    const maxAllowed = suggestedPrice * 1.25; // 25% zyada
-    const userPrice = Number(price);
-
-    if (userPrice < minAllowed || userPrice > maxAllowed) {
-        return res.status(400).json({
-            success: false,
-            message: `🛡️ Rezon Price Guard: Aapki price market rate (Rs. ${suggestedPrice}) se bohot door hai. Aap Rs. ${Math.round(minAllowed)} se Rs. ${Math.round(maxAllowed)} ke darmiyan price laga sakte hain.`
-        });
-    }
-}
-
-// ... (Baaki save karne wala code)

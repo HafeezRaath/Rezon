@@ -54,17 +54,20 @@ const httpServer = createServer(app);
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
-  "https://raathdeveloper.com",
+  "https://raathdeveloper.com", 
   "https://rezon-production.up.railway.app",
   "http://localhost:5173"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Origin trim karo taake accidental spaces ignore ho jayein
+    const cleanOrigin = origin?.trim();
+    
+    if (!cleanOrigin || allowedOrigins.includes(cleanOrigin)) {
       return callback(null, true);
     }
-    console.error(`🚫 Origin Blocked by CORS: ${origin}`);
+    console.error(`🚫 Origin Blocked by CORS: ${cleanOrigin}`);
     return callback(new Error('CORS Policy violation'), false);
   },
   credentials: true,
