@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { FaChevronDown, FaMapMarkerAlt, FaSearch, FaCrosshairs, FaSpinner } from "react-icons/fa";
+import {
+  FaChevronDown,
+  FaMapMarkerAlt,
+  FaSearch,
+  FaCrosshairs,
+  FaSpinner,
+} from "react-icons/fa";
 
 const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); 
+  const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const dropdownRef = useRef(null);
   const abortControllerRef = useRef(null);
   const inputRef = useRef(null);
@@ -23,11 +30,12 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     "Gujranwala, Punjab",
   ];
 
-  // Address Formatting Logic
+  // Address formatter
   const formatLiveAddress = useCallback((item) => {
     if (!item?.address) return "Pakistan";
-    
+
     const addr = item.address;
+
     const area =
       addr.suburb ||
       addr.city_district ||
@@ -59,7 +67,7 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     [formatLiveAddress]
   );
 
-  // Click Outside to Close
+  // Click outside close
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -74,7 +82,7 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     }
   }, [isOpen]);
 
-  // Live Search
+  // Live search
   useEffect(() => {
     if (searchTerm.length <= 2 || !isOpen) {
       setSuggestions([]);
@@ -119,7 +127,7 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     };
   }, [searchTerm, isOpen]);
 
-  // 🔧 SAFE HANDLER
+  // Select handler
   const handleSelect = useCallback(
     (val) => {
       if (!val) return;
@@ -135,9 +143,10 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     [onChange]
   );
 
+  // Current location fetch
   const fetchCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      alert("Geolocation not supported by your browser");
       return;
     }
 
@@ -156,18 +165,21 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
 
           const data = await res.json();
 
-          const finalPlace =
-            variant === "form"
-              ? data.display_name
-              : getShortAddress(data);
+          const finalPlace = getShortAddress(data);
 
-          // 🔧 SAFE CALL
-          if (finalPlace) {
-            handleSelect(finalPlace);
+          console.log("Location fetched:", finalPlace);
+
+          if (finalPlace && typeof onChange === "function") {
+            onChange(finalPlace);
           }
+
+          setIsOpen(false);
+          setSearchTerm("");
+          setSuggestions([]);
+          setLoading(false);
         } catch (err) {
           console.error("Location error:", err);
-          alert("Failed to fetch location. Please try again.");
+          alert("Failed to fetch location");
           setLoading(false);
         }
       },
@@ -177,16 +189,17 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
 
         const errorMessages = {
           1: "Location permission denied. Please enable location access.",
-          2: "Location unavailable. Try searching manually.",
-          3: "Location request timed out. Try again.",
+          2: "Location unavailable.",
+          3: "Location request timed out.",
         };
 
-        alert(errorMessages[error.code] || "Unable to retrieve your location.");
+        alert(errorMessages[error.code] || "Unable to retrieve location");
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     );
-  }, [variant, getShortAddress, handleSelect]);
+  }, [getShortAddress, onChange]);
 
+  // Toggle dropdown
   const handleToggle = useCallback(() => {
     if (variant === "form") {
       fetchCurrentLocation();
@@ -207,67 +220,30 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     };
   }, []);
 
-  const themeClasses = {
-    form: {
-      border:
-        "border-slate-200 hover:border-emerald-500 focus-within:border-emerald-500",
-      icon: "text-emerald-500",
-      button:
-        "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white",
-    },
-    default: {
-      border:
-        "border-slate-200 hover:border-emerald-500 focus-within:border-emerald-500",
-      icon: "text-emerald-600",
-      chevron: "text-slate-400",
-      liveResults: "text-emerald-600 bg-emerald-50/50",
-      currentLoc: "text-emerald-600 hover:bg-emerald-50",
-      currentLocIcon:
-        "bg-emerald-100 group-hover/loc:bg-emerald-600 group-hover/loc:text-white",
-      suggestionHover: "group-hover/item:text-emerald-600",
-    },
-  };
-
-  const currentTheme = themeClasses[variant] || themeClasses.default;
-
   return (
     <div
       ref={dropdownRef}
       className={`relative ${variant === "form" ? "w-full" : "w-64"} text-sm`}
     >
       <div
-        className={`border-2 transition-all duration-200 rounded-xl px-4 py-3 flex justify-between items-center cursor-pointer bg-white ${currentTheme.border}`}
+        className="border-2 border-slate-200 hover:border-emerald-500 rounded-xl px-4 py-3 flex justify-between items-center cursor-pointer bg-white"
         onClick={handleToggle}
-        role="combobox"
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
-        aria-label="Select location"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleToggle();
-          }
-        }}
       >
         <div className="flex items-center gap-2 truncate text-slate-700">
           {loading ? (
-            <FaSpinner
-              className={`${currentTheme.icon} shrink-0 animate-spin`}
-            />
+            <FaSpinner className="text-emerald-500 animate-spin" />
           ) : (
-            <FaMapMarkerAlt
-              className={`${currentTheme.icon} shrink-0`}
-            />
+            <FaMapMarkerAlt className="text-emerald-500" />
           )}
-          <span className="truncate font-semibold tracking-tight">
+
+          <span className="truncate font-semibold">
             {loading ? "Locating..." : selected || "Select Location"}
           </span>
         </div>
 
         {variant !== "form" && (
           <FaChevronDown
-            className={`${currentTheme.chevron} text-xs transition-transform duration-300 ${
+            className={`text-xs transition-transform ${
               isOpen ? "rotate-180" : ""
             }`}
           />
@@ -275,9 +251,9 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
       </div>
 
       {variant !== "form" && isOpen && (
-        <div className="absolute z-[100] w-full bg-white border border-slate-100 mt-2 rounded-2xl shadow-2xl overflow-hidden">
-          <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+        <div className="absolute z-[100] w-full bg-white border mt-2 rounded-xl shadow-xl overflow-hidden">
+          <div className="p-3 border-b">
+            <div className="flex items-center bg-white border rounded-lg px-3 py-2">
               <FaSearch className="text-slate-400 mr-2" />
 
               <input
@@ -293,7 +269,7 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
 
           <div className="max-h-72 overflow-y-auto">
             <div
-              className={`px-4 py-3 ${currentTheme.currentLoc} cursor-pointer flex items-center gap-3 font-semibold`}
+              className="px-4 py-3 cursor-pointer flex items-center gap-3 font-semibold hover:bg-emerald-50"
               onClick={fetchCurrentLocation}
             >
               <FaCrosshairs />
@@ -307,13 +283,12 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
                 <div
                   key={item.place_id}
                   className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b"
-                  onClick={() =>
-                    handleSelect(formatLiveAddress(item))
-                  }
+                  onClick={() => handleSelect(formatLiveAddress(item))}
                 >
                   <p className="font-bold text-xs">
                     {formatLiveAddress(item)}
                   </p>
+
                   <p className="text-[10px] text-slate-400 truncate">
                     {item.display_name}
                   </p>

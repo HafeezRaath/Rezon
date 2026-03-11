@@ -121,15 +121,16 @@ const PostAd = ({ onClose, onAdAdded }) => {
     
     const [formData, setFormData] = useState({
         title: "", condition: "Used", description: "", price: "", location: "",
-        phoneNumber: "", images: [], imagePreviews: []
+        phoneNumber: "", // Auto-filled from profile
+        images: [], imagePreviews: []
     });
 
-    // Auto-fetch profile number
+    // 1. Fetch Profile Mobile Number
     useEffect(() => {
         const fetchProfile = async () => {
             try {
                 const token = localStorage.getItem("firebaseIdToken");
-                const res = await axios.get(`${API_BASE_URL}/users/me`, {
+                const res = await axios.get(`${API_BASE_URL}/user/profile`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.data.phoneNumber) {
@@ -156,11 +157,27 @@ const PostAd = ({ onClose, onAdAdded }) => {
         }));
     };
 
-    const submitAd = async () => {
-        if (!formData.title || !formData.price || !formData.location) {
-            return toast.error("Please fill required fields!");
-        }
-        
+    const handleAiAssist = async () => {
+        if (formData.images.length === 0) return toast.error("Upload images first!");
+        setAiLoading(true);
+        const aiData = new FormData();
+        formData.images.forEach(f => aiData.append("images", f));
+        aiData.append("category", selectedCat.id);
+
+        try {
+            const token = localStorage.getItem("firebaseIdToken");
+            const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = res.data.data;
+            setFormData(prev => ({ ...prev, ...data, price: data.suggestedPrice || prev.price }));
+            toast.success("AI Analysis Complete! ✨");
+        } catch (err) { toast.error("AI Analysis failed."); }
+        finally { setAiLoading(false); }
+    };
+
+    const submitAd = async (e) => {
+        if(e) e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
         setLoading(true);
         const postData = new FormData();
@@ -178,89 +195,85 @@ const PostAd = ({ onClose, onAdAdded }) => {
             toast.success("Ad Posted! 🚀");
             onClose();
             if (onAdAdded) onAdAdded(res.data);
-        } catch (err) { 
-            toast.error("Failed to post ad."); 
-        } finally { 
-            setLoading(false); 
-        }
+        } catch (err) { toast.error("Failed to post ad."); }
+        finally { setLoading(false); }
     };
 
     const modalContent = (
-        <div className="fixed inset-0 flex justify-center items-center bg-black/90 backdrop-blur-sm p-4 z-[10000]" onClick={onClose}>
-            <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-4 z-[9999]" onClick={onClose}>
+            <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                 
                 {/* Header */}
-                <div className="p-6 text-center bg-white border-b border-gray-100 relative shrink-0">
-                    <h2 className="text-xl font-black text-emerald-600 uppercase tracking-tighter">
+                <div className="p-8 text-center bg-white border-b border-gray-100 relative">
+                    <h2 className="text-2xl font-black text-emerald-600 uppercase">
                         {step === 1 ? "Select Category" : `Post in: ${selectedCat.name}`}
                     </h2>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onClose(); }} 
-                        className="absolute right-6 top-1/2 -translate-y-1/2 w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all shadow-sm"
-                    >
-                        <FaTimes size={20} />
+                    <button onClick={onClose} className="absolute right-8 top-8 text-gray-400 hover:text-red-500 transition-all">
+                        <FaTimes size={24} />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="overflow-y-auto px-6 py-6 flex-1 custom-scrollbar">
+                <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
                     {step === 1 ? (
                         <div className="grid grid-cols-3 gap-3">
                             {CATEGORIES.map(cat => (
-                                <button key={cat.id} onClick={() => { setSelectedCat(cat); setStep(2); }} className="flex flex-col items-center justify-center p-5 rounded-[30px] border border-gray-100 bg-white hover:border-emerald-500 hover:bg-emerald-50 transition-all shadow-sm group">
-                                    <div className="text-3xl text-emerald-600 mb-2 group-hover:scale-110 transition-transform">{cat.icon}</div>
+                                <button key={cat.id} onClick={() => { setSelectedCat(cat); setStep(2); }} className="flex flex-col items-center justify-center p-4 rounded-[30px] border border-gray-100 bg-white hover:border-emerald-500 hover:bg-emerald-50 transition-all">
+                                    <div className="text-3xl text-emerald-600 mb-2">{cat.icon}</div>
                                     <span className="text-[10px] font-black text-gray-500 uppercase">{cat.name}</span>
                                 </button>
                             ))}
                         </div>
                     ) : (
-                        <div className="space-y-5 pb-32"> {/* Increased padding for submit button distance */}
-                            <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-[10px] bg-emerald-50 px-3 py-1 rounded-full uppercase">← Change Category</button>
+                        <div className="space-y-4 pb-20">
+                            <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-xs">← CHANGE CATEGORY</button>
                             
-                            {/* Images */}
+                            {/* Image Preview Grid */}
                             <div className="grid grid-cols-4 gap-2">
                                 {formData.imagePreviews.map((src, i) => (
-                                    <img key={i} src={src} className="w-full aspect-square object-cover rounded-2xl border-2 border-white shadow-sm" alt="preview" />
+                                    <img key={i} src={src} className="w-full aspect-square object-cover rounded-xl border" alt="preview" />
                                 ))}
                                 {formData.images.length < 10 && (
-                                    <label className="aspect-square border-2 border-dashed border-emerald-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 transition-colors">
-                                        <FaCamera className="text-emerald-400 text-xl" />
+                                    <label className="aspect-square border-2 border-dashed border-emerald-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50">
+                                        <FaCamera className="text-emerald-500 text-xl" />
                                         <input type="file" multiple onChange={imageHandler} className="hidden" />
                                     </label>
                                 )}
                             </div>
 
-                            <input name="title" value={formData.title} onChange={inputHandler} placeholder="What are you selling? *" className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm border border-transparent focus:border-emerald-500 transition-all" />
+                            <button type="button" onClick={handleAiAssist} disabled={aiLoading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2">
+                                {aiLoading ? <FaSpinner className="animate-spin" /> : <><FaMagic /> AI AUTO-FILL</>}
+                            </button>
+
+                            <input name="title" value={formData.title} onChange={inputHandler} placeholder="Ad Title *" className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
                             
                             <div className="grid grid-cols-2 gap-3">
-                                <input name="price" type="number" value={formData.price} onChange={inputHandler} placeholder="Price (PKR) *" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm border border-transparent focus:border-emerald-500" />
-                                <input name="phoneNumber" value={formData.phoneNumber} onChange={inputHandler} placeholder="Phone Number" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm border border-transparent focus:border-emerald-500" />
+                                <input name="price" type="number" value={formData.price} onChange={inputHandler} placeholder="Price (PKR) *" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                                <input name="phoneNumber" value={formData.phoneNumber} onChange={inputHandler} placeholder="Contact Number" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
                             </div>
 
-                            <textarea name="description" value={formData.description} onChange={inputHandler} rows="4" placeholder="Describe your item details..." className="w-full p-5 rounded-[25px] bg-white outline-none font-bold shadow-sm resize-none border border-transparent focus:border-emerald-500" />
+                            {CATEGORY_FIELDS[selectedCat.id]?.map(field => (
+                                field.type === "select" ? (
+                                    <select key={field.name} name={field.name} onChange={inputHandler} className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm">
+                                        <option value="">{field.placeholder}</option>
+                                        {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                ) : (
+                                    <input key={field.name} name={field.name} onChange={inputHandler} placeholder={field.placeholder} className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                                )
+                            ))}
+
+                            <textarea name="description" value={formData.description} onChange={inputHandler} rows="3" placeholder="Description..." className="w-full p-5 rounded-[30px] bg-white outline-none font-bold shadow-sm resize-none" />
                             
-                            {/* Location Section */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-widest">Item Location *</label>
-                                <LocationDropdown 
-                                    selected={formData.location} 
-                                    onChange={(loc) => setFormData(p => ({...p, location: loc}))} 
-                                    variant="form" 
-                                />
-                            </div>
+                            <LocationDropdown selected={formData.location} onChange={v => setFormData(p => ({...p, location: v}))} variant="default" />
                         </div>
                     )}
                 </div>
 
-                {/* Footer Submit Button */}
                 {step === 2 && (
-                    <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#f0f2f5] via-[#f0f2f5]/90 to-transparent pt-12 shrink-0">
-                        <button 
-                            onClick={submitAd} 
-                            disabled={loading} 
-                            className="w-full py-5 bg-emerald-600 text-white rounded-[30px] font-black text-xl shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 hover:bg-emerald-700 active:scale-95 transition-all"
-                        >
-                            {loading ? <FaSpinner className="animate-spin" /> : <><FaRocket /> PUBLISH AD NOW</>}
+                    <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#f0f2f5] to-transparent">
+                        <button onClick={submitAd} disabled={loading} className="w-full py-5 bg-emerald-600 text-white rounded-[30px] font-black text-xl shadow-xl flex items-center justify-center gap-3">
+                            {loading ? <FaSpinner className="animate-spin" /> : <><FaRocket /> SUBMIT AD</>}
                         </button>
                     </div>
                 )}
