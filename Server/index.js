@@ -27,7 +27,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 🔧 RAILWAY PROXY TRUST (VERY IMPORTANT FOR CORS)
+// 🔧 Railway proxy trust (IMPORTANT!)
 app.set("trust proxy", 1);
 
 const httpServer = createServer(app);
@@ -50,49 +50,49 @@ try {
 }
 
 // ==========================================
-// 🌐 CORS SETUP (GURANTEED FIX)
+// 🌐 CORS SETUP - CLEAN & BULLETPROOF
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
   "https://raathdeveloper.com",
   "https://rezon.up.railway.app",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "http://localhost:3000"
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl)
+    // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("Blocked by CORS:", origin);
+      console.log("❌ CORS Blocked:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
 };
 
-// 1. Pehle CORS middleware apply karein
+// ✅ Apply CORS before any other middleware
 app.use(cors(corsOptions));
 
-// 2. Pre-flight (OPTIONS) requests ko har route ke liye manually handle karein
+// ✅ Handle preflight for all routes
 app.options("*", cors(corsOptions));
 
 // ==========================================
 // 🔌 Socket.IO SETUP
 // ==========================================
 const io = new Server(httpServer, {
-  path: "/socket.io/",
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // ==========================================
@@ -110,8 +110,22 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use("/api", route);
 app.use("/api/admin", adminRoutes);
 
+// Health check
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", db: mongoose.connection.readyState === 1 ? "connected" : "disconnected" });
+  res.status(200).json({ 
+    status: "OK", 
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// CORS test endpoint
+app.get("/cors-test", (req, res) => {
+  res.json({ 
+    message: "CORS Working!", 
+    origin: req.headers.origin || "no-origin",
+    allowedOrigins: allowedOrigins
+  });
 });
 
 // ==========================================
@@ -120,32 +134,92 @@ app.get("/health", (req, res) => {
 let onlineUsers = new Map();
 
 io.on("connection", (socket) => {
+  console.log("🔌 Socket connected:", socket.id);
+
   socket.on("setup", (userId) => {
     if (!userId) return;
     socket.join(userId);
-    onlineUsers.set(userId, { socketId: socket.id });
+    onlineUsers.set(userId, { socketId: socket.id, lastSeen: new Date() });
     socket.emit("connected");
+    console.log("✅ User setup:", userId);
   });
 
   socket.on("user_online", async (userId) => {
     if (!userId) return;
-    await User.findOneAndUpdate({ uid: userId }, { isOnline: true, lastSeen: new Date() });
-    io.emit("status_change", { userId, isOnline: true });
+    try {
+      await User.findOneAndUpdate(
+        { uid: userId }, 
+        { isOnline: true, lastSeen: new Date() }
+      );
+      io.emit("status_change", { userId, isOnline: true });
+    } catch (err) {
+      console.error("❌ User online error:", err);
+    }
+  });
+
+  socket.on("join_chat", (chatId) => {
+    socket.join(chatId);
+    console.log("👥 User joined chat:", chatId);
   });
 
   socket.on("send_message", async (data) => {
     const { chatId, senderId, message } = data;
     try {
-      const updatedChat = await Chat.findByIdAndUpdate(chatId, {
-        $push: { messages: { senderId, message, timestamp: new Date(), isRead: false } },
-        $set: { lastMessage: message, lastMessageTime: new Date() }
-      }, { new: true });
-      if (updatedChat) io.to(chatId).emit("receive_message", data);
-    } catch (err) { console.error(err); }
+      const updatedChat = await Chat.findByIdAndUpdate(
+        chatId,
+        {
+          $push: { 
+            messages: { 
+              senderId, 
+              message, 
+              timestamp: new Date(), 
+              isRead: false 
+            } 
+          },
+          $set: { 
+            lastMessage: message, 
+            lastMessageTime: new Date() 
+          }
+        }, 
+        { new: true }
+      );
+      
+      if (updatedChat) {
+        io.to(chatId).emit("receive_message", data);
+        console.log("📨 Message sent to chat:", chatId);
+      }
+    } catch (err) { 
+      console.error("❌ Send message error:", err); 
+    }
   });
 
-  socket.on("disconnect", () => {
-    // disconnect logic...
+  socket.on("typing", (data) => {
+    socket.to(data.chatId).emit("typing", data);
+  });
+
+  socket.on("stop_typing", (data) => {
+    socket.to(data.chatId).emit("stop_typing", data);
+  });
+
+  socket.on("disconnect", async () => {
+    console.log("🔌 Socket disconnected:", socket.id);
+    
+    // Find and update user status
+    for (const [userId, data] of onlineUsers.entries()) {
+      if (data.socketId === socket.id) {
+        onlineUsers.delete(userId);
+        try {
+          await User.findOneAndUpdate(
+            { uid: userId }, 
+            { isOnline: false, lastSeen: new Date() }
+          );
+          io.emit("status_change", { userId, isOnline: false });
+        } catch (err) {
+          console.error("❌ Disconnect update error:", err);
+        }
+        break;
+      }
+    }
   });
 });
 
@@ -155,9 +229,25 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 8000;
 const MONGO_URL = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URL).then(() => {
-  console.log("✅ MongoDB Connected");
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port: ${PORT}`);
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  httpServer.close(() => {
+    mongoose.connection.close(false, () => {
+      process.exit(0);
+    });
   });
-}).catch(err => console.error("❌ DB Error:", err));
+});
+
+mongoose.connect(MONGO_URL)
+  .then(() => {
+    console.log("✅ MongoDB Connected");
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port: ${PORT}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  })
+  .catch(err => {
+    console.error("❌ DB Error:", err);
+    process.exit(1);
+  });
