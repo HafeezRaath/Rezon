@@ -121,8 +121,25 @@ const PostAd = ({ onClose, onAdAdded }) => {
     
     const [formData, setFormData] = useState({
         title: "", condition: "Used", description: "", price: "", location: "",
-        images: [], imagePreviews: [], suggestedPriceByAI: null
+        phoneNumber: "", // Auto-filled from profile
+        images: [], imagePreviews: []
     });
+
+    // 1. Fetch Profile Mobile Number
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const token = localStorage.getItem("firebaseIdToken");
+                const res = await axios.get(`${API_BASE_URL}/user/profile`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.data.phoneNumber) {
+                    setFormData(prev => ({ ...prev, phoneNumber: res.data.phoneNumber }));
+                }
+            } catch (err) { console.error("Profile Fetch Error", err); }
+        };
+        fetchProfile();
+    }, []);
 
     const inputHandler = (e) => {
         const { name, value } = e.target;
@@ -160,7 +177,7 @@ const PostAd = ({ onClose, onAdAdded }) => {
     };
 
     const submitAd = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
         setLoading(true);
         const postData = new FormData();
@@ -183,55 +200,58 @@ const PostAd = ({ onClose, onAdAdded }) => {
     };
 
     const modalContent = (
-        <div className="fixed inset-0 flex justify-center items-center bg-black/70 backdrop-blur-md p-4 z-[999] animate-in fade-in duration-300">
-            <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]">
+        <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-4 z-[9999]" onClick={onClose}>
+            <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                 
                 {/* Header */}
-                <div className="p-8 text-center bg-white border-b border-gray-100">
-                    <h2 className="text-2xl font-black text-emerald-600 uppercase tracking-tighter">
-                        {step === 1 ? "What are you listing?" : `Post in: ${selectedCat.name}`}
+                <div className="p-8 text-center bg-white border-b border-gray-100 relative">
+                    <h2 className="text-2xl font-black text-emerald-600 uppercase">
+                        {step === 1 ? "Select Category" : `Post in: ${selectedCat.name}`}
                     </h2>
-                    <button onClick={onClose} className="absolute right-8 top-8 text-gray-300 hover:text-rose-500 transition-all"><FaTimes size={24} /></button>
+                    <button onClick={onClose} className="absolute right-8 top-8 text-gray-400 hover:text-red-500 transition-all">
+                        <FaTimes size={24} />
+                    </button>
                 </div>
 
-                {/* Grid vs Form */}
+                {/* Body */}
                 <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
                     {step === 1 ? (
                         <div className="grid grid-cols-3 gap-3">
                             {CATEGORIES.map(cat => (
-                                <button key={cat.id} onClick={() => { setSelectedCat(cat); setStep(2); }} className="flex flex-col items-center justify-center p-4 rounded-[30px] border border-gray-50 bg-white hover:border-emerald-500 hover:bg-emerald-50 group transition-all">
-                                    <div className="text-3xl text-gray-400 group-hover:text-emerald-600 mb-2">{cat.icon}</div>
-                                    <span className="text-[10px] font-black text-gray-500 text-center uppercase leading-tight">{cat.name}</span>
+                                <button key={cat.id} onClick={() => { setSelectedCat(cat); setStep(2); }} className="flex flex-col items-center justify-center p-4 rounded-[30px] border border-gray-100 bg-white hover:border-emerald-500 hover:bg-emerald-50 transition-all">
+                                    <div className="text-3xl text-emerald-600 mb-2">{cat.icon}</div>
+                                    <span className="text-[10px] font-black text-gray-500 uppercase">{cat.name}</span>
                                 </button>
                             ))}
                         </div>
                     ) : (
-                        <form id="post-ad-form" className="space-y-4 pb-28">
-                            <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-xs uppercase mb-2 block">← Change Category</button>
+                        <div className="space-y-4 pb-20">
+                            <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-xs">← CHANGE CATEGORY</button>
                             
-                            <label className="block w-full py-10 border-2 border-dashed border-emerald-300 rounded-[35px] text-center bg-white cursor-pointer hover:bg-emerald-50 transition-all">
-                                <FaCamera className="mx-auto text-emerald-500 text-3xl mb-2" />
-                                <span className="text-gray-400 font-black text-xs">UPLOAD IMAGES (MULTIPLE)</span>
-                                <input type="file" multiple onChange={imageHandler} className="hidden" />
-                            </label>
-
-                            {formData.images.length > 0 && (
-                                <button type="button" onClick={handleAiAssist} disabled={aiLoading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs tracking-widest flex items-center justify-center gap-2">
-                                    {aiLoading ? <FaSpinner className="animate-spin" /> : <><FaMagic /> AI AUTO-FILL</>}
-                                </button>
-                            )}
-
-                            <input name="title" value={formData.title} onChange={inputHandler} placeholder="Ad Title *" className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" required />
-                            
-                            <div className="grid grid-cols-2 gap-3">
-                                <select name="condition" value={formData.condition} onChange={inputHandler} className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm">
-                                    <option value="Used">Used</option>
-                                    <option value="New">New</option>
-                                </select>
-                                <input name="price" type="number" value={formData.price} onChange={inputHandler} placeholder="Price (PKR) *" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" required />
+                            {/* Image Preview Grid */}
+                            <div className="grid grid-cols-4 gap-2">
+                                {formData.imagePreviews.map((src, i) => (
+                                    <img key={i} src={src} className="w-full aspect-square object-cover rounded-xl border" alt="preview" />
+                                ))}
+                                {formData.images.length < 10 && (
+                                    <label className="aspect-square border-2 border-dashed border-emerald-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50">
+                                        <FaCamera className="text-emerald-500 text-xl" />
+                                        <input type="file" multiple onChange={imageHandler} className="hidden" />
+                                    </label>
+                                )}
                             </div>
 
-                            {/* Dynamic Fields from your list */}
+                            <button type="button" onClick={handleAiAssist} disabled={aiLoading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2">
+                                {aiLoading ? <FaSpinner className="animate-spin" /> : <><FaMagic /> AI AUTO-FILL</>}
+                            </button>
+
+                            <input name="title" value={formData.title} onChange={inputHandler} placeholder="Ad Title *" className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <input name="price" type="number" value={formData.price} onChange={inputHandler} placeholder="Price (PKR) *" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                                <input name="phoneNumber" value={formData.phoneNumber} onChange={inputHandler} placeholder="Contact Number" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                            </div>
+
                             {CATEGORY_FIELDS[selectedCat.id]?.map(field => (
                                 field.type === "select" ? (
                                     <select key={field.name} name={field.name} onChange={inputHandler} className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm">
@@ -243,19 +263,16 @@ const PostAd = ({ onClose, onAdAdded }) => {
                                 )
                             ))}
 
-                            <textarea name="description" value={formData.description} onChange={inputHandler} rows="4" placeholder="Full Description..." className="w-full p-5 rounded-[30px] bg-white outline-none font-bold shadow-sm resize-none" />
+                            <textarea name="description" value={formData.description} onChange={inputHandler} rows="3" placeholder="Description..." className="w-full p-5 rounded-[30px] bg-white outline-none font-bold shadow-sm resize-none" />
                             
-                            <div className="bg-white rounded-2xl p-1 shadow-sm">
-                                <LocationDropdown selected={formData.location} onChange={v => setFormData(p => ({...p, location: v}))} variant="form" />
-                            </div>
-                        </form>
+                            <LocationDropdown selected={formData.location} onChange={v => setFormData(p => ({...p, location: v}))} variant="form" />
+                        </div>
                     )}
                 </div>
 
-                {/* Fixed Action Button */}
                 {step === 2 && (
-                    <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#f0f2f5] via-[#f0f2f5] to-transparent">
-                        <button onClick={submitAd} disabled={loading} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[30px] font-black text-xl shadow-xl transition-all flex items-center justify-center gap-3">
+                    <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#f0f2f5] to-transparent">
+                        <button onClick={submitAd} disabled={loading} className="w-full py-5 bg-emerald-600 text-white rounded-[30px] font-black text-xl shadow-xl flex items-center justify-center gap-3">
                             {loading ? <FaSpinner className="animate-spin" /> : <><FaRocket /> SUBMIT AD</>}
                         </button>
                     </div>
