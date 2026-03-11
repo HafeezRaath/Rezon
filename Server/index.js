@@ -26,7 +26,9 @@ app.set("trust proxy", 1);
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
+  "https://www.rezon.raathdeveloper.com", // <-- Ye lazmi add karein
   "https://raathdeveloper.com",
+  "https://www.raathdeveloper.com",
   "https://rezon.up.railway.app",
   "http://localhost:5173"
 ];
