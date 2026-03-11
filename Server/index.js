@@ -52,27 +52,19 @@ const httpServer = createServer(app);
 // ==========================================
 // 🌐 CORS & Socket Setup (FIXED FOR PRODUCTION)
 // ==========================================
+// Pehle origins ki list check karein
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
   "https://raathdeveloper.com", 
-  "https://rezon-production.up.railway.app",
+  process.env.RAILWAY_STATIC_URL,  // Railway ka auto URL
   "http://localhost:5173"
-];
+].filter(Boolean)
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Origin trim karo taake accidental spaces ignore ho jayein
-    const cleanOrigin = origin?.trim();
-    
-    if (!cleanOrigin || allowedOrigins.includes(cleanOrigin)) {
-      return callback(null, true);
-    }
-    console.error(`🚫 Origin Blocked by CORS: ${cleanOrigin}`);
-    return callback(new Error('CORS Policy violation'), false);
-  },
+  origin: true, // Ya "*" lekin credentials ke saath "*" kaam nahi karega
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
 }));
 
 // 🔧 Pre-flight support
