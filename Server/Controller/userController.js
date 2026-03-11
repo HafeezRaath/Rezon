@@ -211,17 +211,12 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // 🛡️ DUPLICATE SHIELD (Hashing)
+        // 🛡️ DUPLICATE SHIELD (Hashing) - ✅ Ab buffer milega!
         // ==========================================
         const currentHashes = [];
         for (const file of req.files) {
-            // ✅ FIXED: Agar buffer hai toh direct, warna Cloudinary se fetch
-            let buffer = file.buffer;
-            if (!buffer && file.path) {
-                const response = await fetch(file.path);
-                buffer = Buffer.from(await response.arrayBuffer());
-            }
-            const hash = await imghash.hash(buffer);
+            // ✅ Ab file.buffer available hai!
+            const hash = await imghash.hash(file.buffer);
             currentHashes.push(hash);
         }
 
@@ -237,11 +232,11 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // ☁️ CLOUDINARY URLS (FIXED)
+        // ☁️ MANUAL CLOUDINARY UPLOAD (NEW)
         // ==========================================
-        // ✅ Multer-Storage-Cloudinary already upload kar chuka hai
-        // file.path mein Cloudinary URL hai
-        const imageUrls = req.files.map(file => file.path);
+        const imageUrls = await Promise.all(
+            req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
+        );
 
         const categoryDetails = {};
         const currentDetailKeys = CATEGORY_FIELD_MAP[category] || [];

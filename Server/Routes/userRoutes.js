@@ -28,14 +28,13 @@ import {
 
 import authenticate from "../authMiddleware.js";
 import User from "../model/user.js";
-import { upload as cloudinaryUpload } from "../cloudinary.js";
 
 const route = express.Router();
 
 
 // ================= MULTER CONFIG =================
 
-// 📂 Memory storage (AI + KYC ke liye)
+// 📂 Memory storage (AI + KYC + Ads ke liye)
 const memoryStorage = multer.memoryStorage();
 
 const uploadMemory = multer({
@@ -69,90 +68,64 @@ route.post(
 
 route.get("/notifications", authenticate, async (req, res) => {
     try {
-
         const user = await User.findOne({ uid: req.user.uid });
-
         res.status(200).json({
             notifications: user?.notifications || []
         });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Notifications fetch nahi ho saki"
         });
-
     }
 });
 
 
 route.put("/notifications/:id/read", authenticate, async (req, res) => {
-
     try {
-
         await User.updateOne(
             { uid: req.user.uid, "notifications._id": req.params.id },
             { $set: { "notifications.$.read": true } }
         );
-
         res.status(200).json({ message: "Marked as read" });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Failed to mark as read"
         });
-
     }
-
 });
 
 
 route.put("/notifications/read-all", authenticate, async (req, res) => {
-
     try {
-
         await User.updateOne(
             { uid: req.user.uid },
             { $set: { "notifications.$[].read": true } }
         );
-
         res.status(200).json({
             message: "All marked as read"
         });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Failed to mark all as read"
         });
-
     }
-
 });
 
 
 route.delete("/notifications/:id", authenticate, async (req, res) => {
-
     try {
-
         await User.updateOne(
             { uid: req.user.uid },
             { $pull: { notifications: { _id: req.params.id } } }
         );
-
         res.status(200).json({
             message: "Notification deleted"
         });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Failed to delete"
         });
-
     }
-
 });
 
 
@@ -167,11 +140,11 @@ route.post(
 );
 
 
-// ☁️ Create Ad
+// ☁️ Create Ad - ✅ FIXED: uploadMemory use ho raha hai
 route.post(
     "/ad",
     authenticate,
-    cloudinaryUpload.array("images", 10),
+    uploadMemory.array("images", 10),
     create
 );
 
@@ -185,11 +158,11 @@ route.get("/ads/:id", getAdById);
 route.get("/myads", authenticate, getMyAds);
 
 
-// ✏️ Update Ad
+// ✏️ Update Ad - ✅ FIXED: uploadMemory use ho raha hai
 route.put(
     "/ads/:id",
     authenticate,
-    cloudinaryUpload.array("images", 5),
+    uploadMemory.array("images", 5),
     updateAd
 );
 
@@ -232,34 +205,23 @@ route.delete("/chat/:chatId", authenticate, deleteChat);
 // ================= USER PROFILE =================
 
 route.get("/check-phone", authenticate, async (req, res) => {
-
     try {
-
         const { phone } = req.query;
-
         const exists = await User.findOne({ phoneNumber: phone });
-
         res.json({
             exists: !!exists
         });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Error checking phone"
         });
-
     }
-
 });
 
 
 route.put("/users/me", authenticate, async (req, res) => {
-
     try {
-
         const { phoneNumber, password, isPhoneVerified } = req.body;
-
         const user = await User.findOne({ uid: req.user.uid });
 
         if (!user) {
@@ -269,17 +231,13 @@ route.put("/users/me", authenticate, async (req, res) => {
         }
 
         if (phoneNumber && phoneNumber !== user.phoneNumber) {
-
             const exists = await User.findOne({ phoneNumber });
-
             if (exists) {
                 return res.status(400).json({
                     message: "Phone already registered"
                 });
             }
-
             user.phoneNumber = phoneNumber;
-
         }
 
         if (isPhoneVerified) {
@@ -296,16 +254,12 @@ route.put("/users/me", authenticate, async (req, res) => {
             success: true,
             message: "Profile updated"
         });
-
     } catch (error) {
-
         res.status(500).json({
             message: "Update failed",
             error: error.message
         });
-
     }
-
 });
 
 
