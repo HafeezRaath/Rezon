@@ -52,6 +52,9 @@ try {
 // ==========================================
 // 🌐 THE NUCLEAR CORS FIX (FORCE HEADERS)
 // ==========================================
+// Purana manual header logic aur purana app.use(cors) dono hata dein.
+// Sirf ye rakhein:
+
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
   "https://raathdeveloper.com",
@@ -59,31 +62,27 @@ const allowedOrigins = [
   "http://localhost:5173"
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Agar origin list mein hai toh usay allow karo, warna block na karo (Public API logic)
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    // Fallback taake koi bhi request block na ho agar origin missing ho
-    res.setHeader("Access-Control-Allow-Origin", "https://rezon.raathdeveloper.com");
-  }
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
+}));
 
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-
-  // ⚡ Preflight (OPTIONS) request ka foran jawab do
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  next();
-});
+// Iske FORAN BAAD routes hone chahiye
+app.use("/api", route);
 
 // Extra safety layer
 app.use(cors({
-  origin: allowedOrigins,
+  origin: "*", 
   credentials: true
 }));
 
