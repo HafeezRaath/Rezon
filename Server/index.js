@@ -91,12 +91,18 @@ const io = new Server(httpServer, {
   }
 });
 
+// ==========================================
+// 🗄️ Database & Startup
+// ==========================================
+// Railway hamesha process.env.PORT provide karta hai
 const PORT = process.env.PORT || 8000;
 const MONGO_URL = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URL).then(() => {
   console.log("✅ MongoDB Connected");
-  httpServer.listen(PORT, '0.0.0.0', () => {
+  
+  // '0.0.0.0' ko hata kar sirf PORT likhen taake Railway sahi listen kare
+  httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port: ${PORT}`);
   });
 }).catch(err => {
