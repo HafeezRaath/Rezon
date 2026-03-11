@@ -9,7 +9,7 @@ import {
 } from "react-icons/fa";
 import LocationDropdown from "../Components/LocationDropdown";
 
-const API_BASE_URL = "https://rezon.up.railway.app";
+const API_BASE_URL = "https://rezon.up.railway.app/api";  // /api add karein
 
 // 14 Categories as per your provided list
 const CATEGORIES = [
