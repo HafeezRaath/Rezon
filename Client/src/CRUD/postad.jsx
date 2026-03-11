@@ -2,13 +2,33 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
-import { FaTimesCircle, FaSpinner, FaMagic, FaCamera, FaTimes, FaRocket } from "react-icons/fa";
+import { 
+    FaTimes, FaCamera, FaRocket, FaSpinner, FaMagic, FaTimesCircle,
+    FaMobileAlt, FaCar, FaHome, FaLaptop, FaMotorcycle, FaBriefcase,
+    FaDog, FaCouch, FaTshirt, FaBook, FaChild, FaTools, FaIndustry, FaBuilding
+} from "react-icons/fa";
 import LocationDropdown from "../Components/LocationDropdown";
 
-// 🔧 FIXED: Space removed
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 
-// 🔧 FIXED: All categories added
+// 14 Categories as per your provided list
+const CATEGORIES = [
+    { id: "Mobile", name: "Mobiles", icon: <FaMobileAlt /> },
+    { id: "Car", name: "Vehicles", icon: <FaCar /> },
+    { id: "PropertySale", name: "Property Sale", icon: <FaBuilding /> },
+    { id: "PropertyRent", name: "Property Rent", icon: <FaHome /> },
+    { id: "Electronics", name: "Electronics", icon: <FaLaptop /> },
+    { id: "Bikes", name: "Bikes", icon: <FaMotorcycle /> },
+    { id: "Business", name: "Business", icon: <FaIndustry /> },
+    { id: "Services", name: "Services", icon: <FaTools /> },
+    { id: "Jobs", name: "Jobs", icon: <FaBriefcase /> },
+    { id: "Animals", name: "Animals", icon: <FaDog /> },
+    { id: "Furniture", name: "Furniture", icon: <FaCouch /> },
+    { id: "Fashion", name: "Fashion", icon: <FaTshirt /> },
+    { id: "Books", name: "Books", icon: <FaBook /> },
+    { id: "Kids", name: "Kids", icon: <FaChild /> },
+];
+
 const CATEGORY_FIELDS = {
     Mobile: [
         { name: "brand", placeholder: "Brand (e.g., Samsung)", type: "text", required: true },
@@ -93,429 +113,153 @@ const CATEGORY_FIELDS = {
     ],
 };
 
-const getInitialState = (category) => ({
-    images: [],
-    imagePreviews: [],
-    title: "",
-    condition: "Used",
-    description: "",
-    price: "",
-    location: "",
-    category: category || "",
-    suggestedPriceByAI: null, // 🔧 FIX: Initial state mein suggestedPriceByAI add kiya
-});
-
-const MAX_IMAGES = 10;
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
-const PostAd = ({ onClose, onAdAdded, category, user }) => {
-    const [formData, setFormData] = useState(() => getInitialState(category));
+const PostAd = ({ onClose, onAdAdded }) => {
+    const [step, setStep] = useState(1);
+    const [selectedCat, setSelectedCat] = useState(null);
     const [loading, setLoading] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
+    
+    const [formData, setFormData] = useState({
+        title: "", condition: "Used", description: "", price: "", location: "",
+        images: [], imagePreviews: [], suggestedPriceByAI: null
+    });
 
-    useEffect(() => {
-        return () => {
-            formData.imagePreviews.forEach(url => URL.revokeObjectURL(url));
-        };
-    }, [formData.imagePreviews]);
-
-    useEffect(() => {
-        formData.imagePreviews.forEach(url => URL.revokeObjectURL(url));
-        setFormData(getInitialState(category));
-    }, [category]);
-
-    const currentCategoryFields = useMemo(() => 
-        CATEGORY_FIELDS[category] || [], 
-    [category]);
-
-    const inputHandler = useCallback((e) => {
+    const inputHandler = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-    }, []);
-
-    const validateImage = (file) => {
-        if (!file.type.startsWith('image/')) {
-            toast.error(`${file.name} is not an image!`);
-            return false;
-        }
-        if (file.size > MAX_FILE_SIZE) {
-            toast.error(`${file.name} is too large (max 5MB)`);
-            return false;
-        }
-        return true;
     };
 
-    const imageHandler = useCallback((e) => {
+    const imageHandler = (e) => {
         const files = Array.from(e.target.files);
-        
-        if (formData.images.length + files.length > MAX_IMAGES) {
-            toast.error(`Max ${MAX_IMAGES} images allowed!`);
-            return;
-        }
-
-        const validFiles = files.filter(validateImage);
-        if (validFiles.length === 0) return;
-
-        const previews = validFiles.map(file => URL.createObjectURL(file));
-        
+        if (formData.images.length + files.length > 10) return toast.error("Max 10 images!");
+        const previews = files.map(file => URL.createObjectURL(file));
         setFormData(prev => ({
             ...prev,
-            images: [...prev.images, ...validFiles],
+            images: [...prev.images, ...files],
             imagePreviews: [...prev.imagePreviews, ...previews]
         }));
-    }, [formData.images.length]);
+    };
 
-    const removeImage = useCallback((index) => {
-        URL.revokeObjectURL(formData.imagePreviews[index]);
-        
-        setFormData(prev => ({
-            ...prev,
-            images: prev.images.filter((_, i) => i !== index),
-            imagePreviews: prev.imagePreviews.filter((_, i) => i !== index)
-        }));
-    }, [formData.imagePreviews]);
-
-    // 🔧 FIXED: handleAiAssist mein Suggested Price ko store karna
-    const handleAiAssist = useCallback(async () => {
-        if (formData.images.length === 0) {
-            toast.error("Please upload images first! 📸");
-            return;
-        }
-        
+    const handleAiAssist = async () => {
+        if (formData.images.length === 0) return toast.error("Upload images first!");
         setAiLoading(true);
-        const token = localStorage.getItem("firebaseIdToken");
-        
-        if (!token) {
-            toast.error("Please login first! 🔒");
-            setAiLoading(false);
-            return;
-        }
-
         const aiData = new FormData();
-        formData.images.forEach((file) => {
-            aiData.append("images", file);
-        });
-        aiData.append("category", category);
+        formData.images.forEach(f => aiData.append("images", f));
+        aiData.append("category", selectedCat.id);
 
         try {
+            const token = localStorage.getItem("firebaseIdToken");
             const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
-                headers: { 
-                    "Content-Type": "multipart/form-data",
-                    Authorization: `Bearer ${token}` 
-                },
-                timeout: 30000
+                headers: { Authorization: `Bearer ${token}` }
             });
+            const data = res.data.data;
+            setFormData(prev => ({ ...prev, ...data, price: data.suggestedPrice || prev.price }));
+            toast.success("AI Analysis Complete! ✨");
+        } catch (err) { toast.error("AI Analysis failed."); }
+        finally { setAiLoading(false); }
+    };
 
-            const { title, condition, description, suggestedPrice, details } = res.data.data || {};
-            
-            setFormData(prev => ({
-                ...prev,
-                title: title || prev.title,
-                condition: condition || prev.condition,
-                description: description || prev.description,
-                price: suggestedPrice?.toString() || prev.price,
-                // 🔧 FIX: Suggested Price ko state mein rakhen backend validation ke liye
-                suggestedPriceByAI: suggestedPrice || prev.suggestedPriceByAI, 
-                ...(details || {})
-            }));
-
-            toast.success("✨ AI has analyzed your images!");
-        } catch (error) {
-            console.error("AI Assist Error:", error);
-            const errorMsg = error.response?.data?.message || 
-                           error.code === 'ECONNABORTED' ? "Request timeout. Try again." :
-                           "AI analysis failed. Please enter details manually.";
-            toast.error(errorMsg);
-        } finally {
-            setAiLoading(false);
-        }
-    }, [formData.images, category]);
-
-    // 🔧 FIXED: submitForm mein data Cloudinary ke liye bhejna
-    const submitForm = useCallback(async (e) => {
+    const submitAd = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
-        
-        if (!token) {
-            toast.error("Please login first! 🔒");
-            return;
-        }
-        if (formData.images.length === 0) {
-            toast.error("At least one image is required!");
-            return;
-        }
-
         setLoading(true);
-        const toastId = toast.loading("Posting your ad...");
+        const postData = new FormData();
+        
+        Object.keys(formData).forEach(key => {
+            if (key !== 'images' && key !== 'imagePreviews') postData.append(key, formData[key]);
+        });
+        postData.append("category", selectedCat.id);
+        formData.images.forEach(f => postData.append("images", f));
 
         try {
-            const finalFormData = new FormData();
-            finalFormData.append("title", formData.title.trim());
-            finalFormData.append("description", formData.description.trim());
-            finalFormData.append("price", Number(formData.price));
-            finalFormData.append("condition", formData.condition);
-            finalFormData.append("location", formData.location);
-            finalFormData.append("category", category);
-
-            // 🔧 FIX: Suggested price bhejna taake Backend ka 25% Guard bypass na ho
-            if (formData.suggestedPriceByAI) {
-                finalFormData.append("suggestedPriceByAI", formData.suggestedPriceByAI);
-            }
-
-            currentCategoryFields.forEach(field => {
-                if (formData[field.name]) {
-                    finalFormData.append(field.name, formData[field.name]);
-                }
+            const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-
-            // ☁️ CLOUDINARY: Images ko 'images' key ke sath bhejna (Backend matching)
-            formData.images.forEach(file => finalFormData.append("images", file));
-
-            const res = await axios.post(`${API_BASE_URL}/ad`, finalFormData, {
-                headers: {
-                    "Content-Type": "multipart/form-data", // Cloudinary/Multer ke liye lazmi
-                    Authorization: `Bearer ${token}`,
-                },
-                timeout: 60000
-            });
-
-            toast.success("🎉 Ad posted successfully!", { id: toastId });
-            
-            formData.imagePreviews.forEach(url => URL.revokeObjectURL(url));
-            
+            toast.success("Ad Posted! 🚀");
             onClose();
-            if (onAdAdded) onAdAdded(res.data?.data || res.data);
-        } catch (error) {
-            console.error("Post Ad Error:", error);
-            // 🛡️ Error handle: Agar price 25% range se bahar hui toh backend error dikhayega
-            const errorMsg = error.response?.data?.message || 
-                           error.code === 'ECONNABORTED' ? "Upload timeout. Try smaller images." :
-                           "Failed to post ad. Please try again.";
-            toast.error(errorMsg, { id: toastId });
-        } finally {
-            setLoading(false);
-        }
-    }, [formData, currentCategoryFields, category, onClose, onAdAdded]);
+            if (onAdAdded) onAdAdded(res.data);
+        } catch (err) { toast.error("Failed to post ad."); }
+        finally { setLoading(false); }
+    };
 
-    useEffect(() => {
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handleEscape);
-        return () => window.removeEventListener('keydown', handleEscape);
-    }, [onClose]);
-
-    const renderField = useCallback((field) => {
-        // Check dependency
-        if (field.dependsOn && formData[field.dependsOn.field] !== field.dependsOn.value) {
-            return null;
-        }
-
-        const baseClasses = "w-full border border-slate-200 p-4 rounded-xl outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-slate-50/50 font-medium transition-all";
-        
-        if (field.type === "select") {
-            return (
-                <select 
-                    key={field.name}
-                    name={field.name} 
-                    value={formData[field.name] || ""} 
-                    onChange={inputHandler} 
-                    className={baseClasses}
-                    required={field.required}
-                >
-                    <option value="">Select {field.placeholder}</option>
-                    {field.options.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                </select>
-            );
-        }
-        
-        return (
-            <input 
-                key={field.name}
-                type={field.type} 
-                name={field.name} 
-                value={formData[field.name] || ""} 
-                onChange={inputHandler} 
-                placeholder={field.placeholder} 
-                className={baseClasses}
-                required={field.required}
-                min={field.min}
-                max={field.max}
-            />
-        );
-    }, [formData, inputHandler]);
-
-    // 🎨 FIXED: Emerald Theme Modal
     const modalContent = (
-        <div 
-            className="fixed inset-0 flex justify-center items-center bg-slate-900/70 backdrop-blur-sm p-4 z-[999] animate-in fade-in duration-200"
-            onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 flex justify-center items-center bg-black/70 backdrop-blur-md p-4 z-[999] animate-in fade-in duration-300">
+            <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]">
+                
                 {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-white sticky top-0 z-10">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800">
-                            Post in <span className="text-emerald-600">{category}</span>
-                        </h2>
-                        <p className="text-sm text-slate-500 mt-1">Fill in the details below</p>
-                    </div>
-                    <button 
-                        onClick={onClose} 
-                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                        <FaTimes size={20} />
-                    </button>
+                <div className="p-8 text-center bg-white border-b border-gray-100">
+                    <h2 className="text-2xl font-black text-emerald-600 uppercase tracking-tighter">
+                        {step === 1 ? "What are you listing?" : `Post in: ${selectedCat.name}`}
+                    </h2>
+                    <button onClick={onClose} className="absolute right-8 top-8 text-gray-300 hover:text-rose-500 transition-all"><FaTimes size={24} /></button>
                 </div>
 
-                {/* Form Content */}
-                <div className="overflow-y-auto p-6 space-y-6">
-                    <form onSubmit={submitForm} className="space-y-6" id="post-ad-form">
-                        {/* Image Upload Section */}
-                        <div className="space-y-4">
-                            <label className="block w-full p-8 border-2 border-dashed border-emerald-200 rounded-2xl text-center bg-emerald-50/30 cursor-pointer hover:bg-emerald-50 transition-all group">
-                                <FaCamera className="text-4xl text-emerald-400 mx-auto mb-3 group-hover:scale-110 transition-transform" />
-                                <span className="text-slate-700 font-bold block mb-1">Upload Images</span>
-                                <span className="text-slate-500 text-sm">Max {MAX_IMAGES} images, 5MB each</span>
-                                <input 
-                                    type="file" 
-                                    multiple 
-                                    accept="image/*" 
-                                    onChange={imageHandler} 
-                                    className="hidden" 
-                                />
+                {/* Grid vs Form */}
+                <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
+                    {step === 1 ? (
+                        <div className="grid grid-cols-3 gap-3">
+                            {CATEGORIES.map(cat => (
+                                <button key={cat.id} onClick={() => { setSelectedCat(cat); setStep(2); }} className="flex flex-col items-center justify-center p-4 rounded-[30px] border border-gray-50 bg-white hover:border-emerald-500 hover:bg-emerald-50 group transition-all">
+                                    <div className="text-3xl text-gray-400 group-hover:text-emerald-600 mb-2">{cat.icon}</div>
+                                    <span className="text-[10px] font-black text-gray-500 text-center uppercase leading-tight">{cat.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <form id="post-ad-form" className="space-y-4 pb-28">
+                            <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-xs uppercase mb-2 block">← Change Category</button>
+                            
+                            <label className="block w-full py-10 border-2 border-dashed border-emerald-300 rounded-[35px] text-center bg-white cursor-pointer hover:bg-emerald-50 transition-all">
+                                <FaCamera className="mx-auto text-emerald-500 text-3xl mb-2" />
+                                <span className="text-gray-400 font-black text-xs">UPLOAD IMAGES (MULTIPLE)</span>
+                                <input type="file" multiple onChange={imageHandler} className="hidden" />
                             </label>
 
-                            {/* AI Assist Button */}
                             {formData.images.length > 0 && (
-                                <button 
-                                    type="button"
-                                    onClick={handleAiAssist}
-                                    disabled={aiLoading}
-                                    className="w-full py-3 bg-gradient-to-r from-violet-600 via-emerald-600 to-teal-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    {aiLoading ? (
-                                        <>
-                                            <FaSpinner className="animate-spin" />
-                                            Analyzing images...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FaMagic />
-                                            Auto-Fill with AI
-                                        </>
-                                    )}
+                                <button type="button" onClick={handleAiAssist} disabled={aiLoading} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs tracking-widest flex items-center justify-center gap-2">
+                                    {aiLoading ? <FaSpinner className="animate-spin" /> : <><FaMagic /> AI AUTO-FILL</>}
                                 </button>
                             )}
 
-                            {/* Image Previews */}
-                            {formData.imagePreviews.length > 0 && (
-                                <div className="flex gap-3 overflow-x-auto pb-2 pt-2 scrollbar-thin scrollbar-thumb-emerald-300">
-                                    {formData.imagePreviews.map((img, i) => (
-                                        <div key={i} className="relative shrink-0 group">
-                                            <img 
-                                                src={img} 
-                                                className="w-24 h-24 object-cover rounded-xl border-4 border-white shadow-lg" 
-                                                alt={`Preview ${i + 1}`}
-                                            />
-                                            <button 
-                                                type="button"
-                                                onClick={() => removeImage(i)}
-                                                className="absolute -top-2 -right-2 text-rose-500 bg-white rounded-full p-1 shadow-md hover:text-rose-700 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
-                                            >
-                                                <FaTimesCircle size={20} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Basic Info */}
-                        <div className="space-y-4">
-                            <input 
-                                name="title" 
-                                value={formData.title} 
-                                onChange={inputHandler} 
-                                placeholder="Ad Title *" 
-                                className="w-full border border-slate-200 p-4 rounded-xl outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-slate-50/50 font-medium transition-all"
-                                required 
-                                maxLength={100}
-                            />
+                            <input name="title" value={formData.title} onChange={inputHandler} placeholder="Ad Title *" className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" required />
                             
-                            <div className="grid grid-cols-2 gap-4">
-                                <select 
-                                    name="condition" 
-                                    value={formData.condition} 
-                                    onChange={inputHandler} 
-                                    className="border border-slate-200 p-4 rounded-xl bg-slate-50/50 outline-none font-medium focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                                >
+                            <div className="grid grid-cols-2 gap-3">
+                                <select name="condition" value={formData.condition} onChange={inputHandler} className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm">
                                     <option value="Used">Used</option>
                                     <option value="New">New</option>
-                                    <option value="Refurbished">Refurbished</option>
                                 </select>
-                                <input 
-                                    type="number" 
-                                    name="price" 
-                                    value={formData.price} 
-                                    onChange={inputHandler} 
-                                    placeholder="Price (PKR) *" 
-                                    className="border border-slate-200 p-4 rounded-xl outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-slate-50/50 font-medium"
-                                    required 
-                                    min="0"
-                                />
+                                <input name="price" type="number" value={formData.price} onChange={inputHandler} placeholder="Price (PKR) *" className="p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" required />
                             </div>
-                        </div>
 
-                        {/* Category Fields */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {currentCategoryFields.map(renderField)}
-                        </div>
+                            {/* Dynamic Fields from your list */}
+                            {CATEGORY_FIELDS[selectedCat.id]?.map(field => (
+                                field.type === "select" ? (
+                                    <select key={field.name} name={field.name} onChange={inputHandler} className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm">
+                                        <option value="">{field.placeholder}</option>
+                                        {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                ) : (
+                                    <input key={field.name} name={field.name} onChange={inputHandler} placeholder={field.placeholder} className="w-full p-5 rounded-2xl bg-white outline-none font-bold shadow-sm" />
+                                )
+                            ))}
 
-                        {/* Description */}
-                        <textarea 
-                            name="description" 
-                            value={formData.description} 
-                            onChange={inputHandler} 
-                            rows="4" 
-                            className="w-full border border-slate-200 p-4 rounded-xl bg-slate-50/50 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 font-medium resize-none"
-                            placeholder="Describe your product in detail..."
-                            required
-                            maxLength={2000}
-                        />
-                        
-                        {/* Location */}
-                        <LocationDropdown 
-                            selected={formData.location} 
-                            onChange={val => setFormData(p => ({...p, location: val}))} 
-                            variant="form" 
-                        />
-                    </form>
+                            <textarea name="description" value={formData.description} onChange={inputHandler} rows="4" placeholder="Full Description..." className="w-full p-5 rounded-[30px] bg-white outline-none font-bold shadow-sm resize-none" />
+                            
+                            <div className="bg-white rounded-2xl p-1 shadow-sm">
+                                <LocationDropdown selected={formData.location} onChange={v => setFormData(p => ({...p, location: v}))} variant="form" />
+                            </div>
+                        </form>
+                    )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-6 border-t border-slate-100 bg-slate-50">
-                    <button 
-                        type="submit" 
-                        form="post-ad-form"
-                        disabled={loading} 
-                        className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2"
-                    >
-                        {loading ? (
-                            <>
-                                <FaSpinner className="animate-spin" />
-                                Posting...
-                            </>
-                        ) : (
-                            <>
-                                <FaRocket />
-                                Post Ad Now
-                            </>
-                        )}
-                    </button>
-                </div>
+                {/* Fixed Action Button */}
+                {step === 2 && (
+                    <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#f0f2f5] via-[#f0f2f5] to-transparent">
+                        <button onClick={submitAd} disabled={loading} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[30px] font-black text-xl shadow-xl transition-all flex items-center justify-center gap-3">
+                            {loading ? <FaSpinner className="animate-spin" /> : <><FaRocket /> SUBMIT AD</>}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
