@@ -9,14 +9,34 @@ import path from 'path';
 import dotenv from 'dotenv';
 import mongoose from "mongoose";
 import OpenAI from "openai";
+import { v2 as cloudinary } from 'cloudinary'; // ✅ Cloudinary import
+import streamifier from 'streamifier'; // ✅ Buffer upload ke liye
 
 dotenv.config();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
 
 // 🔧 FIX 1: BASE_URL added for production
 const BASE_URL = process.env.NODE_ENV === 'production' 
     ? 'https://rezon.up.railway.app' 
     : 'http://localhost:8000';
+
+// ✅ Cloudinary Buffer Upload Helper (KYC ke liye)
+const uploadBufferToCloudinary = (buffer, folder, filename) => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { 
+                folder: folder,
+                public_id: filename,
+                resource_type: 'image'
+            },
+            (error, result) => {
+                if (error) reject(error);
+                else resolve(result.secure_url);
+            }
+        );
+        streamifier.createReadStream(buffer).pipe(stream);
+    });
+};
 
 const CATEGORY_FIELD_MAP = {
     "Mobile": ['brand', 'model', 'warranty', 'warrantyDuration', 'storage', 'ram', 'batteryHealth', 'ptaStatus', 'accessories'],
@@ -47,10 +67,27 @@ export const getAISuggestions = async (req, res) => {
             return res.status(400).json({ message: "Kam se kam ek image upload karein" });
         }
 
-        const imagesContent = req.files.map(file => ({
-            type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${file.buffer.toString('base64')}` }
-        }));
+        // ✅ FIXED: Cloudinary se image fetch karo for AI analysis
+        const imagesContent = await Promise.all(
+            req.files.map(async (file) => {
+                // Agar file.buffer hai (memory storage), use directly
+                // Agar file.path hai (cloudinary url), fetch karo
+                let base64Data;
+                if (file.buffer) {
+                    base64Data = file.buffer.toString('base64');
+                } else {
+                    // Cloudinary URL se image fetch karo
+                    const response = await fetch(file.path);
+                    const arrayBuffer = await response.arrayBuffer();
+                    base64Data = Buffer.from(arrayBuffer).toString('base64');
+                }
+                
+                return {
+                    type: "image_url",
+                    image_url: { url: `data:image/jpeg;base64,${base64Data}` }
+                };
+            })
+        );
 
         const promptText = `
 Strictly analyze the text and hardware in ALL provided images for the "${category}" category.
@@ -143,14 +180,9 @@ export const registerUser = async (req, res) => {
     }
 };
 
-
 // ==========================================
-// 🛡️ PRICE GUARD: Check against AI Suggestion (FIXED - Function ke andar moved)
+// 🛡️ CREATE AD (FIXED FOR CLOUDINARY)
 // ==========================================
-
-// Yeh function create ke andar hona chahiye, file level pe nahi
-// Isliye is code ko create function mein move karo
-
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -160,14 +192,14 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // 🛡️ PRICE GUARD: Check against AI Suggestion (YAHAN MOVE KIYA)
+        // 🛡️ PRICE GUARD
         // ==========================================
         const { price, suggestedPriceByAI, title, description, location, condition, category } = req.body;
         const aiSuggested = Number(suggestedPriceByAI);
 
         if (aiSuggested && aiSuggested > 0) {
-            const minAllowed = aiSuggested * 0.75; // 25% lower
-            const maxAllowed = aiSuggested * 1.25; // 25% higher
+            const minAllowed = aiSuggested * 0.75;
+            const maxAllowed = aiSuggested * 1.25;
             const userPrice = Number(price);
 
             if (userPrice < minAllowed || userPrice > maxAllowed) {
@@ -179,11 +211,17 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // 🛡️ DUPLICATE SHIELD (Hashing & AI Check)
+        // 🛡️ DUPLICATE SHIELD (Hashing)
         // ==========================================
         const currentHashes = [];
         for (const file of req.files) {
-            const hash = await imghash.hash(file.buffer);
+            // ✅ FIXED: Agar buffer hai toh direct, warna Cloudinary se fetch
+            let buffer = file.buffer;
+            if (!buffer && file.path) {
+                const response = await fetch(file.path);
+                buffer = Buffer.from(await response.arrayBuffer());
+            }
+            const hash = await imghash.hash(buffer);
             currentHashes.push(hash);
         }
 
@@ -199,8 +237,10 @@ export const create = async (req, res) => {
         }
 
         // ==========================================
-        // ☁️ CLOUDINARY URLS (Data Storage)
+        // ☁️ CLOUDINARY URLS (FIXED)
         // ==========================================
+        // ✅ Multer-Storage-Cloudinary already upload kar chuka hai
+        // file.path mein Cloudinary URL hai
         const imageUrls = req.files.map(file => file.path);
 
         const categoryDetails = {};
@@ -210,16 +250,21 @@ export const create = async (req, res) => {
         }
 
         const newAd = new Ad({
-            images: imageUrls,
+            images: imageUrls, // ✅ Cloudinary URLs
             imageHashes: currentHashes,
-            title, description, price: Number(price), location, condition, category,
+            title, 
+            description, 
+            price: Number(price), 
+            location, 
+            condition, 
+            category,
             details: categoryDetails,
             posted_by_uid,
             status: 'Active'
         });
 
         await newAd.save();
-        res.status(201).json({ success: true, message: "Ad Posted successfully on Rezon!" });
+        res.status(201).json({ success: true, message: "Ad Posted successfully on Rezon!", images: imageUrls });
 
     } catch (error) {
         console.error("🔥 Rezon Create Error:", error);
@@ -227,6 +272,9 @@ export const create = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET ALL ADS
+// ==========================================
 export const getAllAds = async (req, res) => {
     try {
         const { city } = req.query;
@@ -246,6 +294,9 @@ export const getAllAds = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET AD BY ID
+// ==========================================
 export const getAdById = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
@@ -256,6 +307,9 @@ export const getAdById = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET MY ADS
+// ==========================================
 export const getMyAds = async (req, res) => {
     try {
         const userUid = req.user.uid;
@@ -269,6 +323,9 @@ export const getMyAds = async (req, res) => {
     }
 };
 
+// ==========================================
+// UPDATE AD (FIXED FOR CLOUDINARY)
+// ==========================================
 export const updateAd = async (req, res) => {
     try {
         const adId = req.params.id;
@@ -283,14 +340,9 @@ export const updateAd = async (req, res) => {
             return res.status(400).json({ message: "Sold items cannot be edited" });
         }
 
+        // ✅ FIXED: Cloudinary URLs direct use karo
         if (req.files && req.files.length > 0) {
-            const newImageUrls = [];
-            for (const file of req.files) {
-                const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname) || '.jpg'}`;
-                fs.writeFileSync(path.join('uploads/', fileName), file.buffer);
-                // 🔧 FIX 2: Use BASE_URL
-                newImageUrls.push(`${BASE_URL}/uploads/${fileName}`);
-            }
+            const newImageUrls = req.files.map(file => file.path); // Already Cloudinary URLs
             updateData.images = [...(currentAd.images || []), ...newImageUrls];
         }
 
@@ -301,11 +353,27 @@ export const updateAd = async (req, res) => {
     }
 };
 
+// ==========================================
+// DELETE AD
+// ==========================================
 export const deleteAd = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
         if (!ad) return res.status(404).json({ message: "Ad not found" });
         if (ad.posted_by_uid !== req.user.uid) return res.status(403).json({ message: "Ownership Mismatch" });
+
+        // ✅ OPTIONAL: Cloudinary se bhi images delete karo
+        if (ad.images && ad.images.length > 0) {
+            for (const imageUrl of ad.images) {
+                try {
+                    // Public ID extract karo URL se
+                    const publicId = imageUrl.split('/').slice(-2).join('/').split('.')[0];
+                    await cloudinary.uploader.destroy(publicId);
+                } catch (err) {
+                    console.log("Cloudinary delete error:", err);
+                }
+            }
+        }
 
         await Ad.findByIdAndDelete(req.params.id);
         res.status(200).json({ message: "Ad Deleted Successfully" });
@@ -313,10 +381,10 @@ export const deleteAd = async (req, res) => {
         res.status(500).json({ errorMessage: error.message });
     }
 };
+
 // ==========================================
 // MARK AS SOLD CONTROLLERS
 // ==========================================
-
 export const getChatUsersForAd = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -377,7 +445,6 @@ export const markAsSold = async (req, res) => {
             return res.status(404).json({ message: "Buyer nahi mila database mein" });
         }
 
-        // 30 days baad auto-delete
         const deleteDate = new Date();
         deleteDate.setDate(deleteDate.getDate() + 30);
 
@@ -444,7 +511,6 @@ export const canReview = async (req, res) => {
 // ==========================================
 // REVIEWS & RATINGS CONTROLLERS
 // ==========================================
-
 export const createReview = async (req, res) => {
     try {
         const { sellerId, adId, rating, comment } = req.body;
@@ -533,7 +599,6 @@ export const getSellerReviews = async (req, res) => {
 // ==========================================
 // REPORT CONTROLLERS
 // ==========================================
-
 export const createReport = async (req, res) => {
     try {
         const { reportedUserId, adId, reason, description } = req.body;
@@ -571,7 +636,7 @@ export const createReport = async (req, res) => {
 };
 
 // ==========================================
-// 🛡️ LOCAL IDENTITY VERIFICATION (KYC)
+// 🛡️ LOCAL IDENTITY VERIFICATION (KYC) - FIXED FOR CLOUDINARY
 // ==========================================
 export const verifyIdentity = async (req, res) => {
     try {
@@ -588,31 +653,27 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🚫 AI COMPLETELY DISABLED - No face matching, no ID comparison
-        // Sirf files save karna, koi verification nahi
+        // ✅ FIXED: Direct Cloudinary upload using buffer
+        const timestamp = Date.now();
         
-        const uploadDir = 'uploads/verification/';
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-        
-        // ID Front save
-        const idFrontName = `idFront-${userUid}-${Date.now()}.jpg`;
-        const idFrontPath = path.join(uploadDir, idFrontName);
-        fs.writeFileSync(idFrontPath, req.files.idFront[0].buffer);
-        
-        // ID Back save  
-        const idBackName = `idBack-${userUid}-${Date.now()}.jpg`;
-        const idBackPath = path.join(uploadDir, idBackName);
-        fs.writeFileSync(idBackPath, req.files.idBack[0].buffer);
-        
-        // Selfie save
-        const selfieName = `selfie-${userUid}-${Date.now()}.jpg`;
-        const selfiePath = path.join(uploadDir, selfieName);
-        fs.writeFileSync(selfiePath, req.files.liveSelfie[0].buffer);
-
-        // URLs generate karna
-        const idFrontUrl = `${BASE_URL}/uploads/verification/${idFrontName}`;
-        const idBackUrl = `${BASE_URL}/uploads/verification/${idBackName}`;
-        const selfieUrl = `${BASE_URL}/uploads/verification/${selfieName}`;
+        // Upload all three to Cloudinary
+        const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+            uploadBufferToCloudinary(
+                req.files.idFront[0].buffer, 
+                'rezon_kyc', 
+                `idFront-${userUid}-${timestamp}`
+            ),
+            uploadBufferToCloudinary(
+                req.files.idBack[0].buffer, 
+                'rezon_kyc', 
+                `idBack-${userUid}-${timestamp}`
+            ),
+            uploadBufferToCloudinary(
+                req.files.liveSelfie[0].buffer, 
+                'rezon_kyc', 
+                `selfie-${userUid}-${timestamp}`
+            )
+        ]);
 
         // Direct verification - No AI check
         await User.findOneAndUpdate(
@@ -650,7 +711,7 @@ export const verifyIdentity = async (req, res) => {
 };
 
 // ==========================================
-// 👤 GET CURRENT USER DETAILS (For Navbar/Profile)
+// 👤 GET CURRENT USER DETAILS
 // ==========================================
 export const me = async (req, res) => {
     try {
@@ -668,7 +729,9 @@ export const me = async (req, res) => {
     }
 };
 
-// 🔧 FIX 3: ADDED - Update Ad Status for Admin
+// ==========================================
+// UPDATE AD STATUS (ADMIN)
+// ==========================================
 export const updateAdStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -687,23 +750,21 @@ export const updateAdStatus = async (req, res) => {
         res.status(500).json({ message: "Error updating status", error: error.message });
     }
 };
+
 // ==========================================
 // 💬 CHAT SYSTEM CONTROLLERS
 // ==========================================
-
-// Get all conversations for a user (Inbox)
 export const getChatList = async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Security check: user sirf apni hi list dekh sakta
         if (req.user.uid !== userId) {
             return res.status(403).json({ message: "Access denied. Apni hi chats dekh sakte hain." });
         }
 
         const chats = await Chat.find({
             participants: { $in: [userId] },
-            deletedBy: { $nin: [userId] }  // Jo user ne delete ki hain wo na dikhain
+            deletedBy: { $nin: [userId] }
         })
         .populate({
             path: 'adId',
@@ -711,7 +772,6 @@ export const getChatList = async (req, res) => {
         })
         .sort({ updatedAt: -1 });
 
-        // Har chat ke liye other user ka data nikalo
         const formattedChats = await Promise.all(
             chats.map(async (chat) => {
                 const otherUserId = chat.participants.find(p => p !== userId);
@@ -739,7 +799,6 @@ export const getChatList = async (req, res) => {
     }
 };
 
-// Get single chat messages
 export const getChatMessages = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -754,7 +813,6 @@ export const getChatMessages = async (req, res) => {
             return res.status(403).json({ message: "Access denied. Aap is chat mein nahi hain." });
         }
 
-        // Mark messages as read jo user ne receive kiye hain
         let unreadCount = 0;
         chat.messages.forEach(msg => {
             if (msg.senderId !== userId && !msg.read) {
@@ -767,7 +825,6 @@ export const getChatMessages = async (req, res) => {
             await chat.save();
         }
 
-        // Other user ka data bhejo
         const otherUserId = chat.participants.find(p => p !== userId);
         const otherUser = await User.findOne({ uid: otherUserId }).select('name profilePic uid');
 
@@ -784,7 +841,6 @@ export const getChatMessages = async (req, res) => {
     }
 };
 
-// Send message in chat
 export const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -814,13 +870,10 @@ export const sendMessage = async (req, res) => {
         chat.messages.push(newMessage);
         chat.lastMessage = text.trim();
         chat.updatedAt = new Date();
-        
-        // Agar dono ne delete ki thi toh wapas lao
         chat.deletedBy = [];
         
         await chat.save();
 
-        // Notification bhejo receiver ko (async, wait nahi karein)
         const receiverId = chat.participants.find(p => p !== senderId);
         if (receiverId) {
             await User.findOneAndUpdate(
@@ -851,7 +904,6 @@ export const sendMessage = async (req, res) => {
     }
 };
 
-// Soft delete chat (sirf user ke liye hide ho)
 export const deleteChat = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -866,7 +918,6 @@ export const deleteChat = async (req, res) => {
             return res.status(403).json({ message: "Access denied" });
         }
 
-        // Soft delete - add to deletedBy array
         if (!chat.deletedBy.includes(userId)) {
             chat.deletedBy.push(userId);
             await chat.save();
@@ -882,24 +933,20 @@ export const deleteChat = async (req, res) => {
     }
 };
 
-// Start new chat (already tha, bas controller mein move kar diya)
 export const startChat = async (req, res) => {
     try {
         const { buyerId, sellerId, adId } = req.body;
 
-        // Validation
         if (!buyerId || !sellerId || !adId) {
             return res.status(400).json({ message: "Buyer, Seller aur Ad ID lazmi hain" });
         }
 
-        // Check if already exists
         let chat = await Chat.findOne({
             adId: adId,
             participants: { $all: [buyerId, sellerId] }
         });
 
         if (chat) {
-            // Agar pehle delete ki thi toh restore karo
             chat.deletedBy = chat.deletedBy.filter(id => id !== buyerId && id !== sellerId);
             await chat.save();
             
@@ -910,7 +957,6 @@ export const startChat = async (req, res) => {
             });
         }
 
-        // New chat create karo
         chat = new Chat({
             participants: [buyerId, sellerId],
             adId: adId,
