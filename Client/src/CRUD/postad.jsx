@@ -121,22 +121,25 @@ const PostAd = ({ onClose, onAdAdded }) => {
     
     const [formData, setFormData] = useState({
         title: "", condition: "Used", description: "", price: "", location: "",
-        phoneNumber: "", // Auto-filled from profile
+        phoneNumber: "", 
         images: [], imagePreviews: []
     });
 
-    // 1. Fetch Profile Mobile Number
+    // ✨ FIX 1: Profile Fetch URL changed to /users/me
     useEffect(() => {
         const fetchProfile = async () => {
             try {
                 const token = localStorage.getItem("firebaseIdToken");
-                const res = await axios.get(`${API_BASE_URL}/user/profile`, {
+                if (!token) return;
+                const res = await axios.get(`${API_BASE_URL}/users/me`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.data.phoneNumber) {
                     setFormData(prev => ({ ...prev, phoneNumber: res.data.phoneNumber }));
                 }
-            } catch (err) { console.error("Profile Fetch Error", err); }
+            } catch (err) { 
+                console.error("Profile Fetch Error", err); 
+            }
         };
         fetchProfile();
     }, []);
@@ -157,6 +160,7 @@ const PostAd = ({ onClose, onAdAdded }) => {
         }));
     };
 
+    // ✨ FIX 2: AI Assist URL changed to /ai-assist-ad
     const handleAiAssist = async () => {
         if (formData.images.length === 0) return toast.error("Upload images first!");
         setAiLoading(true);
@@ -166,44 +170,69 @@ const PostAd = ({ onClose, onAdAdded }) => {
 
         try {
             const token = localStorage.getItem("firebaseIdToken");
-            const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
+            const res = await axios.post(`${API_BASE_URL}/ai-assist-ad`, aiData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = res.data.data;
-            setFormData(prev => ({ ...prev, ...data, price: data.suggestedPrice || prev.price }));
+            setFormData(prev => ({ 
+                ...prev, 
+                title: data.title || prev.title,
+                description: data.description || prev.description,
+                price: data.suggestedPrice || prev.price,
+                condition: data.condition || prev.condition
+            }));
             toast.success("AI Analysis Complete! ✨");
-        } catch (err) { toast.error("AI Analysis failed."); }
-        finally { setAiLoading(false); }
+        } catch (err) { 
+            toast.error("AI Analysis failed."); 
+        } finally { 
+            setAiLoading(false); 
+        }
     };
 
+    // ✨ FIX 3: Submit Ad URL changed to /post-new-ad
     const submitAd = async (e) => {
         if(e) e.preventDefault();
         const token = localStorage.getItem("firebaseIdToken");
+        if (!token) return toast.error("Please login again");
+        if (!formData.location) return toast.error("Please select a location");
+
         setLoading(true);
         const postData = new FormData();
         
+        // Append all text fields
         Object.keys(formData).forEach(key => {
-            if (key !== 'images' && key !== 'imagePreviews') postData.append(key, formData[key]);
+            if (key !== 'images' && key !== 'imagePreviews') {
+                postData.append(key, formData[key]);
+            }
         });
+        
         postData.append("category", selectedCat.id);
+        
+        // Append images
         formData.images.forEach(f => postData.append("images", f));
 
         try {
-            const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
-                headers: { Authorization: `Bearer ${token}` }
+            const res = await axios.post(`${API_BASE_URL}/post-new-ad`, postData, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "multipart/form-data"
+                }
             });
-            toast.success("Ad Posted! 🚀");
+            toast.success("Ad Posted Successfully! 🚀");
             onClose();
             if (onAdAdded) onAdAdded(res.data);
-        } catch (err) { toast.error("Failed to post ad."); }
-        finally { setLoading(false); }
+        } catch (err) { 
+            const errorMsg = err.response?.data?.message || "Failed to post ad.";
+            toast.error(errorMsg); 
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const modalContent = (
         <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-4 z-[9999]" onClick={onClose}>
             <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                 
-                {/* Header */}
                 <div className="p-8 text-center bg-white border-b border-gray-100 relative">
                     <h2 className="text-2xl font-black text-emerald-600 uppercase">
                         {step === 1 ? "Select Category" : `Post in: ${selectedCat.name}`}
@@ -213,7 +242,6 @@ const PostAd = ({ onClose, onAdAdded }) => {
                     </button>
                 </div>
 
-                {/* Body */}
                 <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
                     {step === 1 ? (
                         <div className="grid grid-cols-3 gap-3">
@@ -228,7 +256,6 @@ const PostAd = ({ onClose, onAdAdded }) => {
                         <div className="space-y-4 pb-20">
                             <button onClick={() => setStep(1)} className="text-emerald-600 font-bold text-xs">← CHANGE CATEGORY</button>
                             
-                            {/* Image Preview Grid */}
                             <div className="grid grid-cols-4 gap-2">
                                 {formData.imagePreviews.map((src, i) => (
                                     <img key={i} src={src} className="w-full aspect-square object-cover rounded-xl border" alt="preview" />
