@@ -126,20 +126,28 @@ const PostAd = ({ onClose, onAdAdded }) => {
     });
 
     // 1. Fetch Profile Mobile Number
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const token = localStorage.getItem("firebaseIdToken");
-               const res = await axios.get(`${API_BASE_URL}/users/me`, {
-    headers: { Authorization: `Bearer ${token}` }
-});
-                if (res.data.phoneNumber) {
-                    setFormData(prev => ({ ...prev, phoneNumber: res.data.phoneNumber }));
+   useEffect(() => {
+    const fetchProfile = async () => {
+        try {
+            const token = localStorage.getItem("firebaseIdToken");
+            if (!token) return;
+
+            // Direct URL use karke test karein ya check karein variable scope
+            const res = await axios.get("https://rezon.up.railway.app/api/users/me", {
+                headers: { 
+                    Authorization: `Bearer ${token}` 
                 }
-            } catch (err) { console.error("Profile Fetch Error", err); }
-        };
-        fetchProfile();
-    }, []);
+            });
+
+            if (res.data && res.data.phoneNumber) {
+                setFormData(prev => ({ ...prev, phoneNumber: res.data.phoneNumber }));
+            }
+        } catch (err) { 
+            console.error("Profile Fetch Error Detail:", err.response || err); 
+        }
+    };
+    fetchProfile();
+}, []);
 
     const inputHandler = (e) => {
         const { name, value } = e.target;
