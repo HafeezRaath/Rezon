@@ -3,8 +3,9 @@ import User from "../model/user.js";
 import Review from "../model/Review.js";
 import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
+import sharp from 'sharp'; // ✅ Naya stable tareeqa
 import blockhash from 'blockhash-core';
-import { decode } from 'jpeg-js';
+//import { decode } from 'jpeg-js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -186,12 +187,7 @@ export const registerUser = async (req, res) => {
     }
 };
 
-// ==========================================
-// 🛡️ CREATE AD (FIXED FOR CLOUDINARY)
-// ==========================================
-// ==========================================
-// 🛡️ CREATE AD (BLOCKHASH + AI QUALITY AUDIT)
-// ==========================================
+
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -206,27 +202,39 @@ export const create = async (req, res) => {
             title, 
             description, 
             location, 
+            condition, 
             category,
-            imageQualityByAI // AI Assist se mila hua result
+            imageQualityByAI 
         } = req.body;
 
-        // 1. 🛡️ AI QUALITY GUARD (Stock Photo Detection)
+        // 1. 🛡️ AI QUALITY GUARD
         if (imageQualityByAI === "Stock" || imageQualityByAI === "Suspicious") {
             return res.status(400).json({
                 success: false,
-                message: "🛡️ Rezon Security: Internet photos allow nahi hain. Apne product ki real photo khinchen."
+                message: "🛡️ Rezon Security: Hum sirf original photos allow karte hain. Internet photos block hain."
             });
         }
 
-        // 2. 🛡️ DUPLICATE SHIELD (Blockhash Perceptual Match)
+        // 2. 🛡️ DUPLICATE SHIELD (Sharp + Blockhash) ✅
         const currentHashes = [];
         for (const file of req.files) {
             try {
-                const pixels = decode(file.buffer, { useTArray: true });
-                const hash = blockhash.bmh(pixels, 16); 
+                // Sharp se har kism ki image ko raw pixels mein convert karein
+                const { data, info } = await sharp(file.buffer)
+                    .ensureAlpha()
+                    .raw()
+                    .toBuffer({ resolveWithObject: true });
+
+                const hash = blockhash.bmh({
+                    data: data,
+                    width: info.width,
+                    height: info.height
+                }, 16);
+                
                 currentHashes.push(hash);
             } catch (err) {
-                console.warn("Hashing failed for an image, skipping duplication check for it.");
+                console.error("🔥 Hashing Error:", err.message);
+                continue; 
             }
         }
 
@@ -238,18 +246,37 @@ export const create = async (req, res) => {
 
             if (internalDuplicate) {
                 return res.status(400).json({
-                    message: "🛡️ Rezon Shield: Ye product pehle hi Rezon par post ho chuka hai."
+                    message: "🛡️ Rezon Shield: Ye image Rezon par pehle hi mojud hai."
                 });
             }
         }
 
-        // 3. ☁️ CLOUDINARY UPLOAD & SAVE
-        // (Upload logic here...)
+        // 3. ☁️ CLOUDINARY UPLOAD (Using existing helper)
+        const imageUrls = await Promise.all(
+            req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
+        );
 
-        res.status(201).json({ success: true, message: "Ad Posted successfully!" });
+        // 4. SAVE TO DATABASE
+        const newAd = new Ad({
+            images: imageUrls, 
+            imageHashes: currentHashes,
+            title, 
+            description, 
+            price: Number(price), 
+            location, 
+            condition, 
+            category,
+            posted_by_uid,
+            status: 'Active',
+            aiAuditStatus: imageQualityByAI
+        });
+
+        await newAd.save();
+        res.status(201).json({ success: true, message: "Ad Posted successfully!", images: imageUrls });
 
     } catch (error) {
-        res.status(500).json({ message: "Error", error: error.message });
+        console.error("🔥 Rezon Create Error:", error);
+        res.status(500).json({ message: "Posting failed", error: error.message });
     }
 };
 
