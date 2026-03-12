@@ -3,8 +3,8 @@ import User from "../model/user.js";
 import Review from "../model/Review.js";
 import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
-import sharp from 'sharp'; // ✅ Naya stable tareeqa
-import blockhashCore from 'blockhash-core';
+import crypto from 'crypto'; // ✅ Built-in, 0% Crash Rate
+import sharp from 'sharp';
 //import { decode } from 'jpeg-js';
 import fs from 'fs';
 import path from 'path';
@@ -195,6 +195,9 @@ export const registerUser = async (req, res) => {
 };
 
 
+// ==========================================
+// 🛡️ CREATE AD (Final Stable Hashing)
+// ==========================================
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -202,40 +205,45 @@ export const create = async (req, res) => {
 
         const { price, title, description, category, imageQualityByAI } = req.body;
 
-        // 🛡️ AI Guard
+        // 🛡️ 1. AI QUALITY GUARD
         if (imageQualityByAI === "Stock") {
             return res.status(400).json({ message: "🛡️ Rezon Security: Internet photos not allowed." });
         }
 
-        // 🛡️ Duplicate Shield
+        // 🛡️ 2. DUPLICATE SHIELD (Ultra-Stable MD5 Hashing)
         const currentHashes = [];
-        const hashFunc = blockhashCore.hash || blockhashCore; // Robust access
-
         for (const file of req.files) {
-            try {
-                const { data, info } = await sharp(file.buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-                const hash = hashFunc({ data, width: info.width, height: info.height }, 16, 2);
-                currentHashes.push(hash);
-            } catch (err) { continue; }
+            // Buffer ka unique MD5 fingerprint banayein
+            const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
+            currentHashes.push(hash);
         }
 
         const duplicate = await Ad.findOne({ imageHashes: { $in: currentHashes }, isDeleted: false });
-        if (duplicate) return res.status(400).json({ message: "🛡️ Rezon Shield: Duplicate Image detected." });
+        if (duplicate) {
+            return res.status(400).json({ message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai." });
+        }
 
-        const imageUrls = await Promise.all(req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products')));
+        // 🛡️ 3. CLOUDINARY UPLOAD
+        const imageUrls = await Promise.all(
+            req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
+        );
 
         const newAd = new Ad({
             images: imageUrls, 
             imageHashes: currentHashes,
-            title, price, category, posted_by_uid,
+            title, 
+            price: Number(price), 
+            category, 
+            posted_by_uid,
             status: 'Active',
             aiAuditStatus: imageQualityByAI
         });
 
         await newAd.save();
-        res.status(201).json({ success: true, message: "Ad Posted!", images: imageUrls });
+        res.status(201).json({ success: true, message: "Ad Posted successfully!" });
 
     } catch (error) {
+        console.error("🔥 Server Error:", error.message);
         res.status(500).json({ message: "Post failed", error: error.message });
     }
 };
