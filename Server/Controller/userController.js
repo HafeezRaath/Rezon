@@ -826,29 +826,67 @@ export const getChatMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { text } = req.body; // Frontend se 'text' aa raha hai
+        const { message, recipientId, tempId } = req.body;
         const senderId = req.user.uid;
 
-        if (!text) return res.status(400).json({ message: "Text is required" });
+        if (!message?.trim()) {
+            return res.status(400).json({ message: "Message empty nahi ho sakta" });
+        }
 
-        const newMessage = {
-            senderId,
-            message: text, // Model mein field ka naam 'message' rakhein taake frontend se match ho
-            timestamp: new Date()
-        };
-
+        // 1. Save to database
         const updatedChat = await Chat.findByIdAndUpdate(
             chatId,
             { 
-                $push: { messages: newMessage },
-                $set: { lastMessage: text, updatedAt: new Date() } // lastMessage ko update lazmi karein
+                $push: { 
+                    messages: { 
+                        senderId, 
+                        message: message.trim(), 
+                        timestamp: new Date(),
+                        read: false 
+                    } 
+                },
+                $set: { 
+                    lastMessage: message.trim(), 
+                    updatedAt: new Date() 
+                } 
             },
             { new: true }
-        );
+        ).populate('adId', 'title images');
 
-        res.status(200).json({ success: true, data: newMessage });
+        if (!updatedChat) {
+            return res.status(404).json({ message: "Chat nahi mili" });
+        }
+
+        const savedMessage = updatedChat.messages[updatedChat.messages.length - 1];
+
+        // 2. 🔥 FIXED: Emit to chat room (not just recipient)
+        const io = req.app.get("io");
+        
+        // Emit to chat room so both participants receive it
+        io.to(chatId).emit("receive_message", {
+            _id: savedMessage._id,
+            senderId: savedMessage.senderId,
+            message: savedMessage.message,
+            timestamp: savedMessage.timestamp,
+            chatId: chatId,
+            tempId: tempId // For optimistic update matching
+        });
+
+        // Also notify recipient if they're not in the room
+        io.to(recipientId).emit("new_message_notification", {
+            chatId,
+            message: savedMessage.message,
+            senderId
+        });
+
+        res.status(200).json({ 
+            success: true, 
+            data: savedMessage 
+        });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("🔥 SendMessage Error:", error);
+        res.status(500).json({ message: "Message send nahi ho saka" });
     }
 };
 

@@ -173,53 +173,54 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     };
 
     // 🔥 MOBILE MENU COMPONENT
-    const MobileMenu = () => (
+   const MobileMenu = () => (
+    <div
+        ref={mobileMenuRef}
+        className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${showMobileMenu ? 'visible' : 'invisible'}`}
+    >
+        {/* Backdrop - 🔧 Smoother exit */}
         <div
-            ref={mobileMenuRef}
-            className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${showMobileMenu ? 'visible' : 'invisible'
-                }`}
-        >
-            {/* Backdrop */}
-            <div
-                className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showMobileMenu ? 'opacity-100' : 'opacity-0'
-                    }`}
-                onClick={() => setShowMobileMenu(false)}
-            />
+            className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-300 ${showMobileMenu ? 'opacity-100' : 'opacity-0'}`}
+            onClick={() => setShowMobileMenu(false)}
+        />
 
-            {/* Menu Panel */}
-            <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'
-                }`}>
-                {/* Header */}
-                <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
-                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-                            <span className="text-white font-black text-xl">R</span>
-                        </div>
-                        <span className="text-xl font-black text-white">RE<span className="text-emerald-400">ZON</span></span>
-                    </Link>
-                    <button
-                        onClick={() => setShowMobileMenu(false)}
-                        className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
-                    >
-                        <FaTimes />
-                    </button>
-                </div>
+        {/* Menu Panel */}
+        <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-out flex flex-col ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
+            
+            {/* 1. Header */}
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                        <span className="text-white font-black text-xl">R</span>
+                    </div>
+                    <span className="text-xl font-black text-white">RE<span className="text-emerald-400">ZON</span></span>
+                </Link>
+                <button
+                    onClick={() => setShowMobileMenu(false)}
+                    className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                >
+                    <FaTimes />
+                </button>
+            </div>
 
-                {/* User Section */}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto pb-8 custom-scrollbar">
+                
+                {/* 2. User Section */}
                 {user ? (
-                    <div className="p-6 border-b border-slate-800">
+                    <div className="p-6 border-b border-slate-800 bg-slate-800/20">
                         <div className="flex items-center gap-4 mb-4">
-                            <img src={user.photoURL} alt="" className="w-14 h-14 rounded-xl border-2 border-emerald-500/30" />
-                            <div>
-                                <p className="font-bold text-white">{user.displayName}</p>
-                                <p className="text-xs text-slate-500">{user.email}</p>
+                            <img src={user.photoURL} alt="" className="w-14 h-14 rounded-xl border-2 border-emerald-500/30 object-cover" />
+                            <div className="min-w-0">
+                                <p className="font-bold text-white truncate">{user.displayName}</p>
+                                <p className="text-xs text-slate-500 truncate">{user.email}</p>
                             </div>
                         </div>
                         {isAdmin(user.uid) && (
                             <Link
                                 to="/admin/dashboard"
                                 onClick={() => setShowMobileMenu(false)}
-                                className="flex items-center gap-3 p-3 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold mb-2"
+                                className="flex items-center gap-3 p-3 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold mb-2 border border-emerald-500/20"
                             >
                                 <FaUserShield /> Admin Dashboard
                             </Link>
@@ -229,16 +230,44 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     <div className="p-6 border-b border-slate-800">
                         <button
                             onClick={() => { setShowMobileMenu(false); setShowLogin(true); }}
-                            className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold"
+                            className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all"
                         >
                             Login / Sign Up
                         </button>
                     </div>
                 )}
 
-                {/* Navigation Links */}
+                {/* 3. 📍 LOCATION SECTION (New!) */}
+                <div className="p-6 border-b border-slate-800">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Location</p>
+                    <button 
+                        onClick={() => setShowLocDropdown(!showLocDropdown)}
+                        className="w-full flex items-center justify-between p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50 hover:border-emerald-500/50 transition-all"
+                    >
+                        <div className="flex items-center gap-3">
+                            <FaMapMarkerAlt className="text-emerald-500" />
+                            <span className="font-medium truncate">{selectedLocation}</span>
+                        </div>
+                        <FaChevronDown size={10} className={`transition-transform duration-200 ${showLocDropdown ? "rotate-180" : ""}`} />
+                    </button>
+                    
+                    {showLocDropdown && (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 animate-in fade-in slide-in-from-top-2">
+                            <LocationDropdown
+                                selected={selectedLocation}
+                                onChange={(loc) => {
+                                    setSelectedLocation(loc);
+                                    setShowLocDropdown(false);
+                                    onLocationChange?.(loc);
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* 4. Navigation Links */}
                 <div className="p-4 space-y-1">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Categories</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2 mt-2">Browse Categories</p>
                     {[
                         { to: '/', icon: FaHome, label: 'Home' },
                         { to: '/mobiles', icon: FaStore, label: 'Mobiles' },
@@ -252,38 +281,39 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             key={item.to}
                             to={item.to}
                             onClick={() => setShowMobileMenu(false)}
-                            className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all"
+                            className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
                         >
-                            <item.icon className="text-slate-500" />
+                            <item.icon className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
                             <span className="font-medium">{item.label}</span>
                         </Link>
                     ))}
                 </div>
 
-                {/* User Links */}
+                {/* 5. User Account Links */}
                 {user && (
-                    <div className="p-4 border-t border-slate-800 space-y-1">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Account</p>
+                    <div className="p-4 border-t border-slate-800 space-y-1 mt-2">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">My Account</p>
                         <Link to="/profile" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaUserCircle /> Profile
+                            <FaUserEdit className="text-slate-500" /> Profile Settings
                         </Link>
                         <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaStore /> My Ads
+                            <FaHistory className="text-slate-500" /> My Active Ads
                         </Link>
                         <Link to="/conversationlist" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaComments /> Messages
+                            <FaComments className="text-slate-500" /> Inbox Messages
                         </Link>
                         <button
                             onClick={() => { setShowMobileMenu(false); handleLogout(); }}
-                            className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl"
+                            className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors mt-4"
                         >
-                            <FaSignOutAlt /> Logout
+                            <FaSignOutAlt /> Sign Out
                         </button>
                     </div>
                 )}
             </div>
         </div>
-    );
+    </div>
+);
 
     // 🔥 MOBILE SEARCH OVERLAY
     const MobileSearch = () => (
@@ -298,14 +328,14 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </button>
                 <form onSubmit={handleSearchSubmit} className="flex-1">
                     <input
-                        ref={searchInputRef}
-                        type="text"
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/50"
-                        autoFocus
-                    />
+    ref={searchInputRef}
+    type="text"
+    placeholder="Search products..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+    className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/50"
+    // autoFocus property yahan se khatam kar di gayi hai
+/>
                 </form>
                 <button
                     onClick={handleSearchSubmit}

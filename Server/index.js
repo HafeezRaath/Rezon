@@ -90,6 +90,54 @@ const io = new Server(httpServer, {
     credentials: true
   }
 });
+// ==========================================
+// 💬 Real-time Chat Logic (Socket.io)
+// ==========================================
+// ==========================================
+// 💬 Fixed Real-time Chat Logic
+// ==========================================
+const userSocketMap = new Map(); // userId -> socketId
+
+io.on("connection", (socket) => {
+    console.log("👤 Connected:", socket.id);
+
+    // User setup - store mapping
+    socket.on("setup", (userId) => {
+        socket.userId = userId;
+        userSocketMap.set(userId, socket.id);
+        socket.join(userId); // Personal room for notifications
+        console.log(`✅ User ${userId} setup complete`);
+    });
+
+    // 🔥 FIXED: Join conversation room
+    socket.on("join_chat", (chatId) => {
+        socket.join(chatId);
+        console.log(`🏠 User joined chat room: ${chatId}`);
+    });
+
+    // Leave chat
+    socket.on("leave_chat", (chatId) => {
+        socket.leave(chatId);
+        console.log(`🚪 User left chat room: ${chatId}`);
+    });
+
+    // 🔥 FIXED: Handle typing status
+    socket.on("typing", (chatId) => {
+        socket.to(chatId).emit("typing", chatId);
+    });
+
+    socket.on("stop_typing", (chatId) => {
+        socket.to(chatId).emit("stop_typing", chatId);
+    });
+
+    // Cleanup on disconnect
+    socket.on("disconnect", () => {
+        if (socket.userId) {
+            userSocketMap.delete(socket.userId);
+        }
+        console.log("❌ Disconnected:", socket.id);
+    });
+});
 
 // ==========================================
 // 🗄️ Database & Startup
