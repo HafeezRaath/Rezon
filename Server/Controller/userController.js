@@ -826,63 +826,29 @@ export const getChatMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { text } = req.body;
+        const { text } = req.body; // Frontend se 'text' aa raha hai
         const senderId = req.user.uid;
 
-        if (!text || text.trim() === "") {
-            return res.status(400).json({ message: "Message text khali nahi ho sakta" });
-        }
-
-        const chat = await Chat.findById(chatId);
-        if (!chat) {
-            return res.status(404).json({ message: "Chat nahi mili" });
-        }
-
-        if (!chat.participants.includes(senderId)) {
-            return res.status(403).json({ message: "Access denied" });
-        }
+        if (!text) return res.status(400).json({ message: "Text is required" });
 
         const newMessage = {
             senderId,
-            text: text.trim(),
-            timestamp: new Date(),
-            read: false
+            message: text, // Model mein field ka naam 'message' rakhein taake frontend se match ho
+            timestamp: new Date()
         };
 
-        chat.messages.push(newMessage);
-        chat.lastMessage = text.trim();
-        chat.updatedAt = new Date();
-        chat.deletedBy = [];
-        
-        await chat.save();
+        const updatedChat = await Chat.findByIdAndUpdate(
+            chatId,
+            { 
+                $push: { messages: newMessage },
+                $set: { lastMessage: text, updatedAt: new Date() } // lastMessage ko update lazmi karein
+            },
+            { new: true }
+        );
 
-        const receiverId = chat.participants.find(p => p !== senderId);
-        if (receiverId) {
-            await User.findOneAndUpdate(
-                { uid: receiverId },
-                {
-                    $push: {
-                        notifications: {
-                            type: 'message',
-                            title: 'New Message',
-                            message: `Aapko naya message mila hai`,
-                            chatId: chat._id,
-                            read: false,
-                            createdAt: new Date()
-                        }
-                    }
-                }
-            );
-        }
-
-        res.status(200).json({ 
-            success: true,
-            message: "Message bhej diya gaya", 
-            data: newMessage 
-        });
+        res.status(200).json({ success: true, data: newMessage });
     } catch (error) {
-        console.error("🔥 Send Message Error:", error);
-        res.status(500).json({ message: "Message bhejne mein masla hua", error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 

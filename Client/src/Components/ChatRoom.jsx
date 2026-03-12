@@ -130,15 +130,15 @@ const ChatRoom = ({ user }) => {
         if (!socket) return;
 
         const handleReceiveMessage = (data) => {
-            if (data.chatId === conversationId) {
-                setAllMessages(prev => {
-                    // Prevent duplicates
-                    if (prev.some(m => m.tempId === data.tempId || m._id === data._id)) {
-                        return prev;
-                    }
-                    return [...prev, data];
-                });
-            }
+           if (data.chatId === conversationId) {
+        setAllMessages(prev => {
+            // Duplicate check
+            const exists = prev.find(m => (m._id && m._id === data._id) || (m.tempId && m.tempId === data.tempId));
+            if (exists) return prev;
+            return [...prev, data];
+        });
+    }
+
         };
 
         const handleStatusChange = (data) => {
