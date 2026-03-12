@@ -3,7 +3,7 @@ import User from "../model/user.js";
 import Review from "../model/Review.js";
 import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
-import imghash from 'imghash';
+import blockhash from 'blockhash';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -67,16 +67,13 @@ export const getAISuggestions = async (req, res) => {
             return res.status(400).json({ message: "Kam se kam ek image upload karein" });
         }
 
-        // ✅ FIXED: Cloudinary se image fetch karo for AI analysis
+        // ✅ Cloudinary ya Buffer se image fetch logic
         const imagesContent = await Promise.all(
             req.files.map(async (file) => {
-                // Agar file.buffer hai (memory storage), use directly
-                // Agar file.path hai (cloudinary url), fetch karo
                 let base64Data;
                 if (file.buffer) {
                     base64Data = file.buffer.toString('base64');
                 } else {
-                    // Cloudinary URL se image fetch karo
                     const response = await fetch(file.path);
                     const arrayBuffer = await response.arrayBuffer();
                     base64Data = Buffer.from(arrayBuffer).toString('base64');
@@ -89,16 +86,20 @@ export const getAISuggestions = async (req, res) => {
             })
         );
 
+        // ✅ Updated Prompt with Stock/Fake Detection
         const promptText = `
 Strictly analyze the text and hardware in ALL provided images for the "${category}" category.
 
 1. **OCR Focus**: Read the 'Battery Health' screenshot carefully. Extract Max Capacity, Cycle Count, and First Use Date.
-2. **Hardware Check**: Identify the port. (Flat USB-C = iPhone 15 series).
+2. **Hardware Check**: Identify the port (e.g., USB-C vs Lightning).
 3. **Price Suggestion**: Suggest a realistic market price for Pakistan.
-4. **Animals Category**: Identify breed and traits if applicable.
+4. **Authenticity Audit (NEW)**: 
+   - Detect if the image is an 'Original' photo taken by a person or a 'Stock' photo from the internet.
+   - Look for watermarks of other sites (OLX, etc.) or studio backgrounds.
+   - Assign an "imageQuality" value: "Original", "Stock", or "Suspicious".
 
 **IMPORTANT LANGUAGE RULE**:
-Write the "aiDescription" field in **Roman Urdu** (e.g., "Ye phone bohot achi condition mein hai, battery health zabardast hai..."). The tone should be helpful and attractive for buyers.
+Write the "aiDescription" field in **Roman Urdu**.
 
 Return ONLY a JSON object:
 {
@@ -106,6 +107,7 @@ Return ONLY a JSON object:
   "condition": "string",
   "aiDescription": "string (in Roman Urdu)",
   "estimatedPrice": number,
+  "imageQuality": "string",
   "extractedDetails": { "field_name": "value" }
 }`;
 
@@ -125,6 +127,7 @@ Return ONLY a JSON object:
 
         const aiData = JSON.parse(response.choices[0].message.content);
 
+        // Similar Ads check for pricing
         const similarAds = await Ad.find({
             category: category,
             title: { $regex: aiData.product.split(' ')[0], $options: 'i' },
@@ -133,11 +136,12 @@ Return ONLY a JSON object:
         }).limit(3);
 
         let finalPrice = aiData.estimatedPrice;
-        let dataSource = "AI Market Estimate (Pakistan)";
+        // Image Quality ko info mein shamil kar rahe hain taake user ko pata chale
+        let dataSource = `AI Audit: ${aiData.imageQuality}`;
 
         if (similarAds.length > 0) {
             finalPrice = similarAds.reduce((acc, ad) => acc + ad.price, 0) / similarAds.length;
-            dataSource = `Based on ${similarAds.length} similar sold items on Rezon`;
+            dataSource += ` | Based on ${similarAds.length} sold items on Rezon`;
         }
 
         res.status(200).json({
@@ -147,6 +151,7 @@ Return ONLY a JSON object:
                 condition: aiData.condition,
                 description: aiData.aiDescription,
                 suggestedPrice: Math.round(finalPrice),
+                imageQuality: aiData.imageQuality, // ✅ New Field
                 details: aiData.extractedDetails,
                 info: dataSource
             }
@@ -183,6 +188,9 @@ export const registerUser = async (req, res) => {
 // ==========================================
 // 🛡️ CREATE AD (FIXED FOR CLOUDINARY)
 // ==========================================
+// ==========================================
+// 🛡️ CREATE AD (BLOCKHASH + AI QUALITY AUDIT)
+// ==========================================
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
@@ -191,12 +199,32 @@ export const create = async (req, res) => {
             return res.status(400).json({ message: "At least one image is required" });
         }
 
+        const { 
+            price, 
+            suggestedPriceByAI, 
+            title, 
+            description, 
+            location, 
+            condition, 
+            category,
+            imageQualityByAI // ✅ Frontend se imageQuality receive karein
+        } = req.body;
+
+        // ==========================================
+        // 🛡️ AI QUALITY GUARD (NEW)
+        // ==========================================
+        // Agar AI ne detect kiya ke image internet se hai, to ad block kar do
+        if (imageQualityByAI === "Stock" || imageQualityByAI === "Suspicious") {
+            return res.status(400).json({
+                success: false,
+                message: "🛡️ Rezon Security: Hum sirf original photos allow karte hain. Internet ya stock photos lagana mana hai."
+            });
+        }
+
         // ==========================================
         // 🛡️ PRICE GUARD
         // ==========================================
-        const { price, suggestedPriceByAI, title, description, location, condition, category } = req.body;
         const aiSuggested = Number(suggestedPriceByAI);
-
         if (aiSuggested && aiSuggested > 0) {
             const minAllowed = aiSuggested * 0.75;
             const maxAllowed = aiSuggested * 1.25;
@@ -205,34 +233,40 @@ export const create = async (req, res) => {
             if (userPrice < minAllowed || userPrice > maxAllowed) {
                 return res.status(400).json({
                     success: false,
-                    message: `🛡️ Rezon Price Guard: Aapki price market rate (Rs. ${aiSuggested}) se bohot door hai. Aap Rs. ${Math.round(minAllowed)} se Rs. ${Math.round(maxAllowed)} ke darmiyan price laga sakte hain.`
+                    message: `🛡️ Rezon Price Guard: Aapki price market rate (Rs. ${aiSuggested}) se bohot door hai.`
                 });
             }
         }
 
         // ==========================================
-        // 🛡️ DUPLICATE SHIELD (Hashing) - ✅ Ab buffer milega!
+        // 🛡️ DUPLICATE SHIELD (Blockhash)
         // ==========================================
         const currentHashes = [];
         for (const file of req.files) {
-            // ✅ Ab file.buffer available hai!
-            const hash = await imghash.hash(file.buffer);
-            currentHashes.push(hash);
+            try {
+                const hash = blockhash(file.buffer, 16); 
+                currentHashes.push(hash);
+            } catch (err) {
+                console.warn("⚠️ Hashing failed for an image:", err.message);
+                continue;
+            }
         }
 
-        const internalDuplicate = await Ad.findOne({
-            imageHashes: { $in: currentHashes },
-            isDeleted: false
-        });
-
-        if (internalDuplicate) {
-            return res.status(400).json({
-                message: "🛡️ Rezon Shield: In mein se kuch images already platform par hain."
+        if (currentHashes.length > 0) {
+            const internalDuplicate = await Ad.findOne({
+                imageHashes: { $in: currentHashes },
+                isDeleted: false
             });
+
+            if (internalDuplicate) {
+                return res.status(400).json({
+                    message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai."
+                });
+            }
         }
 
         // ==========================================
-        // ☁️ MANUAL CLOUDINARY UPLOAD (NEW)
+        // ☁️ CLOUDINARY UPLOAD
         // ==========================================
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
@@ -245,7 +279,7 @@ export const create = async (req, res) => {
         }
 
         const newAd = new Ad({
-            images: imageUrls, // ✅ Cloudinary URLs
+            images: imageUrls, 
             imageHashes: currentHashes,
             title, 
             description, 
@@ -255,11 +289,16 @@ export const create = async (req, res) => {
             category,
             details: categoryDetails,
             posted_by_uid,
-            status: 'Active'
+            status: 'Active',
+            aiAuditStatus: imageQualityByAI // Database mein save kar lein verification ke liye
         });
 
         await newAd.save();
-        res.status(201).json({ success: true, message: "Ad Posted successfully on Rezon!", images: imageUrls });
+        res.status(201).json({ 
+            success: true, 
+            message: "Ad Posted successfully on Rezon!", 
+            images: imageUrls 
+        });
 
     } catch (error) {
         console.error("🔥 Rezon Create Error:", error);
