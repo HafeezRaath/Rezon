@@ -41,6 +41,7 @@ import toast, { Toaster } from "react-hot-toast";
 // Components
 import LoginPopup from "./Loginpopup";
 import LocationDropdown from "./LocationDropdown";
+import Ads from "../CRUD/ads";
 
 const Navbar = ({ onSearch, onLocationChange }) => {
     const navigate = useNavigate();
@@ -65,6 +66,12 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [scrolled, setScrolled] = useState(false);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const [showMyAds, setShowMyAds] = useState(false); // ✅ YEH ADD KAREIN
+
+    // ... other code ...
+
+    // ✅ MODIFIED: Pehle My Ads show karein
+    
 
     // 🔥 FIXED: API URL without space
     const API_URL = "https://rezon.up.railway.app/api";
@@ -124,36 +131,37 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     };
 
     const handleSellClick = useCallback(async () => {
-        if (!user) {
-            toast("Please login first! 🔒", { icon: '🔑' });
-            setShowLogin(true);
-            return;
-        }
+    if (!user) {
+        toast("Please login first! 🔒", { icon: '🔑' });
+        setShowLogin(true);
+        return;
+    }
 
-        setIsVerifying(true);
-        const loadingToast = toast.loading("Verifying...");
+    setIsVerifying(true);
+    const loadingToast = toast.loading("Verifying...");
 
-        try {
-            const token = localStorage.getItem('firebaseIdToken');
-            const res = await axios.get(`${API_URL}/users/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+    try {
+        const token = localStorage.getItem('firebaseIdToken');
+        const res = await axios.get(`${API_URL}/users/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-            toast.dismiss(loadingToast);
+        toast.dismiss(loadingToast);
 
-            if (!res.data?.isVerified) {
-                toast("Please verify your profile 🛡️", { icon: '⚠️' });
-                navigate('/verify');
-            } else {
-                navigate('/post-ad');
-            }
-        } catch (error) {
-            toast.dismiss(loadingToast);
+        if (!res.data?.isVerified) {
+            toast("Please verify your profile 🛡️", { icon: '⚠️' });
             navigate('/verify');
-        } finally {
-            setIsVerifying(false);
+        } else {
+            // ✅ YEH LINE CHANGE KAREIN - Ads.jsx show karein
+            setShowMyAds(true);
         }
-    }, [user, navigate]);
+    } catch (error) {
+        toast.dismiss(loadingToast);
+        navigate('/verify');
+    } finally {
+        setIsVerifying(false);
+    }
+}, [user, navigate, setShowMyAds]); // setShowMyAds dependency add karein
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -559,6 +567,12 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     isOpen={showLogin}
                     onClose={() => setShowLogin(false)}
                     onSuccess={() => setShowLogin(false)}
+                />
+            )}
+             {showMyAds && user && (
+                <Ads 
+                    user={user} 
+                    onClose={() => setShowMyAds(false)} 
                 />
             )}
 

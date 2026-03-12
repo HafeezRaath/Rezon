@@ -91,31 +91,32 @@ const Ads = ({ onClose, user }) => {
     }, []);
 
     // 🗑️ Delete handler with optimistic UI - 🔧 FIXED: Better toast handling
-    const handleDelete = useCallback(async (id) => {
-        const authHeaders = getAuthHeaders();
-        if (!authHeaders) return;
+    // 🗑️ Delete handler with confirmation
+const handleDelete = useCallback(async (id) => {
+    // ✅ YEH LINE ADD KAREIN - confirmation dialog
+   const confirmed = window.confirm("Are you sure you want to delete this ad?");
+if (!confirmed) return;
 
-        // Simple confirm dialog instead of complex toast promise
-        
-        if (!confirmed) return;
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders) return;
 
-        // Optimistic update
-        const previousAds = [...ads];
-        setAds(prev => prev.filter(ad => ad._id !== id));
+    // Optimistic update
+    const previousAds = [...ads];
+    setAds(prev => prev.filter(ad => ad._id !== id));
 
-        try {
-            await axios.delete(`${API_BASE_URL}/ads/${id}`, authHeaders);
-            toast.success("Ad deleted successfully!");
-        } catch (error) {
-            // Rollback on error
-            setAds(previousAds);
-            console.error("Delete Error:", error);
-            const errorMsg = error.response?.status === 403 
-                ? "You don't have permission to delete this ad"
-                : "Failed to delete ad. Please try again.";
-            toast.error(errorMsg);
-        }
-    }, [ads, getAuthHeaders]);
+    try {
+        await axios.delete(`${API_BASE_URL}/ads/${id}`, authHeaders);
+        toast.success("Ad deleted successfully!");
+    } catch (error) {
+        // Rollback on error
+        setAds(previousAds);
+        console.error("Delete Error:", error);
+        const errorMsg = error.response?.status === 403 
+            ? "You don't have permission to delete this ad"
+            : "Failed to delete ad. Please try again.";
+        toast.error(errorMsg);
+    }
+}, [ads, getAuthHeaders]);
 
     // ✏️ Edit handler
     const handleEdit = useCallback((ad) => {

@@ -367,31 +367,64 @@ export const deleteAd = async (req, res) => {
 // ==========================================
 // MARK AS SOLD CONTROLLERS
 // ==========================================
+// userController.js - Modify existing function
 export const getChatUsersForAd = async (req, res) => {
     try {
         const { adId } = req.params;
         const sellerUid = req.user.uid;
 
+        // Check if ad belongs to seller
+        const ad = await Ad.findById(adId);
+        if (!ad) {
+            return res.status(404).json({ message: "Ad nahi mili" });
+        }
+        
+        if (ad.posted_by_uid !== sellerUid) {
+            return res.status(403).json({ message: "Sirf owner dekh sakta hai" });
+        }
+
+        // Get all chats for this ad
         const chats = await Chat.find({
             adId: adId,
             participants: { $in: [sellerUid] }
         });
 
         if (!chats.length) {
-            return res.status(404).json({ message: "Is ad pe koi chat nahi hai" });
+            return res.status(404).json({  // ✅ Yahan .json() likhna tha
+                message: "Is ad pe koi chat nahi hai",
+                buyers: [] 
+            });
         }
 
+        // Get unique buyer UIDs (excluding seller)
         const buyerUids = [...new Set(
             chats.flatMap(chat =>
                 chat.participants.filter(uid => uid !== sellerUid)
             )
         )];
 
-        const buyers = await User.find({
-            uid: { $in: buyerUids }
-        }).select("name uid profilePic rating");
+        // Get buyer details with last message preview
+        const buyers = await Promise.all(
+            buyerUids.map(async (uid) => {
+                const user = await User.findOne({ uid }).select("name uid profilePic rating");
+                
+                // Get last message from chat
+                const chat = chats.find(c => c.participants.includes(uid));
+                const lastMessage = chat?.lastMessage || "";
+                
+                return {
+                    ...user?.toObject(),
+                    lastMessage: lastMessage.substring(0, 50),
+                    chatId: chat?._id
+                };
+            })
+        );
 
-        res.status(200).json(buyers);
+        res.status(200).json({
+            adTitle: ad.title,
+            adPrice: ad.price,
+            buyers: buyers
+        });
 
     } catch (error) {
         console.error("Get Chat Users Error:", error);
@@ -399,14 +432,17 @@ export const getChatUsersForAd = async (req, res) => {
     }
 };
 
+// userController.js - Modify markAsSold
 export const markAsSold = async (req, res) => {
     try {
         const { adId } = req.params;
-        const { buyerUid } = req.body;
+        const { buyerUid, buyerObjectId } = req.body; // buyerObjectId bhi bhejein
         const sellerUid = req.user.uid;
 
-        if (!buyerUid) {
-            return res.status(400).json({ message: "Buyer select karna zaroori hai" });
+        if (!buyerUid || !buyerObjectId) {
+            return res.status(400).json({ 
+                message: "Buyer select karna zaroori hai. Kaunse user ko becha hai?" 
+            });
         }
 
         const ad = await Ad.findById(adId);
@@ -422,6 +458,18 @@ export const markAsSold = async (req, res) => {
             return res.status(400).json({ message: "Yeh item already sold hai" });
         }
 
+        // ✅ Verify buyer actually chatted on this ad
+        const chatExists = await Chat.findOne({
+            adId: adId,
+            participants: { $all: [sellerUid, buyerUid] }
+        });
+
+        if (!chatExists) {
+            return res.status(400).json({ 
+                message: "Yeh buyer is ad par message nahi kiya. Pehle chat karein." 
+            });
+        }
+
         const buyer = await User.findOne({ uid: buyerUid });
         if (!buyer) {
             return res.status(404).json({ message: "Buyer nahi mila database mein" });
@@ -430,19 +478,41 @@ export const markAsSold = async (req, res) => {
         const deleteDate = new Date();
         deleteDate.setDate(deleteDate.getDate() + 30);
 
+        // ✅ Save with buyer reference
         ad.status = 'Sold';
-        ad.soldTo = buyer._id;
+        ad.soldTo = buyer._id;  // MongoDB ObjectId
+        ad.soldToUid = buyerUid; // Firebase UID
         ad.soldAt = new Date();
         ad.isDeleted = true;
         ad.deleteAfter = deleteDate;
 
         await ad.save();
 
+        // ✅ Create notification for buyer
+        await User.findByIdAndUpdate(buyer._id, {
+            $push: {
+                notifications: {
+                    type: 'purchase_complete',
+                    title: 'Purchase Completed! 🎉',
+                    message: `You bought "${ad.title}" for Rs ${ad.price}. Leave a review!`,
+                    adId: ad._id,
+                    read: false,
+                    createdAt: new Date()
+                }
+            }
+        });
+
         res.status(200).json({
-            message: "🎉 Item successfully sold! Review possible for 30 days.",
-            soldTo: buyer.name,
+            success: true,
+            message: "🎉 Item successfully sold! Buyer can now leave a review.",
+            soldTo: {
+                name: buyer.name,
+                uid: buyerUid,
+                _id: buyer._id
+            },
             soldAt: ad.soldAt,
-            autoDeleteOn: deleteDate
+            autoDeleteOn: deleteDate,
+            canReview: true
         });
 
     } catch (error) {
@@ -451,6 +521,7 @@ export const markAsSold = async (req, res) => {
     }
 };
 
+// userController.js - Modify canReview
 export const canReview = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -464,7 +535,10 @@ export const canReview = async (req, res) => {
         const ad = await Ad.findOne({
             _id: adId,
             status: 'Sold',
-            soldTo: buyer._id
+            $or: [
+                { soldTo: buyer._id },
+                { soldToUid: buyerUid }
+            ]
         });
 
         if (!ad) {
@@ -474,15 +548,24 @@ export const canReview = async (req, res) => {
             });
         }
 
+        // Check if already reviewed
         const existingReview = await Review.findOne({
             buyerId: buyer._id,
             adId: adId
         });
 
+        // Check if within 30 days
+        const daysSinceSold = Math.floor((new Date() - ad.soldAt) / (1000 * 60 * 60 * 24));
+        const canStillReview = daysSinceSold <= 30;
+
         res.status(200).json({
-            canReview: !existingReview,
+            canReview: !existingReview && canStillReview,
             alreadyReviewed: !!existingReview,
-            message: existingReview ? "Already reviewed" : "Eligible for review"
+            expired: !canStillReview,
+            daysRemaining: Math.max(0, 30 - daysSinceSold),
+            message: existingReview ? "Already reviewed" : 
+                     !canStillReview ? "Review period expired (30 days)" : 
+                     "Eligible for review"
         });
 
     } catch (error) {
