@@ -12,10 +12,17 @@ import dotenv from 'dotenv';
 import mongoose from "mongoose";
 import OpenAI from "openai";
 import { v2 as cloudinary } from 'cloudinary'; // ✅ Cloudinary import
-import streamifier from 'streamifier'; // ✅ Buffer upload ke liye
+import streamifier from 'streamifier';
+
+cloudinary.config({ 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET 
+});// ✅ Buffer upload ke liye
 
 dotenv.config();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
+// userController.js mein isay update karein:
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // 🔧 FIX 1: BASE_URL added for production
 const BASE_URL = process.env.NODE_ENV === 'production' 
@@ -225,11 +232,12 @@ export const create = async (req, res) => {
                     .raw()
                     .toBuffer({ resolveWithObject: true });
 
-                const hash = blockhash.bmh({
-                    data: data,
-                    width: info.width,
-                    height: info.height
-                }, 16);
+               // create function ke andar hashing loop mein:
+const hash = blockhash.hash({
+    data: data,
+    width: info.width,
+    height: info.height
+}, 16, 2); // .bmh ki jagah sirf .hash use karein
                 
                 currentHashes.push(hash);
             } catch (err) {
