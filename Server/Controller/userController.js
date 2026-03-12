@@ -4,7 +4,7 @@ import Review from "../model/Review.js";
 import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
 import sharp from 'sharp'; // ✅ Naya stable tareeqa
-import blockhash from 'blockhash-core';
+import blockhashCore from 'blockhash-core';
 //import { decode } from 'jpeg-js';
 import fs from 'fs';
 import path from 'path';
@@ -198,93 +198,45 @@ export const registerUser = async (req, res) => {
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
+        if (!req.files || req.files.length === 0) return res.status(400).json({ message: "Images required" });
 
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ message: "Images are required" });
+        const { price, title, description, category, imageQualityByAI } = req.body;
+
+        // 🛡️ AI Guard
+        if (imageQualityByAI === "Stock") {
+            return res.status(400).json({ message: "🛡️ Rezon Security: Internet photos not allowed." });
         }
 
-        const { 
-            price, 
-            suggestedPriceByAI, 
-            title, 
-            description, 
-            location, 
-            condition, 
-            category,
-            imageQualityByAI 
-        } = req.body;
-
-        // 1. 🛡️ AI QUALITY GUARD
-        if (imageQualityByAI === "Stock" || imageQualityByAI === "Suspicious") {
-            return res.status(400).json({
-                success: false,
-                message: "🛡️ Rezon Security: Hum sirf original photos allow karte hain. Internet photos block hain."
-            });
-        }
-
-        // 2. 🛡️ DUPLICATE SHIELD (Sharp + Blockhash) ✅
+        // 🛡️ Duplicate Shield
         const currentHashes = [];
+        const hashFunc = blockhashCore.hash || blockhashCore; // Robust access
+
         for (const file of req.files) {
             try {
-                // Sharp se har kism ki image ko raw pixels mein convert karein
-                const { data, info } = await sharp(file.buffer)
-                    .ensureAlpha()
-                    .raw()
-                    .toBuffer({ resolveWithObject: true });
-
-               // create function ke andar hashing loop mein:
-const hash = blockhash.hash({
-    data: data,
-    width: info.width,
-    height: info.height
-}, 16, 2); // .bmh ki jagah sirf .hash use karein
-                
+                const { data, info } = await sharp(file.buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+                const hash = hashFunc({ data, width: info.width, height: info.height }, 16, 2);
                 currentHashes.push(hash);
-            } catch (err) {
-                console.error("🔥 Hashing Error:", err.message);
-                continue; 
-            }
+            } catch (err) { continue; }
         }
 
-        if (currentHashes.length > 0) {
-            const internalDuplicate = await Ad.findOne({
-                imageHashes: { $in: currentHashes },
-                isDeleted: false
-            });
+        const duplicate = await Ad.findOne({ imageHashes: { $in: currentHashes }, isDeleted: false });
+        if (duplicate) return res.status(400).json({ message: "🛡️ Rezon Shield: Duplicate Image detected." });
 
-            if (internalDuplicate) {
-                return res.status(400).json({
-                    message: "🛡️ Rezon Shield: Ye image Rezon par pehle hi mojud hai."
-                });
-            }
-        }
+        const imageUrls = await Promise.all(req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products')));
 
-        // 3. ☁️ CLOUDINARY UPLOAD (Using existing helper)
-        const imageUrls = await Promise.all(
-            req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
-        );
-
-        // 4. SAVE TO DATABASE
         const newAd = new Ad({
             images: imageUrls, 
             imageHashes: currentHashes,
-            title, 
-            description, 
-            price: Number(price), 
-            location, 
-            condition, 
-            category,
-            posted_by_uid,
+            title, price, category, posted_by_uid,
             status: 'Active',
             aiAuditStatus: imageQualityByAI
         });
 
         await newAd.save();
-        res.status(201).json({ success: true, message: "Ad Posted successfully!", images: imageUrls });
+        res.status(201).json({ success: true, message: "Ad Posted!", images: imageUrls });
 
     } catch (error) {
-        console.error("🔥 Rezon Create Error:", error);
-        res.status(500).json({ message: "Posting failed", error: error.message });
+        res.status(500).json({ message: "Post failed", error: error.message });
     }
 };
 
