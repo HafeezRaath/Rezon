@@ -165,47 +165,75 @@ const PostAd = ({ onClose, onAdAdded }) => {
         }));
     };
 
-    const handleAiAssist = async () => {
-        if (formData.images.length === 0) return toast.error("Upload images first!");
-        setAiLoading(true);
-        const aiData = new FormData();
-        formData.images.forEach(f => aiData.append("images", f));
-        aiData.append("category", selectedCat.id);
+  const handleAiAssist = async () => {
+    if (formData.images.length === 0) return toast.error("Upload images first!");
+    setAiLoading(true);
+    
+    const aiData = new FormData();
+    formData.images.forEach(f => aiData.append("images", f));
+    aiData.append("category", selectedCat.id);
 
-        try {
-            const token = localStorage.getItem("firebaseIdToken");
-            const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = res.data.data;
-            setFormData(prev => ({ ...prev, ...data, price: data.suggestedPrice || prev.price }));
-            toast.success("AI Analysis Complete! ✨");
-        } catch (err) { toast.error("AI Analysis failed."); }
-        finally { setAiLoading(false); }
-    };
+    try {
+        const token = localStorage.getItem("firebaseIdToken");
+        const res = await axios.post(`${API_BASE_URL}/ad/ai-assist`, aiData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const aiResponse = res.data.data;
+        
+        // Frontend State ko AI ke data se fill karein
+       setFormData(prev => ({ 
+    ...prev, 
+    description: aiResponse.aiDescription || prev.description,
+    price: aiResponse.estimatedPrice || prev.price,
+    condition: aiResponse.condition || prev.condition, // AI se aane wali condition
+    imageQuality: aiResponse.imageQuality 
+}));
+        
+        toast.success("AI Analysis Complete! ✨");
+    } catch (err) { 
+        toast.error("AI Analysis failed."); 
+    } finally { setAiLoading(false); }
+};
 
     const submitAd = async (e) => {
-        if(e) e.preventDefault();
-        const token = localStorage.getItem("firebaseIdToken");
-        setLoading(true);
-        const postData = new FormData();
-        
-        Object.keys(formData).forEach(key => {
-            if (key !== 'images' && key !== 'imagePreviews') postData.append(key, formData[key]);
-        });
-        postData.append("category", selectedCat.id);
-        formData.images.forEach(f => postData.append("images", f));
+    if(e) e.preventDefault();
+    
+    // VALIDATION: Submit se pehle check karlein
+    if (!formData.location || !formData.title || !formData.price) {
+        return toast.error("Please fill all required fields (Title, Price, Location)");
+    }
 
-        try {
-            const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            toast.success("Ad Posted! 🚀");
-            onClose();
-            if (onAdAdded) onAdAdded(res.data);
-        } catch (err) { toast.error("Failed to post ad."); }
-        finally { setLoading(false); }
-    };
+    const token = localStorage.getItem("firebaseIdToken");
+    setLoading(true);
+    
+    const postData = new FormData();
+    
+    // Saari fields ko FormData mein add karein
+    Object.keys(formData).forEach(key => {
+        if (key !== 'images' && key !== 'imagePreviews') {
+            postData.append(key, formData[key]);
+        }
+    });
+
+    // 🛡️ Ensure AI Audit Data is passed (backend expectation)
+    postData.append("category", selectedCat.id);
+    postData.append("imageQualityByAI", formData.imageQuality || "Original"); // Default to Original if AI skipped
+    
+    formData.images.forEach(f => postData.append("images", f));
+
+    try {
+        const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success("Ad Posted! 🚀");
+        onClose();
+        if (onAdAdded) onAdAdded(res.data);
+    } catch (err) { 
+        console.error("Submission Error:", err.response?.data);
+        toast.error(err.response?.data?.message || "Failed to post ad."); 
+    } finally { setLoading(false); }
+};
 
     const modalContent = (
         <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-4 z-[9999]" onClick={onClose}>
