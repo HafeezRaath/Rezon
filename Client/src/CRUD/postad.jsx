@@ -3,7 +3,8 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
 import { 
-    FaTimes, FaCamera, FaRocket, FaSpinner, FaMagic, FaTimesCircle,
+    FaTimes, FaCamera, FaRocket, FaSpinner, FaMagic, 
+    FaMapMarkerAlt, // ✅ Yeh missing tha import mein
     FaMobileAlt, FaCar, FaHome, FaLaptop, FaMotorcycle, FaBriefcase,
     FaDog, FaCouch, FaTshirt, FaBook, FaChild, FaTools, FaIndustry, FaBuilding
 } from "react-icons/fa";
