@@ -198,22 +198,23 @@ export const registerUser = async (req, res) => {
 // ==========================================
 // 🛡️ CREATE AD (Final Stable Hashing)
 // ==========================================
+// Controller mein create function ko aise update karein:
 export const create = async (req, res) => {
     try {
         const posted_by_uid = req.user.uid;
         if (!req.files || req.files.length === 0) return res.status(400).json({ message: "Images required" });
 
-        const { price, title, description, category, imageQualityByAI } = req.body;
+        // ✅ 1.req.body se missing fields nikalien
+        const { price, title, description, category, condition, location, imageQualityByAI } = req.body;
 
-        // 🛡️ 1. AI QUALITY GUARD
+        // 🛡️ AI QUALITY GUARD
         if (imageQualityByAI === "Stock") {
             return res.status(400).json({ message: "🛡️ Rezon Security: Internet photos not allowed." });
         }
 
-        // 🛡️ 2. DUPLICATE SHIELD (Ultra-Stable MD5 Hashing)
+        // 🛡️ DUPLICATE SHIELD (MD5 Hashing)
         const currentHashes = [];
         for (const file of req.files) {
-            // Buffer ka unique MD5 fingerprint banayein
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
             currentHashes.push(hash);
         }
@@ -223,20 +224,25 @@ export const create = async (req, res) => {
             return res.status(400).json({ message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai." });
         }
 
-        // 🛡️ 3. CLOUDINARY UPLOAD
+        // 🛡️ CLOUDINARY UPLOAD
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
+        // ✅ 2. new Ad mein sari required fields pass karein
         const newAd = new Ad({
             images: imageUrls, 
             imageHashes: currentHashes,
             title, 
+            description,   // 👈 Ab error nahi aayega
+            location,      // 👈 Ab error nahi aayega
+            condition,     // 👈 Ab error nahi aayega
             price: Number(price), 
             category, 
             posted_by_uid,
             status: 'Active',
-            aiAuditStatus: imageQualityByAI
+            aiAuditStatus: imageQualityByAI,
+            details: req.body.details || {} // Mixed type ke liye empty object
         });
 
         await newAd.save();
