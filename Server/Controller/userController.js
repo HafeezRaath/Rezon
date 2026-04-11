@@ -725,18 +725,27 @@ export const verifyIdentity = async (req, res) => {
             uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
         ]);
 
-        // 2. AI Verification Logic (GPT-4o)
+        // 2. AI Verification Logic (Optimized for Pakistani IDs & Style)
         const aiResponse = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 {
                     role: "system",
-                    content: "You are a KYC expert. Compare the ID card photo with the live selfie. Check if they are the same person. Also verify if the ID card looks like a valid Pakistani CNIC. Return JSON only: { 'isMatched': boolean, 'confidence': number, 'reason': string }"
+                    content: `You are a KYC expert for "REZON", a Pakistani marketplace.
+                    Analyze the CNIC and Selfie to verify identity.
+                    
+                    RULES:
+                    1. People look different over years. Ignore changes in facial hair (beard/mustache), hairstyle, or glasses.
+                    2. Focus on permanent markers: Bone structure, ear shape, and distance between eyes.
+                    3. If the person in the selfie looks like a plausible version of the person on the ID, mark isMatched: true.
+                    4. Lighting in Pakistan can be poor; do not reject solely based on shadows.
+                    
+                    Return JSON only: { "isMatched": boolean, "confidence": number, "reason": string }`
                 },
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "Analyze these images for identity verification." },
+                        { type: "text", text: "Verify if this person matches the ID card provided." },
                         { type: "image_url", image_url: { url: idFrontUrl } },
                         { type: "image_url", image_url: { url: selfieUrl } }
                     ],
@@ -747,15 +756,19 @@ export const verifyIdentity = async (req, res) => {
 
         const result = JSON.parse(aiResponse.choices[0].message.content);
 
-        // 3. Check AI Result
-        if (!result.isMatched || result.confidence < 70) {
+        // 3. IMPROVED CHECK: Relaxed threshold & "similar" keyword check
+        const isActuallyMatched = result.isMatched || 
+                                 (result.confidence >= 55) || 
+                                 result.reason.toLowerCase().includes("similar");
+
+        if (!isActuallyMatched) {
             return res.status(400).json({ 
                 success: false, 
                 message: `Verification fail: ${result.reason} ❌` 
             });
         }
 
-        // 4. Update Database if AI passes
+        // 4. Update Database
         await User.findOneAndUpdate(
             { uid: userUid },
             { 
