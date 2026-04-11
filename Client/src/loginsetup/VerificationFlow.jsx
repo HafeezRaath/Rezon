@@ -19,7 +19,6 @@ import {
 import { auth } from "../firebase.config";
 import toast, { Toaster } from 'react-hot-toast';
 
-// 🔧 FIXED: Space removed
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -55,7 +54,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             newErrors.phone = "Invalid format. Use 03XXXXXXXXX";
         }
         
-        // 🔧 Check if phone already exists (optional - backend se bhi check ho raha)
         if (phone && phone.length === 11) {
             checkPhoneUnique(phone);
         }
@@ -78,7 +76,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         }
     }, [phone, password, confirmPassword, idFront, idBack, currentStep]);
 
-    // 🔧 ADDED: Check phone unique
     const checkPhoneUnique = async (phoneNum) => {
         try {
             const token = await auth.currentUser?.getIdToken();
@@ -137,66 +134,62 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         setSelfie(null);
     }, []);
 
-    // 🔧 FIXED: Submit with phone/password save
-   // ☁️ FINAL SUBMIT: Updated for 3-Image KYC & Cloudinary
-const handleFinalSubmit = useCallback(async () => {
-    if (!selfie || !idFront || !idBack) {
-        toast.error("Please complete all steps (Front, Back & Selfie) 📸");
-        return;
-    }
-
-    setLoading(true);
-    const toastId = toast.loading("Verifying your identity with AI... 🤖");
-
-    try {
-        const token = await auth.currentUser?.getIdToken(true);
-        if (!token) throw new Error("Session expired. Please login again.");
-
-        // 1. Pehle Phone/Password update karein
-        await axios.put(`${API_BASE_URL}/users/me`, {
-            phoneNumber: phone,
-            password: password,
-            isPhoneVerified: true
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        // 2. KYC Documents upload karein
-        const formData = new FormData();
-        // 🔧 FIXED: Backend keys (idFront, idBack, liveSelfie) ke sath match kiya
-        formData.append('idFront', idFront); 
-        formData.append('idBack', idBack);
-        
-        // Base64 selfie ko blob mein convert karna
-        const selfieBlob = await fetch(selfie).then(r => r.blob());
-        formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
-
-        const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
-            headers: { 
-                'Content-Type': 'multipart/form-data',
-                'Authorization': `Bearer ${token}`
-            },
-            timeout: 60000 // AI processing ke liye zyada time diya
-        });
-
-        if (verifyRes.data?.success) {
-            toast.success("Mubarak ho! Verification successful! 🎉", { id: toastId });
-            
-            // UI cleanup
-            if (onComplete) onComplete(verifyRes.data.profilePic);
-            setTimeout(() => onClose(), 2000);
+    const handleFinalSubmit = useCallback(async () => {
+        if (!selfie || !idFront || !idBack) {
+            toast.error("Please complete all steps (Front, Back & Selfie) 📸");
+            return;
         }
-    } catch (err) {
-        console.error("KYC Error:", err);
-        // AI rejection message dikhayein (e.g., face not matched)
-        const errorMsg = err.response?.data?.message || "Verification failed. Try again with better lighting.";
-        toast.error(errorMsg, { id: toastId });
-    } finally {
-        setLoading(false);
-    }
-}, [selfie, idFront, idBack, password, phone, onComplete, onClose]);
 
-    // Escape key
+        setLoading(true);
+        const toastId = toast.loading("AI is analyzing your ID and Face... 🤖", {
+            style: { minWidth: '250px' },
+        });
+
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) throw new Error("Session expired. Please login again.");
+
+            // 1. Update Profile Info
+            await axios.put(`${API_BASE_URL}/users/me`, {
+                phoneNumber: phone,
+                password: password,
+                isPhoneVerified: true
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // 2. KYC Documents upload for AI check
+            const formData = new FormData();
+            formData.append('idFront', idFront); 
+            formData.append('idBack', idBack);
+            
+            const selfieBlob = await fetch(selfie).then(r => r.blob());
+            formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
+
+            // 🚀 INCREASED TIMEOUT to 90s for OpenAI Vision processing
+            const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
+                headers: { 
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${token}`
+                },
+                timeout: 90000 
+            });
+
+            if (verifyRes.data?.success) {
+                toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
+                if (onComplete) onComplete(verifyRes.data.profileUrl);
+                setTimeout(() => onClose(), 2000);
+            }
+        } catch (err) {
+            console.error("KYC Error:", err);
+            // Show AI's specific rejection reason if available
+            const errorMsg = err.response?.data?.message || "Verification failed. Please ensure clear lighting and valid ID.";
+            toast.error(errorMsg, { id: toastId, duration: 6000 });
+        } finally {
+            setLoading(false);
+        }
+    }, [selfie, idFront, idBack, password, phone, onComplete, onClose]);
+
     useEffect(() => {
         const handleEscape = (e) => {
             if (e.key === 'Escape' && !loading) onClose();
@@ -210,8 +203,8 @@ const handleFinalSubmit = useCallback(async () => {
             {[1, 2, 3].map((step) => (
                 <div key={step} className="flex items-center">
                     <button
-                        onClick={() => step < currentStep && setCurrentStep(step)}
-                        disabled={step >= currentStep}
+                        onClick={() => step < currentStep && !loading && setCurrentStep(step)}
+                        disabled={step >= currentStep || loading}
                         className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
                             step < currentStep ? 'bg-emerald-500 text-white cursor-pointer hover:scale-110' :
                             step === currentStep ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white scale-110 ring-4 ring-emerald-200' : 
@@ -228,9 +221,8 @@ const handleFinalSubmit = useCallback(async () => {
                 </div>
             ))}
         </div>
-    ), [currentStep]);
+    ), [currentStep, loading]);
 
-    // 🎨 Color Scheme: Emerald + Slate
     const modalContent = (
         <div 
             className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[100] p-0 md:p-4"
@@ -238,7 +230,6 @@ const handleFinalSubmit = useCallback(async () => {
         >
             <div className="bg-white w-full max-w-5xl h-full md:h-auto md:max-h-[95vh] md:rounded-3xl shadow-2xl relative overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
                 
-                {/* Header */}
                 <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4 md:p-6 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/20">
@@ -246,7 +237,7 @@ const handleFinalSubmit = useCallback(async () => {
                         </div>
                         <div>
                             <h1 className="text-xl md:text-2xl font-bold">Identity Verification</h1>
-                            <p className="text-xs md:text-sm text-slate-300">Secure 3-step verification process</p>
+                            <p className="text-xs md:text-sm text-slate-300">Secure AI-powered process</p>
                         </div>
                     </div>
                     <button 
@@ -288,6 +279,7 @@ const handleFinalSubmit = useCallback(async () => {
                                             type="tel" 
                                             placeholder="03XXXXXXXXX" 
                                             maxLength={11}
+                                            disabled={loading}
                                             className={`w-full p-4 pl-12 bg-white border-2 rounded-xl outline-none transition-all font-medium ${
                                                 errors.phone ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-emerald-500'
                                             }`}
@@ -305,7 +297,8 @@ const handleFinalSubmit = useCallback(async () => {
                                     <div className="relative">
                                         <input 
                                             type="password" 
-                                            placeholder="Create Password (min 6 chars)" 
+                                            placeholder="Create Password" 
+                                            disabled={loading}
                                             onChange={(e) => setPassword(e.target.value)}
                                             className={`w-full p-4 pl-12 bg-white border-2 rounded-xl outline-none transition-all ${
                                                 errors.password ? 'border-rose-300' : 'border-slate-200 focus:border-emerald-500'
@@ -318,6 +311,7 @@ const handleFinalSubmit = useCallback(async () => {
                                         <input 
                                             type="password" 
                                             placeholder="Confirm Password" 
+                                            disabled={loading}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             className={`w-full p-4 pl-12 bg-white border-2 rounded-xl outline-none transition-all ${
                                                 errors.confirmPassword ? 'border-rose-300 focus:border-rose-500' : 
@@ -329,9 +323,6 @@ const handleFinalSubmit = useCallback(async () => {
                                             <FaCheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" />
                                         )}
                                     </div>
-                                    {errors.confirmPassword && (
-                                        <p className="text-xs text-rose-500">{errors.confirmPassword}</p>
-                                    )}
                                 </div>
                             </div>
 
@@ -356,46 +347,32 @@ const handleFinalSubmit = useCallback(async () => {
                                         <label className={`relative group cursor-pointer overflow-hidden rounded-xl border-2 border-dashed h-36 flex flex-col items-center justify-center p-2 transition-all ${
                                             idFront ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-teal-400 bg-white'
                                         }`}>
-                                            <input type="file" hidden accept="image/*" onChange={handleIdFrontChange} />
+                                            <input type="file" hidden accept="image/*" disabled={loading} onChange={handleIdFrontChange} />
                                             {idFrontPreview ? (
                                                 <img src={idFrontPreview} className="w-full h-full object-cover absolute inset-0" alt="ID Front" />
                                             ) : (
                                                 <>
                                                     <FaCloudUploadAlt className="text-3xl text-slate-400 mb-2" />
-                                                    <span className="text-xs font-bold text-slate-500">FRONT SIDE</span>
-                                                    <span className="text-[10px] text-slate-400 mt-1">Click to upload</span>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Front Side</span>
                                                 </>
                                             )}
-                                            {idFront && (
-                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <span className="text-white text-xs font-bold">Change</span>
-                                                </div>
-                                            )}
                                         </label>
-                                        {idFront && <p className="text-xs text-emerald-600 font-medium text-center">✓ Front uploaded</p>}
                                     </div>
 
                                     <div className="space-y-2">
                                         <label className={`relative group cursor-pointer overflow-hidden rounded-xl border-2 border-dashed h-36 flex flex-col items-center justify-center p-2 transition-all ${
                                             idBack ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-teal-400 bg-white'
                                         }`}>
-                                            <input type="file" hidden accept="image/*" onChange={handleIdBackChange} />
+                                            <input type="file" hidden accept="image/*" disabled={loading} onChange={handleIdBackChange} />
                                             {idBackPreview ? (
                                                 <img src={idBackPreview} className="w-full h-full object-cover absolute inset-0" alt="ID Back" />
                                             ) : (
                                                 <>
                                                     <FaCloudUploadAlt className="text-3xl text-slate-400 mb-2" />
-                                                    <span className="text-xs font-bold text-slate-500">BACK SIDE</span>
-                                                    <span className="text-[10px] text-slate-400 mt-1">Click to upload</span>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Back Side</span>
                                                 </>
                                             )}
-                                            {idBack && (
-                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <span className="text-white text-xs font-bold">Change</span>
-                                                </div>
-                                            )}
                                         </label>
-                                        {idBack && <p className="text-xs text-emerald-600 font-medium text-center">✓ Back uploaded</p>}
                                     </div>
                                 </div>
                             </div>
@@ -412,7 +389,7 @@ const handleFinalSubmit = useCallback(async () => {
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-lg text-slate-800">Step 3: Face Authentication</h3>
-                                        <p className="text-xs text-slate-500">Take a clear selfie for verification</p>
+                                        <p className="text-xs text-slate-500">Take a clear selfie for AI verification</p>
                                     </div>
                                 </div>
 
@@ -425,24 +402,19 @@ const handleFinalSubmit = useCallback(async () => {
                                                     screenshotFormat="image/jpeg" 
                                                     className="w-full h-full object-cover"
                                                     mirrored={true}
-                                                    videoConstraints={{
-                                                        width: 720,
-                                                        height: 720,
-                                                        facingMode: "user"
-                                                    }}
+                                                    onUserMediaError={() => toast.error("Please enable camera access")}
+                                                    videoConstraints={{ width: 720, height: 720, facingMode: "user" }}
                                                 />
                                             </div>
                                             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                                                 <button 
                                                     onClick={captureSelfie} 
-                                                    className="bg-amber-500 hover:bg-amber-600 text-white p-4 rounded-full border-4 border-white shadow-lg transition-transform hover:scale-110 active:scale-95"
+                                                    disabled={loading}
+                                                    className="bg-amber-500 hover:bg-amber-600 text-white p-4 rounded-full border-4 border-white shadow-lg transition-transform hover:scale-110 active:scale-95 disabled:opacity-50"
                                                 >
                                                     <FaCamera size={24} />
                                                 </button>
                                             </div>
-                                            <p className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-sm text-slate-500 whitespace-nowrap">
-                                                Position your face in the circle
-                                            </p>
                                         </div>
                                     ) : (
                                         <div className="text-center">
@@ -458,7 +430,8 @@ const handleFinalSubmit = useCallback(async () => {
                                             </div>
                                             <button 
                                                 onClick={retakeSelfie} 
-                                                className="mt-6 flex items-center gap-2 mx-auto text-amber-600 font-bold hover:text-amber-700 transition-colors px-4 py-2 rounded-lg hover:bg-amber-50"
+                                                disabled={loading}
+                                                className="mt-6 flex items-center gap-2 mx-auto text-amber-600 font-bold hover:text-amber-700 transition-colors px-4 py-2 rounded-lg hover:bg-amber-50 disabled:opacity-50"
                                             >
                                                 <FaRedo /> Retake Photo
                                             </button>
@@ -472,7 +445,7 @@ const handleFinalSubmit = useCallback(async () => {
                         <div className="mt-8 pt-6 border-t border-slate-200">
                             <div className="flex items-center gap-3 mb-4 text-sm text-slate-600 bg-emerald-50 p-4 rounded-xl">
                                 <FaShieldAlt className="text-emerald-500 text-xl" />
-                                <p>Your data is encrypted and securely stored. We only use it for verification purposes.</p>
+                                <p>Your identity is verified in real-time using OpenAI vision. Data is encrypted and deleted after processing.</p>
                             </div>
                             
                             <button 
@@ -483,11 +456,11 @@ const handleFinalSubmit = useCallback(async () => {
                                 {loading ? (
                                     <>
                                         <FaSpinner className="animate-spin" /> 
-                                        Processing...
+                                        AI is verifying... 
                                     </>
                                 ) : (
                                     <>
-                                        <FaShieldAlt /> Complete Verification
+                                        <FaShieldAlt /> Complete AI Verification
                                     </>
                                 )}
                             </button>

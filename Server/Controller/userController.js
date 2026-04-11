@@ -706,41 +706,56 @@ export const createReport = async (req, res) => {
 export const verifyIdentity = async (req, res) => {
     try {
         const userUid = req.user.uid;
-
         const existingUser = await User.findOne({ uid: userUid });
+
         if (existingUser?.isVerified) {
             return res.status(400).json({ message: "Aapka account pehle se verified hai! ✅" });
         }
 
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
+            return res.status(400).json({ message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" });
+        }
+
+        const timestamp = Date.now();
+        
+        // 1. Upload to Cloudinary
+        const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+            uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
+            uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
+            uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
+        ]);
+
+        // 2. AI Verification Logic (GPT-4o)
+        const aiResponse = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a KYC expert. Compare the ID card photo with the live selfie. Check if they are the same person. Also verify if the ID card looks like a valid Pakistani CNIC. Return JSON only: { 'isMatched': boolean, 'confidence': number, 'reason': string }"
+                },
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Analyze these images for identity verification." },
+                        { type: "image_url", image_url: { url: idFrontUrl } },
+                        { type: "image_url", image_url: { url: selfieUrl } }
+                    ],
+                },
+            ],
+            response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(aiResponse.choices[0].message.content);
+
+        // 3. Check AI Result
+        if (!result.isMatched || result.confidence < 70) {
             return res.status(400).json({ 
-                message: "ID Front, ID Back aur Live Selfie teeno upload karna lazmi hain. 📸" 
+                success: false, 
+                message: `Verification fail: ${result.reason} ❌` 
             });
         }
 
-        // ✅ FIXED: Direct Cloudinary upload using buffer
-        const timestamp = Date.now();
-        
-        // Upload all three to Cloudinary
-        const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
-            uploadBufferToCloudinary(
-                req.files.idFront[0].buffer, 
-                'rezon_kyc', 
-                `idFront-${userUid}-${timestamp}`
-            ),
-            uploadBufferToCloudinary(
-                req.files.idBack[0].buffer, 
-                'rezon_kyc', 
-                `idBack-${userUid}-${timestamp}`
-            ),
-            uploadBufferToCloudinary(
-                req.files.liveSelfie[0].buffer, 
-                'rezon_kyc', 
-                `selfie-${userUid}-${timestamp}`
-            )
-        ]);
-
-        // Direct verification - No AI check
+        // 4. Update Database if AI passes
         await User.findOneAndUpdate(
             { uid: userUid },
             { 
@@ -748,25 +763,19 @@ export const verifyIdentity = async (req, res) => {
                 isVerified: true,
                 verificationStatus: 'Verified',
                 verifiedAt: new Date(),
-                kycDocuments: {
-                    idFront: idFrontUrl,
-                    idBack: idBackUrl,
-                    selfie: selfieUrl
-                },
+                kycDocuments: { idFront: idFrontUrl, idBack: idBackUrl, selfie: selfieUrl },
                 kycDetails: {
-                    method: "Manual verification",
-                    aiCheck: false,
-                    faceMatch: null,
-                    idOcr: null,
-                    verifiedBy: "system_auto"
+                    method: "AI Verification",
+                    aiCheck: true,
+                    faceMatchScore: result.confidence,
+                    reason: result.reason
                 }
             }
         );
 
         return res.status(200).json({ 
             success: true, 
-            message: "Mubarak ho! Aapki pehchan verify ho gayi hai. 🎉", 
-            profileUrl: selfieUrl 
+            message: "Mubarak ho! AI ne aapki pehchan verify kar li hai. 🎉" 
         });
 
     } catch (error) {
