@@ -47,23 +47,10 @@ const uploadMemory = multer({
 
 route.post("/register", registerUser);
 
-// ✅ Isay upar rakha hai taake /users/:id se clash na ho
+// ✅ GET: Profile data lene ke liye
 route.get("/users/me", authenticate, me);
 
-route.get("/check-phone", authenticate, async (req, res) => {
-    try {
-        const { phone } = req.query;
-        const exists = await User.findOne({ phoneNumber: phone });
-        res.json({
-            exists: !!exists
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: "Error checking phone"
-        });
-    }
-});
-
+// ✅ PUT: Profile update karne ke liye (Aapka original code)
 route.put("/users/me", authenticate, async (req, res) => {
     try {
         const { phoneNumber, password, isPhoneVerified } = req.body;
@@ -103,6 +90,37 @@ route.put("/users/me", authenticate, async (req, res) => {
         res.status(500).json({
             message: "Update failed",
             error: error.message
+        });
+    }
+});
+
+// ✅ PATCH: Extra Safety (Agar Railway PUT block kare to ye chale ga)
+route.patch("/users/me", authenticate, async (req, res) => {
+    try {
+        const { phoneNumber, isPhoneVerified } = req.body;
+        const user = await User.findOne({ uid: req.user.uid });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (phoneNumber) user.phoneNumber = phoneNumber;
+        if (isPhoneVerified !== undefined) user.isPhoneVerified = isPhoneVerified;
+
+        await user.save();
+        res.json({ success: true, message: "Profile patched" });
+    } catch (error) {
+        res.status(500).json({ message: "Patch failed", error: error.message });
+    }
+});
+
+route.get("/check-phone", authenticate, async (req, res) => {
+    try {
+        const { phone } = req.query;
+        const exists = await User.findOne({ phoneNumber: phone });
+        res.json({
+            exists: !!exists
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Error checking phone"
         });
     }
 });
