@@ -166,7 +166,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             const selfieBlob = await fetch(selfie).then(r => r.blob());
             formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
 
-            // 🚀 INCREASED TIMEOUT to 90s for OpenAI Vision processing
             const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
                 headers: { 
                     'Content-Type': 'multipart/form-data',
@@ -176,16 +175,13 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             });
 
             if (verifyRes.data?.success) {
-    toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
-    
-    // SAFE CALLS: ?. use karein taake agar prop missing ho to crash na ho
-    onComplete?.(verifyRes.data.profileUrl); 
-    setTimeout(() => onClose?.(), 2000);
-}
+                toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
+                onComplete?.(verifyRes.data.profileUrl); 
+                setTimeout(() => onClose?.(), 2000);
+            }
         } catch (err) {
-            console.error("KYC Error:", err);
-            // Show AI's specific rejection reason if available
-            const errorMsg = err.response?.data?.message || "Verification failed. Please ensure clear lighting and valid ID.";
+            console.error("KYC Error Details:", err.response); // Debugging 404
+            const errorMsg = err.response?.data?.message || "Verification failed. Check lighting and ID.";
             toast.error(errorMsg, { id: toastId, duration: 6000 });
         } finally {
             setLoading(false);
@@ -275,7 +271,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-4">
+                                <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
                                     <div className="relative">
                                         <input 
                                             type="tel" 
@@ -325,7 +321,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                             <FaCheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" />
                                         )}
                                     </div>
-                                </div>
+                                </form>
                             </div>
 
                             {/* Step 2 */}
