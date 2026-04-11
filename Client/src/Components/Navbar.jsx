@@ -66,14 +66,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [scrolled, setScrolled] = useState(false);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const [showMyAds, setShowMyAds] = useState(false); // ✅ YEH ADD KAREIN
+    const [showMyAds, setShowMyAds] = useState(false);
 
-    // ... other code ...
-
-    // ✅ MODIFIED: Pehle My Ads show karein
-    
-
-    // 🔥 FIXED: API URL without space
     const API_URL = "https://rezon.up.railway.app/api";
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
@@ -131,37 +125,36 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     };
 
     const handleSellClick = useCallback(async () => {
-    if (!user) {
-        toast("Please login first! 🔒", { icon: '🔑' });
-        setShowLogin(true);
-        return;
-    }
-
-    setIsVerifying(true);
-    const loadingToast = toast.loading("Verifying...");
-
-    try {
-        const token = localStorage.getItem('firebaseIdToken');
-        const res = await axios.get(`${API_URL}/users/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        toast.dismiss(loadingToast);
-
-        if (!res.data?.isVerified) {
-            toast("Please verify your profile 🛡️", { icon: '⚠️' });
-            navigate('/verify');
-        } else {
-            // ✅ YEH LINE CHANGE KAREIN - Ads.jsx show karein
-            setShowMyAds(true);
+        if (!user) {
+            toast("Please login first! 🔒", { icon: '🔑' });
+            setShowLogin(true);
+            return;
         }
-    } catch (error) {
-        toast.dismiss(loadingToast);
-        navigate('/verify');
-    } finally {
-        setIsVerifying(false);
-    }
-}, [user, navigate, setShowMyAds]); // setShowMyAds dependency add karein
+
+        setIsVerifying(true);
+        const loadingToast = toast.loading("Verifying...");
+
+        try {
+            const token = localStorage.getItem('firebaseIdToken');
+            const res = await axios.get(`${API_URL}/users/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            toast.dismiss(loadingToast);
+
+            if (!res.data?.isVerified) {
+                toast("Please verify your profile 🛡️", { icon: '⚠️' });
+                navigate('/verify');
+            } else {
+                setShowMyAds(true);
+            }
+        } catch (error) {
+            toast.dismiss(loadingToast);
+            navigate('/verify');
+        } finally {
+            setIsVerifying(false);
+        }
+    }, [user, navigate]);
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -181,147 +174,138 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     };
 
     // 🔥 MOBILE MENU COMPONENT
-   const MobileMenu = () => (
-    <div
-        ref={mobileMenuRef}
-        className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${showMobileMenu ? 'visible' : 'invisible'}`}
-    >
-        {/* Backdrop - 🔧 Smoother exit */}
+    const MobileMenu = () => (
         <div
-            className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-300 ${showMobileMenu ? 'opacity-100' : 'opacity-0'}`}
-            onClick={() => setShowMobileMenu(false)}
-        />
+            ref={mobileMenuRef}
+            className={`fixed inset-0 z-[100] lg:hidden transition-all duration-300 ${showMobileMenu ? 'visible' : 'invisible'}`}
+        >
+            <div
+                className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-300 ${showMobileMenu ? 'opacity-100' : 'opacity-0'}`}
+                onClick={() => setShowMobileMenu(false)}
+            />
 
-        {/* Menu Panel */}
-        <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-out flex flex-col ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
-            
-            {/* 1. Header */}
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-                <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                        <span className="text-white font-black text-xl">R</span>
-                    </div>
-                    <span className="text-xl font-black text-white">RE<span className="text-emerald-400">ZON</span></span>
-                </Link>
-                <button
-                    onClick={() => setShowMobileMenu(false)}
-                    className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                >
-                    <FaTimes />
-                </button>
-            </div>
-
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto pb-8 custom-scrollbar">
+            <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-out flex flex-col ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
                 
-                {/* 2. User Section */}
-                {user ? (
-                    <div className="p-6 border-b border-slate-800 bg-slate-800/20">
-                        <div className="flex items-center gap-4 mb-4">
-                            <img src={user.photoURL} alt="" className="w-14 h-14 rounded-xl border-2 border-emerald-500/30 object-cover" />
-                            <div className="min-w-0">
-                                <p className="font-bold text-white truncate">{user.displayName}</p>
-                                <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                            </div>
+                <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                    <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
+                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                            <span className="text-white font-black text-xl">R</span>
                         </div>
-                        {isAdmin(user.uid) && (
-                            <Link
-                                to="/admin/dashboard"
-                                onClick={() => setShowMobileMenu(false)}
-                                className="flex items-center gap-3 p-3 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold mb-2 border border-emerald-500/20"
+                        <span className="text-xl font-black text-white">RE<span className="text-emerald-400">ZON</span></span>
+                    </Link>
+                    <button
+                        onClick={() => setShowMobileMenu(false)}
+                        className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                    >
+                        <FaTimes />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto pb-8 custom-scrollbar">
+                    {user ? (
+                        <div className="p-6 border-b border-slate-800 bg-slate-800/20">
+                            <div className="flex items-center gap-4 mb-4">
+                                <img src={user.photoURL} alt="" className="w-14 h-14 rounded-xl border-2 border-emerald-500/30 object-cover" />
+                                <div className="min-w-0">
+                                    <p className="font-bold text-white truncate">{user.displayName}</p>
+                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                                </div>
+                            </div>
+                            {isAdmin(user.uid) && (
+                                <Link
+                                    to="/admin/dashboard"
+                                    onClick={() => setShowMobileMenu(false)}
+                                    className="flex items-center gap-3 p-3 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold mb-2 border border-emerald-500/20"
+                                >
+                                    <FaUserShield /> Admin Dashboard
+                                </Link>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-6 border-b border-slate-800">
+                            <button
+                                onClick={() => { setShowMobileMenu(false); setShowLogin(true); }}
+                                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all"
                             >
-                                <FaUserShield /> Admin Dashboard
-                            </Link>
+                                Login / Sign Up
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="p-6 border-b border-slate-800">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Location</p>
+                        <button 
+                            onClick={() => setShowLocDropdown(!showLocDropdown)}
+                            className="w-full flex items-center justify-between p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50 hover:border-emerald-500/50 transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <FaMapMarkerAlt className="text-emerald-500" />
+                                <span className="font-medium truncate">{selectedLocation}</span>
+                            </div>
+                            <FaChevronDown size={10} className={`transition-transform duration-200 ${showLocDropdown ? "rotate-180" : ""}`} />
+                        </button>
+                        
+                        {showLocDropdown && (
+                            <div className="mt-3 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 animate-in fade-in slide-in-from-top-2">
+                                <LocationDropdown
+                                    selected={selectedLocation}
+                                    onChange={(loc) => {
+                                        setSelectedLocation(loc);
+                                        setShowLocDropdown(false);
+                                        onLocationChange?.(loc);
+                                    }}
+                                />
+                            </div>
                         )}
                     </div>
-                ) : (
-                    <div className="p-6 border-b border-slate-800">
-                        <button
-                            onClick={() => { setShowMobileMenu(false); setShowLogin(true); }}
-                            className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all"
-                        >
-                            Login / Sign Up
-                        </button>
-                    </div>
-                )}
 
-                {/* 3. 📍 LOCATION SECTION (New!) */}
-                <div className="p-6 border-b border-slate-800">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Location</p>
-                    <button 
-                        onClick={() => setShowLocDropdown(!showLocDropdown)}
-                        className="w-full flex items-center justify-between p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50 hover:border-emerald-500/50 transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <FaMapMarkerAlt className="text-emerald-500" />
-                            <span className="font-medium truncate">{selectedLocation}</span>
-                        </div>
-                        <FaChevronDown size={10} className={`transition-transform duration-200 ${showLocDropdown ? "rotate-180" : ""}`} />
-                    </button>
-                    
-                    {showLocDropdown && (
-                        <div className="mt-3 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 animate-in fade-in slide-in-from-top-2">
-                            <LocationDropdown
-                                selected={selectedLocation}
-                                onChange={(loc) => {
-                                    setSelectedLocation(loc);
-                                    setShowLocDropdown(false);
-                                    onLocationChange?.(loc);
-                                }}
-                            />
+                    <div className="p-4 space-y-1">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2 mt-2">Browse Categories</p>
+                        {[
+                            { to: '/', icon: FaHome, label: 'Home' },
+                            { to: '/mobiles', icon: FaStore, label: 'Mobiles' },
+                            { to: '/vehicles', icon: FaStore, label: 'Vehicles' },
+                            { to: '/electronics', icon: FaStore, label: 'Electronics' },
+                            { to: '/property-for-sale', icon: FaStore, label: 'Property' },
+                            { to: '/bikes', icon: FaStore, label: 'Bikes' },
+                            { to: '/furniture', icon: FaStore, label: 'Furniture' },
+                        ].map((item) => (
+                            <Link
+                                key={item.to}
+                                to={item.to}
+                                onClick={() => setShowMobileMenu(false)}
+                                className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
+                            >
+                                <item.icon className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
+                                <span className="font-medium">{item.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+
+                    {user && (
+                        <div className="p-4 border-t border-slate-800 space-y-1 mt-2">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">My Account</p>
+                            <Link to="/profile" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                                <FaUserEdit className="text-slate-500" /> Profile Settings
+                            </Link>
+                            <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                                <FaHistory className="text-slate-500" /> My Active Ads
+                            </Link>
+                            <Link to="/conversationlist" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                                <FaComments className="text-slate-500" /> Inbox Messages
+                            </Link>
+                            <button
+                                onClick={() => { setShowMobileMenu(false); handleLogout(); }}
+                                className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors mt-4"
+                            >
+                                <FaSignOutAlt /> Sign Out
+                            </button>
                         </div>
                     )}
                 </div>
-
-                {/* 4. Navigation Links */}
-                <div className="p-4 space-y-1">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2 mt-2">Browse Categories</p>
-                    {[
-                        { to: '/', icon: FaHome, label: 'Home' },
-                        { to: '/mobiles', icon: FaStore, label: 'Mobiles' },
-                        { to: '/vehicles', icon: FaStore, label: 'Vehicles' },
-                        { to: '/electronics', icon: FaStore, label: 'Electronics' },
-                        { to: '/property-for-sale', icon: FaStore, label: 'Property' },
-                        { to: '/bikes', icon: FaStore, label: 'Bikes' },
-                        { to: '/furniture', icon: FaStore, label: 'Furniture' },
-                    ].map((item) => (
-                        <Link
-                            key={item.to}
-                            to={item.to}
-                            onClick={() => setShowMobileMenu(false)}
-                            className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
-                        >
-                            <item.icon className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
-                            <span className="font-medium">{item.label}</span>
-                        </Link>
-                    ))}
-                </div>
-
-                {/* 5. User Account Links */}
-                {user && (
-                    <div className="p-4 border-t border-slate-800 space-y-1 mt-2">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">My Account</p>
-                        <Link to="/profile" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaUserEdit className="text-slate-500" /> Profile Settings
-                        </Link>
-                        <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaHistory className="text-slate-500" /> My Active Ads
-                        </Link>
-                        <Link to="/conversationlist" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
-                            <FaComments className="text-slate-500" /> Inbox Messages
-                        </Link>
-                        <button
-                            onClick={() => { setShowMobileMenu(false); handleLogout(); }}
-                            className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors mt-4"
-                        >
-                            <FaSignOutAlt /> Sign Out
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
-    </div>
-);
+    );
 
     // 🔥 MOBILE SEARCH OVERLAY
     const MobileSearch = () => (
@@ -336,14 +320,13 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </button>
                 <form onSubmit={handleSearchSubmit} className="flex-1">
                     <input
-    ref={searchInputRef}
-    type="text"
-    placeholder="Search products..."
-    value={searchQuery}
-    onChange={(e) => setSearchQuery(e.target.value)}
-    className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/50"
-    // autoFocus property yahan se khatam kar di gayi hai
-/>
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search products..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
                 </form>
                 <button
                     onClick={handleSearchSubmit}
@@ -353,7 +336,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </button>
             </div>
 
-            {/* Recent Searches / Suggestions */}
             <div className="p-4">
                 <p className="text-xs font-bold text-slate-500 uppercase mb-3">Popular Searches</p>
                 <div className="flex flex-wrap gap-2">
@@ -417,14 +399,12 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     return (
         <>
-            {/* 🔥 MAIN HEADER */}
             <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
                 } border-b border-slate-800/60`}>
 
                 <div className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-12">
                     <div className="flex items-center justify-between gap-4">
 
-                        {/* LEFT: Logo & Mobile Menu */}
                         <div className="flex items-center gap-3 shrink-0">
                             <button
                                 className="lg:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
@@ -446,7 +426,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </Link>
                         </div>
 
-                        {/* CENTER: Search - Desktop */}
                         <div className="hidden lg:flex flex-1 max-w-2xl xl:max-w-3xl">
                             <form onSubmit={handleSearchSubmit} className="w-full relative">
                                 <input
@@ -460,7 +439,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </form>
                         </div>
 
-                        {/* CENTER: Search Button - Mobile */}
                         <button
                             className="lg:hidden flex-1 max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-4 text-left text-slate-400 flex items-center gap-3"
                             onClick={() => setShowMobileSearch(true)}
@@ -469,10 +447,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             <span className="text-sm truncate">Search...</span>
                         </button>
 
-                        {/* RIGHT: Actions */}
                         <div className="flex items-center gap-2 md:gap-4">
 
-                            {/* Location - Desktop */}
                             <div className="hidden xl:block relative">
                                 <button
                                     onClick={() => setShowLocDropdown(prev => !prev)}
@@ -500,7 +476,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 )}
                             </div>
 
-                            {/* Chat - Desktop */}
                             {user && (
                                 <Link
                                     to="/conversations"
@@ -511,7 +486,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 </Link>
                             )}
 
-                            {/* Notifications */}
                             <div className="relative hidden md:block" ref={notifRef}>
                                 <button
                                     onClick={() => setShowNotifications(!showNotifications)}
@@ -526,18 +500,53 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 </button>
                             </div>
 
-                            {/* Profile */}
-                            <div className="relative hidden md:block" ref={dropdownRef}>
-                                <button
-                                    onClick={handleSellClick}
-                                    className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm px-4 md:px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
-                                >
-                                    <FaPlus size={16} />
-                                    <span className="hidden md:inline">SELL</span>
-                                </button>
+                            {/* Desktop Profile Icon and Sell Button Section */}
+                            <div className="hidden md:flex items-center gap-3" ref={dropdownRef}>
+                                {user ? (
+                                    <div className="relative flex items-center gap-3">
+                                        {/* Profile Dropdown Trigger */}
+                                        <button 
+                                            onClick={() => setShowDropdown(!showDropdown)}
+                                            className="flex items-center gap-2 p-1.5 bg-slate-800/40 hover:bg-slate-800 rounded-full border border-slate-700/50 transition-all"
+                                        >
+                                            <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
+                                            <FaChevronDown size={10} className={`text-slate-400 mr-1 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        {showDropdown && (
+                                            <div className="absolute top-full right-0 mt-3 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                <div className="px-4 py-3 border-b border-slate-800">
+                                                    <p className="font-bold text-white truncate">{user.displayName}</p>
+                                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                                                </div>
+                                                <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaUserCircle /> My Profile</Link>
+                                                <Link to="/my-ads" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaHistory /> My Ads</Link>
+                                                {isAdmin(user.uid) && <Link to="/admin/dashboard" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 transition-colors"><FaUserShield /> Admin Panel</Link>}
+                                                <div className="border-t border-slate-800 mt-2">
+                                                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-rose-400 hover:bg-rose-500/10 transition-colors"><FaSignOutAlt /> Logout</button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={handleSellClick}
+                                            className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm px-4 md:px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
+                                        >
+                                            <FaPlus size={16} />
+                                            <span>SELL</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => setShowLogin(true)}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all"
+                                    >
+                                        LOGIN
+                                    </button>
+                                )}
                             </div>
 
-                            {/* Mobile Profile Button */}
                             <button
                                 className="md:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
                                 onClick={() => user ? navigate('/profile') : setShowLogin(true)}
@@ -553,15 +562,12 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </div>
             </header>
 
-            {/* Spacer for fixed header */}
             <div className={`transition-all duration-300 ${scrolled ? 'h-16 md:h-20' : 'h-16 md:h-24'}`} />
 
-            {/* 🔥 MOBILE COMPONENTS */}
             <MobileMenu />
             <MobileSearch />
             <BottomNav />
 
-            {/* Modals */}
             {showLogin && (
                 <LoginPopup
                     isOpen={showLogin}
@@ -569,7 +575,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     onSuccess={() => setShowLogin(false)}
                 />
             )}
-             {showMyAds && user && (
+            {showMyAds && user && (
                 <Ads 
                     user={user} 
                     onClose={() => setShowMyAds(false)} 

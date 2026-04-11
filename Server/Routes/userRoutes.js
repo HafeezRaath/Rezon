@@ -43,11 +43,69 @@ const uploadMemory = multer({
 });
 
 
-// ================= USER AUTH =================
+// ================= USER AUTH & PROFILE (TOP PRIORITY) =================
 
 route.post("/register", registerUser);
 
+// ✅ Isay upar rakha hai taake /users/:id se clash na ho
 route.get("/users/me", authenticate, me);
+
+route.get("/check-phone", authenticate, async (req, res) => {
+    try {
+        const { phone } = req.query;
+        const exists = await User.findOne({ phoneNumber: phone });
+        res.json({
+            exists: !!exists
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Error checking phone"
+        });
+    }
+});
+
+route.put("/users/me", authenticate, async (req, res) => {
+    try {
+        const { phoneNumber, password, isPhoneVerified } = req.body;
+        const user = await User.findOne({ uid: req.user.uid });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (phoneNumber && phoneNumber !== user.phoneNumber) {
+            const exists = await User.findOne({ phoneNumber });
+            if (exists) {
+                return res.status(400).json({
+                    message: "Phone already registered"
+                });
+            }
+            user.phoneNumber = phoneNumber;
+        }
+
+        if (isPhoneVerified) {
+            user.isPhoneVerified = true;
+        }
+
+        if (password) {
+            user.password = await bcrypt.hash(password, 10);
+        }
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: "Profile updated"
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Update failed",
+            error: error.message
+        });
+    }
+});
 
 
 // ================= IDENTITY VERIFICATION =================
@@ -140,7 +198,7 @@ route.post(
 );
 
 
-// ☁️ Create Ad - ✅ FIXED: uploadMemory use ho raha hai
+// ☁️ Create Ad
 route.post(
     "/ad",
     authenticate,
@@ -158,7 +216,7 @@ route.get("/ads/:id", getAdById);
 route.get("/myads", authenticate, getMyAds);
 
 
-// ✏️ Update Ad - ✅ FIXED: uploadMemory use ho raha hai
+// ✏️ Update Ad
 route.put(
     "/ads/:id",
     authenticate,
@@ -200,67 +258,6 @@ route.post("/chat/start", authenticate, startChat);
 route.post("/chat/:chatId/message", authenticate, sendMessage);
 
 route.delete("/chat/:chatId", authenticate, deleteChat);
-
-
-// ================= USER PROFILE =================
-
-route.get("/check-phone", authenticate, async (req, res) => {
-    try {
-        const { phone } = req.query;
-        const exists = await User.findOne({ phoneNumber: phone });
-        res.json({
-            exists: !!exists
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: "Error checking phone"
-        });
-    }
-});
-
-
-route.put("/users/me", authenticate, async (req, res) => {
-    try {
-        const { phoneNumber, password, isPhoneVerified } = req.body;
-        const user = await User.findOne({ uid: req.user.uid });
-
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found"
-            });
-        }
-
-        if (phoneNumber && phoneNumber !== user.phoneNumber) {
-            const exists = await User.findOne({ phoneNumber });
-            if (exists) {
-                return res.status(400).json({
-                    message: "Phone already registered"
-                });
-            }
-            user.phoneNumber = phoneNumber;
-        }
-
-        if (isPhoneVerified) {
-            user.isPhoneVerified = true;
-        }
-
-        if (password) {
-            user.password = await bcrypt.hash(password, 10);
-        }
-
-        await user.save();
-
-        res.json({
-            success: true,
-            message: "Profile updated"
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: "Update failed",
-            error: error.message
-        });
-    }
-});
 
 
 export default route;

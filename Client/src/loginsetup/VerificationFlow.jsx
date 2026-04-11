@@ -176,10 +176,12 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             });
 
             if (verifyRes.data?.success) {
-                toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
-                if (onComplete) onComplete(verifyRes.data.profileUrl);
-                setTimeout(() => onClose(), 2000);
-            }
+    toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
+    
+    // SAFE CALLS: ?. use karein taake agar prop missing ho to crash na ho
+    onComplete?.(verifyRes.data.profileUrl); 
+    setTimeout(() => onClose?.(), 2000);
+}
         } catch (err) {
             console.error("KYC Error:", err);
             // Show AI's specific rejection reason if available
