@@ -313,26 +313,29 @@ const ChatRoom = ({ user }) => {
         );
     }
 
-    return (
+   return (
         <div 
             ref={containerRef}
-            className="fixed inset-0 bg-slate-50 flex justify-center md:p-0 lg:p-4 overscroll-none"
-            style={{ height: '100dvh' }}
+            className="fixed inset-0 bg-slate-50 flex justify-center z-[60] overflow-hidden overscroll-none"
+            style={{ 
+                height: '100dvh',
+                // Desktop par Navbar ki jagah (75px) chori hai, mobile par 0
+                top: window.innerWidth > 1024 ? '75px' : '0' 
+            }}
         >
             <div className={`
                 w-full bg-white flex flex-col h-full shadow-2xl overflow-hidden
                 md:h-full md:max-w-none lg:max-w-4xl lg:h-[95vh] lg:rounded-2xl lg:border lg:border-slate-200
             `}>
                 
-                {/* 🔥 HEADER - Sticky & Mobile Optimized */}
-                <div className="flex-none p-2.5 sm:p-3 md:p-4 border-b border-slate-100 flex items-center justify-between bg-white z-20 shadow-sm safe-area-pt">
+                {/* 🔥 HEADER - Desktop + Mobile Optimized */}
+                <div className="flex-none h-16 md:h-20 border-b border-slate-100 flex items-center justify-between bg-white z-[70] px-2.5 sm:px-6 shrink-0 shadow-sm safe-area-pt">
                     <div className="flex items-center min-w-0 flex-1 gap-2">
                         <button 
                             onClick={() => navigate(-1)}
-                            className="p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition-colors flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95"
-                            aria-label="Go back"
+                            className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition-colors flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95"
                         >
-                            <FaArrowLeft className="text-lg" />
+                            <FaArrowLeft className="text-lg md:text-xl" />
                         </button>
                         
                         <div className="relative flex-shrink-0">
@@ -344,181 +347,93 @@ const ChatRoom = ({ user }) => {
                             )}
                         </div>
                         
-                        <div className="ml-1 sm:ml-2 min-w-0 flex-1">
-                            <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate leading-tight">
-                                {otherUser?.name}
+                        <div className="min-w-0 flex-1">
+                            <h3 className="font-extrabold text-slate-800 text-sm sm:text-base md:text-lg truncate leading-tight">
+                                {otherUser?.name || "Customer"}
                             </h3>
-                            <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight mt-0.5">
-                                {isOnline ? (
-                                    <span className="text-emerald-600 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                        Online
-                                    </span>
-                                ) : (
-                                    formatLastSeen(lastSeen)
-                                )}
+                            <p className="text-[10px] sm:text-xs text-emerald-600 font-bold uppercase tracking-wider leading-tight mt-0.5">
+                                {isOnline ? "• Online" : formatLastSeen(lastSeen)}
                             </p>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
-                        <button 
-                            onClick={() => setShowAdDetails(!showAdDetails)}
-                            className="p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-emerald-600 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95 sm:hidden"
-                            aria-label="Toggle ad details"
-                        >
-                            <FaInfoCircle className="text-lg" />
-                        </button>
-                        
+                    {/* 🔥 Action Buttons (Visible on Mobile + Desktop) */}
+                    <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-shrink-0">
                         <button 
                             onClick={() => setShowReviewModal(true)} 
-                            className="hidden sm:flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-2 rounded-full text-xs font-semibold border border-yellow-200 hover:bg-yellow-100 active:scale-95 transition-transform min-h-[36px]"
+                            className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2.5 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-yellow-200 hover:bg-yellow-100 active:scale-95 transition-transform min-h-[36px]"
                         >
-                            <FaStar size={12} /> Rate
+                            <FaStar size={12} /> <span className="hidden sm:inline">Rate</span>
                         </button>
                         
                         <button 
                             onClick={() => setShowReportModal(true)} 
-                            className="flex items-center gap-1 bg-rose-50 text-rose-600 px-2.5 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-semibold border border-rose-200 hover:bg-rose-100 active:scale-95 transition-transform min-h-[36px]"
+                            className="flex items-center gap-1 bg-rose-50 text-rose-600 px-2.5 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-rose-200 hover:bg-rose-100 active:scale-95 transition-transform min-h-[36px]"
                         >
                             <FaFlag size={11} /> <span className="hidden sm:inline">Report</span>
                         </button>
                     </div>
                 </div>
 
-                {/* 🔥 AD STRIP - Mobile Optimized */}
+                {/* 🔥 AD STRIP */}
                 {ad && (
-                    <div 
-                        className={`
-                            flex-none bg-emerald-50/30 border-b border-slate-100 overflow-hidden transition-all duration-300 ease-in-out
-                            ${showAdDetails ? 'max-h-24 p-2.5 sm:p-3' : 'max-h-0 sm:max-h-20 sm:p-3'}
-                        `}
-                    >
-                        <div className="flex items-center justify-between px-0 sm:px-4 gap-2">
+                    <div className="flex-none bg-emerald-50/40 border-b border-emerald-100 p-2.5 sm:p-3 md:px-6">
+                        <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center min-w-0 flex-1 gap-2 sm:gap-3">
                                 <img 
                                     src={ad.images?.[0] || DEFAULT_AD_IMAGE} 
-                                    className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg object-cover border border-slate-200 shadow-sm bg-slate-100 flex-shrink-0"
-                                    alt={ad.title || "Ad"}
-                                    loading="lazy"
-                                    onError={(e) => { e.target.src = DEFAULT_AD_IMAGE; }}
+                                    className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg object-cover border-2 border-white shadow-sm bg-slate-100 flex-shrink-0" 
+                                    alt="ad" 
                                 />
-                                <div className="min-w-0 flex-1">
-                                    <h4 className="font-semibold text-[11px] sm:text-xs md:text-sm text-slate-700 truncate leading-tight">
-                                        {ad.title}
-                                    </h4>
-                                    <p className="text-emerald-600 font-bold text-xs sm:text-sm md:text-base leading-tight mt-0.5">
-                                        Rs {ad.price?.toLocaleString()}
-                                    </p>
+                                <div className="min-w-0">
+                                    <h4 className="font-bold text-[11px] sm:text-xs md:text-sm text-slate-700 truncate leading-tight">{ad.title}</h4>
+                                    <p className="text-emerald-600 font-black text-xs sm:text-sm md:text-base leading-tight mt-0.5">Rs {ad.price?.toLocaleString()}</p>
                                 </div>
                             </div>
                             <button 
-                                onClick={handleViewAd}
-                                className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 sm:px-3 md:px-4 py-2 rounded-lg text-[11px] sm:text-xs md:text-sm font-semibold shadow-sm flex items-center gap-1 active:scale-95 transition-transform min-h-[36px]"
+                                onClick={handleViewAd} 
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
                             >
-                                <FaEye size={11} /> <span className="hidden xs:inline">View</span>
+                                <FaEye /> <span className="hidden xs:inline">View Ad</span>
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* 🔥 MESSAGES - Mobile Optimized */}
+                {/* 🔥 MESSAGES AREA */}
                 <div 
-                    className={`
-                        flex-1 overflow-y-auto p-2.5 sm:p-3 md:p-4 space-y-2 md:space-y-3 bg-slate-50/30 scroll-smooth
-                        ${keyboardOpen ? 'pb-1' : 'pb-2 sm:pb-4'}
-                    `}
-                    style={{ 
-                        overscrollBehavior: 'contain',
-                        WebkitOverflowScrolling: 'touch'
-                    }}
+                    className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-[#f8fafc] scroll-smooth custom-scrollbar"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     {allMessages.length > 0 ? (
                         allMessages.map((m, i) => {
                             const isMe = m.senderId === user?.uid;
-                            const showAvatar = i === 0 || allMessages[i - 1].senderId !== m.senderId;
-                            const isLast = i === allMessages.length - 1;
-                            
                             return (
-                                <div 
-                                    key={m._id || m.tempId || i} 
-                                    className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    <div className={`
-                                        flex items-end gap-1 sm:gap-1.5 md:gap-2 max-w-[88%] sm:max-w-[85%] md:max-w-[75%] lg:max-w-[65%]
-                                        ${isMe ? 'flex-row-reverse' : 'flex-row'}
-                                    `}>
-                                        {!isMe && showAvatar && (
-                                            <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold flex-shrink-0">
-                                                {otherUser?.name?.charAt(0) || "U"}
-                                            </div>
-                                        )}
-                                        {!isMe && !showAvatar && <div className="w-6 sm:w-7 md:w-8 flex-shrink-0" />}
-                                        
-                                        <div className={`
-                                            px-2.5 py-1.5 sm:px-3 sm:py-2 md:px-4 md:py-2.5 rounded-2xl text-[13px] sm:text-sm md:text-base shadow-sm relative break-words
-                                            ${isMe 
-                                                ? 'bg-emerald-600 text-white rounded-tr-sm' 
-                                                : 'bg-white text-slate-800 border border-slate-200 rounded-tl-sm'
-                                            }
-                                            ${m.pending ? 'opacity-70' : ''}
-                                            ${m.failed ? 'bg-red-500 text-white border-red-500' : ''}
-                                            max-w-full
-                                        `}>
-                                            <p className="leading-relaxed whitespace-pre-wrap break-words">
-                                                {m.message}
-                                            </p>
-                                            
-                                            <div className="flex items-center justify-end gap-1 mt-0.5 sm:mt-1">
-                                                <span className={`text-[9px] sm:text-[10px] ${isMe ? 'text-emerald-100' : 'text-slate-400'}`}>
-                                                    {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { 
-                                                        hour: '2-digit', 
-                                                        minute: '2-digit' 
-                                                    }) : ""}
-                                                </span>
-                                                
-                                                {isMe && (
-                                                    <>
-                                                        {m.pending && <FaSpinner className="animate-spin text-[9px] sm:text-[10px]" />}
-                                                        {m.failed && <span className="text-[9px] sm:text-[10px]">!</span>}
-                                                        {!m.pending && !m.failed && (
-                                                            m.read ? <FaCheckDouble className="text-[9px] sm:text-[10px] text-emerald-200" /> : <FaCheck className="text-[9px] sm:text-[10px] text-emerald-200" />
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-                                            
-                                            {m.failed && (
-                                                <button 
-                                                    onClick={() => retryMessage(m.tempId)}
-                                                    className="absolute -bottom-5 right-0 text-[10px] text-red-500 hover:text-red-700 whitespace-nowrap font-medium px-1"
-                                                >
-                                                    Retry
-                                                </button>
-                                            )}
+                                <div key={m._id || m.tempId || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
+                                    <div className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-2xl max-w-[85%] md:max-w-[70%] text-[13px] sm:text-sm md:text-base shadow-sm ${
+                                        isMe ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
+                                    }`}>
+                                        <p className="leading-relaxed whitespace-pre-wrap">{m.message}</p>
+                                        <div className="text-[9px] mt-1 opacity-70 flex items-center justify-end gap-1 font-medium">
+                                            {m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                                            {isMe && <FaCheckDouble className={m.read ? 'text-emerald-100' : 'text-slate-300'} />}
                                         </div>
                                     </div>
                                 </div>
                             );
                         })
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400 px-4 py-8">
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                                <FaPaperPlane className="text-lg sm:text-xl md:text-2xl text-slate-300" />
-                            </div>
-                            <p className="font-medium text-sm sm:text-base">No messages yet</p>
-                            <p className="text-xs sm:text-sm text-center mt-1 opacity-80">Say hello to start the conversation!</p>
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 opacity-50 py-10">
+                            <FaComments size={50} />
+                            <p className="font-medium text-sm">Start conversation with {otherUser?.name || 'Seller'}</p>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
                 
-                {/* 🔥 INPUT AREA - Mobile Optimized */}
-                <div className={`
-                    flex-none bg-white border-t border-slate-100 p-2 sm:p-2.5 md:p-4 safe-area-pb
-                    ${keyboardOpen ? '' : ''}
-                `}>
-                    <div className="flex items-end gap-1.5 sm:gap-2 md:gap-3 max-w-4xl mx-auto">
+                {/* 🔥 INPUT AREA */}
+                <div className={`flex-none bg-white border-t border-slate-100 p-2 sm:p-3 md:p-4 safe-area-pb`}>
+                    <div className="flex items-end gap-2 md:gap-3 max-w-4xl mx-auto">
                         <div className="flex-1 relative">
                             <textarea 
                                 ref={inputRef}
@@ -526,66 +441,29 @@ const ChatRoom = ({ user }) => {
                                 placeholder="Type a message..." 
                                 value={message} 
                                 onChange={handleInputChange}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSend();
-                                    }
-                                }}
-                                disabled={isSending}
-                                maxLength={1000}
                                 rows={1}
-                                style={{ 
-                                    minHeight: '44px', 
-                                    maxHeight: '100px',
-                                    fontSize: '16px' // 🔥 Prevents iOS zoom on focus
-                                }}
+                                style={{ minHeight: '44px', maxHeight: '100px' }}
                             />
-                            <span className="absolute right-2.5 bottom-2.5 text-[9px] sm:text-[10px] text-slate-400 pointer-events-none bg-slate-50/80 px-1 rounded">
-                                {message.length}/1000
-                            </span>
                         </div>
                         <button 
                             onClick={handleSend} 
                             disabled={!message.trim() || isSending}
-                            className={`
-                                p-3 sm:p-3.5 md:p-4 rounded-2xl shadow-lg transition-all active:scale-95 flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center
-                                ${message.trim() && !isSending
-                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                }
-                            `}
-                            aria-label="Send message"
+                            className={`p-3 sm:p-3.5 md:p-4 rounded-2xl shadow-lg transition-all active:scale-95 flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                                message.trim() && !isSending ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-200 text-slate-400'
+                            }`}
                         >
-                            {isSending ? (
-                                <FaSpinner className="animate-spin text-sm sm:text-base" />
-                            ) : (
-                                <FaPaperPlane className="text-sm sm:text-base" />
-                            )}
+                            {isSending ? <FaSpinner className="animate-spin" /> : <FaPaperPlane size={18} />}
                         </button>
                     </div>
                 </div>
             </div>
             
-            {/* 🔥 Mobile Optimized CSS */}
             <style jsx>{`
-                .safe-area-pt {
-                    padding-top: env(safe-area-inset-top, 0px);
-                }
-                .safe-area-pb {
-                    padding-bottom: env(safe-area-inset-bottom, 0px);
-                }
-                .safe-area-pl {
-                    padding-left: env(safe-area-inset-left, 0px);
-                }
-                .safe-area-pr {
-                    padding-right: env(safe-area-inset-right, 0px);
-                }
-                @media (max-width: 380px) {
-                    .xs\\:inline {
-                        display: inline;
-                    }
-                }
+                .safe-area-pt { padding-top: env(safe-area-inset-top, 0px); }
+                .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+                @media (max-width: 480px) { .xs\\:inline { display: inline; } }
             `}</style>
         </div>
     );

@@ -396,6 +396,9 @@ const Navbar = ({ onSearch, onLocationChange }) => {
             </div>
         </div>
     );
+    if (location.pathname.includes('/chat/') || location.pathname.includes('/conversations')) {
+        return null;
+    }
 
     return (
         <>
