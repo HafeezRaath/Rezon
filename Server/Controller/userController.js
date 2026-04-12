@@ -5,7 +5,7 @@ import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
 import crypto from 'crypto'; // ✅ Built-in, 0% Crash Rate
 import sharp from 'sharp';
-//import { decode } from 'jpeg-js';
+
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';

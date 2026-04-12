@@ -46,7 +46,7 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
   const registerInBackend = async (firebaseUser) => {
     try {
       const token = await firebaseUser.getIdToken();
-      await axios.post(`${API_BASE_URL}/register`, {
+     await axios.post(`https://rezon.up.railway.app/api/register`, {
         uid: firebaseUser.uid,
         name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
         email: firebaseUser.email

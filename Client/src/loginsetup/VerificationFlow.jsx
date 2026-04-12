@@ -150,7 +150,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             if (!token) throw new Error("Session expired. Please login again.");
 
             // 1. Update Profile Info
-            await axios.put(`${API_BASE_URL}/users/me`, {
+            await axios.put(`https://rezon.up.railway.app/api/users/me`, {
                 phoneNumber: phone,
                 password: password,
                 isPhoneVerified: true
