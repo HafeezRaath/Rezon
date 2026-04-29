@@ -35,6 +35,29 @@ const UserSchema = new mongoose.Schema({
         default: "" 
     },
     
+    // 🔥 NEW: CNIC / Identity Information (Auto-extracted via OCR)
+    fatherName: {
+        type: String,
+        default: "",
+        trim: true
+    },
+    cnicNumber: {
+        type: String,
+        default: "",
+        unique: true,
+        sparse: true,
+        index: true
+    },
+    dateOfBirth: {
+        type: String,
+        default: ""
+    },
+    gender: {
+        type: String,
+        enum: ['Male', 'Female', 'Other', ''],
+        default: ''
+    },
+    
     // Identity Verification
     isVerified: {
         type: Boolean,
@@ -49,17 +72,39 @@ const UserSchema = new mongoose.Schema({
         default: 'Unverified',
         index: true
     },
+    
+    // 🔥 NEW: KYC Documents & Details
+    kycDocuments: {
+        idFront: { type: String, default: "" },
+        idBack: { type: String, default: "" },
+        selfie: { type: String, default: "" }
+    },
+    kycDetails: {
+        method: { type: String, default: "" },
+        aiCheck: { type: Boolean, default: false },
+        faceMatchScore: { type: Number, default: 0 },
+        reason: { type: String, default: "" },
+        ocrData: {
+            extracted: { type: Boolean, default: false },
+            rawText: { type: String, default: "" },
+            confidence: { type: String, default: "" }
+        }
+    },
+    verifiedAt: {
+        type: Date,
+        default: null
+    },
 
     // Rating & Reviews
     rating: { type: Number, default: 0, min: 0, max: 5 },
     totalReviews: { type: Number, default: 0 },
     
-    // Admin/Safety - 🔧 FIXED: Added status & isBanned
+    // Admin/Safety
     warningCount: { type: Number, default: 0 },
     isFlagged: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
-    isBanned: { type: Boolean, default: false },           // ✅ ADDED
-    status: {                                               // ✅ ADDED
+    isBanned: { type: Boolean, default: false },
+    status: {
         type: String, 
         enum: ['Active', 'Suspended', 'Banned'], 
         default: 'Active' 
@@ -88,7 +133,8 @@ const UserSchema = new mongoose.Schema({
 // Indexes
 UserSchema.index({ isVerified: 1, verificationStatus: 1 });
 UserSchema.index({ isActive: 1, isFlagged: 1 });
-UserSchema.index({ isBanned: 1, status: 1 });                    // ✅ ADDED
+UserSchema.index({ isBanned: 1, status: 1 });
+UserSchema.index({ cnicNumber: 1 }, { sparse: true, unique: true });
 UserSchema.index({ "notifications.read": 1, "notifications.createdAt": -1 });
 
 export default mongoose.model("User", UserSchema);

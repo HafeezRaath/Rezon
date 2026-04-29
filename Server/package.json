@@ -26,7 +26,8 @@
     "openai": "^4.0.0",
     "sharp": "^0.33.5",
     "socket.io": "^4.7.0",
-    "streamifier": "^0.1.1"
+    "streamifier": "^0.1.1",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"

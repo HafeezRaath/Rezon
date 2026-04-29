@@ -2,30 +2,26 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { FcGoogle } from "react-icons/fc";
-import { FaEye, FaEyeSlash, FaSpinner, FaTimes, FaEnvelope, FaPhone, FaLock } from "react-icons/fa";
-import Signinpopup from "../Components/Signinpopup";
-import PhoneLogin from "../Components/PhoneLogin";
+import { FaEye, FaEyeSlash, FaSpinner, FaTimes, FaEnvelope, FaPhone, FaLock, FaApple, FaFacebook } from "react-icons/fa";
 import { auth, google } from "../firebase.config";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import toast from "react-hot-toast";
 import axios from "axios";
+import Signinpopup from "./Signinpopup";
+import PhoneLogin from "./PhoneLogin";
 
-// 🔧 API Config
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 
-export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
+export default function LoginPopup({ onClose, isOpen }) {
   const [showPassword, setShowPassword] = useState(false);
-  const [loginMethod, setLoginMethod] = useState("email");
+  const [loginMethod, setLoginMethod] = useState("social"); // social | email | phone
   const [showSignin, setShowSignin] = useState(false);
-  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-
   const navigate = useNavigate();
 
-  // Prevent scroll
+  // Prevent background scroll
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -33,304 +29,230 @@ export default function LoginPopup({ onClose, isOpen, onSwitchToSignin }) {
     }
   }, [isOpen]);
 
-  // Escape key
-  useEffect(() => {
-    const handleEscape = (e) => { if (e.key === 'Escape') onClose(); };
-    if (isOpen) {
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen, onClose]);
-
-  // 🔧 FIXED: Register user in backend after Firebase login
-  const registerInBackend = async (firebaseUser) => {
+  // 🔥 FIXED: Backend sync function - EXACTLY like Signinpopup
+  const syncUserToBackend = async (firebaseUser) => {
     try {
-      const token = await firebaseUser.getIdToken();
-     await axios.post(`https://rezon.up.railway.app/api/register`, {
+      const idToken = await firebaseUser.getIdToken(true);
+      
+      // 🔥 Store token in localStorage (like Signinpopup does)
+      localStorage.setItem("firebaseIdToken", idToken);
+
+      // 🔥 Send EXACT same data as Signinpopup
+      await axios.post(`${API_BASE_URL}/register`, {
         uid: firebaseUser.uid,
-        name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-        email: firebaseUser.email
+        name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Rezon User",
+        email: firebaseUser.email,
+        photoURL: firebaseUser.photoURL,
+        provider: firebaseUser.providerData?.[0]?.providerId || "password"
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json"
+        }
       });
+
+      console.log("✅ User synced to backend successfully");
+      return true;
+
     } catch (err) {
-      console.log("Backend register error (might already exist):", err.message);
+      // 🔥 Same error handling as Signinpopup - don't fail login if backend sync fails
+      console.error("Backend sync error:", err.response?.data || err.message);
+      // User is still logged in via Firebase, backend sync is best-effort
+      return false;
     }
   };
 
-  const handleEmailLogin = useCallback(async (e) => {
+  // 🔥 FIXED: Email login with backend sync
+  const handleEmailLogin = async (e) => {
     e.preventDefault();
-    
     if (!email.trim() || !password) {
-      toast.error("Please fill in all fields!");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      toast.error("Please enter a valid email address");
+      toast.error("Please enter email and password");
       return;
     }
 
     setLoading(true);
+    const toastId = toast.loading("Logging in...");
+
     try {
+      // Step 1: Firebase Authentication
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
-      
-      if (result.user) {
-        const token = await result.user.getIdToken();
-        localStorage.setItem('firebaseIdToken', token);
-        
-        // 🔧 Register in backend
-        await registerInBackend(result.user);
-        
-        toast.success("Welcome back! Login successful.");
-        onClose();
-        navigate("/");
-      }
+      const firebaseUser = result.user;
+
+      if (!firebaseUser) throw new Error("Login failed - no user data");
+
+      // Step 2: Sync to backend (same as Signinpopup)
+      await syncUserToBackend(firebaseUser);
+
+      toast.success("Welcome back! Login successful.", { id: toastId });
+      onClose();
+      navigate("/");
+
     } catch (error) {
-      console.error("Login Error:", error);
+      console.error("Email login error:", error);
       
-      let errorMessage = "Login failed. Please try again.";
-      switch (error.code) {
-        case 'auth/user-not-found':
-          errorMessage = "No account found with this email.";
-          break;
-        case 'auth/wrong-password':
-          errorMessage = "Incorrect password. Please try again.";
-          break;
-        case 'auth/invalid-email':
-          errorMessage = "Invalid email address format.";
-          break;
-        case 'auth/user-disabled':
-          errorMessage = "This account has been disabled.";
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = "Too many failed attempts. Please try again later.";
-          break;
-        default:
-          errorMessage = error.message;
-      }
-      
-      toast.error(errorMessage);
+      const errorMessages = {
+        "auth/user-not-found": "No account found with this email. Please sign up first.",
+        "auth/wrong-password": "Incorrect password. Please try again.",
+        "auth/invalid-credential": "Invalid email or password.",
+        "auth/invalid-email": "Invalid email address.",
+        "auth/user-disabled": "This account has been disabled.",
+        "auth/too-many-requests": "Too many failed attempts. Please try again later.",
+      };
+
+      toast.error(errorMessages[error.code] || error.message || "Login failed", { id: toastId });
     } finally {
       setLoading(false);
     }
-  }, [email, password, onClose, navigate]);
+  };
 
-  const handleGoogleLogin = useCallback(async () => {
-    if (googleLoading) return;
-    
-    setGoogleLoading(true);
+  // 🔥 FIXED: Google login with backend sync (matches Signinpopup exactly)
+  const handleGoogleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    const toastId = toast.loading("Connecting to Google...");
+
     try {
       const result = await signInWithPopup(auth, google);
-      
-      if (result.user) {
-        const token = await result.user.getIdToken();
-        localStorage.setItem('firebaseIdToken', token);
-        
-        // 🔧 Register in backend
-        await registerInBackend(result.user);
-        
-        toast.success("Welcome! Google login successful.");
-        onClose();
-        navigate("/");
-      }
+      const firebaseUser = result.user;
+
+      if (!firebaseUser) throw new Error("No user data from Google");
+
+      // 🔥 Sync to backend (same pattern as Signinpopup)
+      await syncUserToBackend(firebaseUser);
+
+      toast.success(`Welcome ${firebaseUser.displayName || "User"}! 🎉`, { id: toastId });
+      onClose();
+      navigate("/");
+
     } catch (error) {
-      console.error("Google Login Error:", error);
-      
-      let errorMessage = "Google login failed.";
-      if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = "Login cancelled.";
-      } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = "Popup blocked! Please allow popups for this site.";
-      } else if (error.code === 'auth/account-exists-with-different-credential') {
-        errorMessage = "An account already exists with this email using a different method.";
-      }
-      
-      toast.error(errorMessage);
+      console.error("Google login error:", error);
+
+      const errorMessages = {
+        "auth/popup-closed-by-user": "Sign-in cancelled.",
+        "auth/popup-blocked": "Popup blocked! Please allow popups.",
+        "auth/network-request-failed": "Network error. Check your connection.",
+        "auth/cancelled-popup-request": "Sign-in cancelled.",
+      };
+
+      toast.error(errorMessages[error.code] || "Google login failed", { id: toastId });
     } finally {
-      setGoogleLoading(false);
+      setLoading(false);
     }
-  }, [googleLoading, onClose, navigate]);
-
-  const handleFinalSuccess = useCallback((userData) => {
-    toast.success("Login successful!");
-    onClose();
-    navigate("/");
-  }, [onClose, navigate]);
-
-  const handleShowSignin = useCallback(() => {
-    if (onSwitchToSignin) {
-      onSwitchToSignin();
-    } else {
-      setShowSignin(true);
-    }
-  }, [onSwitchToSignin]);
-
-  const handleCloseSignin = useCallback(() => {
-    setShowSignin(false);
-  }, []);
-
-  const switchMethod = useCallback((method) => {
-    setLoginMethod(method);
-    if (method === "phone") {
-      setEmail("");
-      setPassword("");
-    }
-  }, []);
+  };
 
   if (!isOpen) return null;
 
-  // 🎨 FIXED: Emerald + Slate Theme
   const modalContent = (
     <div 
-      className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-md bg-white shadow-2xl rounded-2xl p-6 md:p-8 border-t-4 border-emerald-600 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-md bg-white shadow-2xl rounded-3xl p-6 md:p-8 border-t-8 border-emerald-600 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
         
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-all text-xl"
-          aria-label="Close"
-        >
+        <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-all text-xl">
           <FaTimes />
         </button>
 
-        {/* 🎨 FIXED: Emerald Logo */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg mb-4">
             <span className="text-white text-2xl font-black">R</span>
           </div>
-          <h2 className="text-2xl font-black text-slate-800">
-            Welcome to <span className="text-emerald-600">Rezon</span>
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">Login to continue buying & selling</p>
+          <h2 className="text-2xl font-black text-slate-800">Welcome Back</h2>
+          <p className="text-slate-500 text-sm">Continue with <span className="text-emerald-600 font-bold">Rezon</span></p>
         </div>
 
-        {/* Toggle Buttons */}
-        <div className="flex mb-6 bg-slate-100 p-1 rounded-xl">
-          {["email", "phone"].map((method) => (
-            <button
-              key={method}
-              onClick={() => switchMethod(method)}
-              className={`flex-1 py-2.5 rounded-lg capitalize font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                loginMethod === method
-                  ? "bg-white text-emerald-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
+        {loginMethod === "social" ? (
+          <div className="space-y-3">
+            <button 
+              onClick={handleGoogleLogin} 
+              disabled={loading}
+              className="w-full bg-white border-2 border-slate-200 py-3.5 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-emerald-500 transition-all disabled:opacity-50"
             >
-              {method === "email" ? <FaEnvelope size={14} /> : <FaPhone size={14} />}
-              {method === "email" ? "Email" : "Phone"}
+              {loading ? <FaSpinner className="animate-spin" /> : <FcGoogle size={22} />}
+              {loading ? "Connecting..." : "Login with Google"}
             </button>
-          ))}
-        </div>
-
-        {loginMethod === "email" ? (
-          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <button 
+              onClick={() => setLoginMethod("email")} 
+              className="w-full bg-slate-100 py-3.5 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-50 text-slate-700 transition-all"
+            >
+              <FaEnvelope className="text-emerald-600" /> Use Email Address
+            </button>
+            <button 
+              onClick={() => setLoginMethod("phone")} 
+              className="w-full bg-slate-100 py-3.5 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-50 text-slate-700 transition-all"
+            >
+              <FaPhone className="text-emerald-600" /> Use Phone Number
+            </button>
+          </div>
+        ) : loginMethod === "email" ? (
+          <form onSubmit={handleEmailLogin} className="space-y-4 animate-in slide-in-from-right-4">
             <div className="relative">
               <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="email"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-4 pl-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all"
-                required
-                autoComplete="email"
+              <input 
+                type="email" 
+                placeholder="Email address" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                className="w-full p-4 pl-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none" 
+                required 
               />
             </div>
-
             <div className="relative">
               <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-4 pl-12 pr-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none transition-all"
-                required
-                autoComplete="current-password"
+              <input 
+                type={showPassword ? "text" : "password"} 
+                placeholder="Password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="w-full p-4 pl-12 bg-slate-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-xl outline-none" 
+                required 
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors"
-              >
-                {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
             </div>
-
-            <div className="flex justify-end">
-              <button 
-                type="button"
-                onClick={() => toast.info("Password reset coming soon!")}
-                className="text-xs text-emerald-600 font-semibold hover:underline"
-              >
-                Forgot Password?
-              </button>
-            </div>
-
             <button 
-              type="submit"
+              type="submit" 
               disabled={loading}
-              className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
             >
-              {loading ? (
-                <>
-                  <FaSpinner className="animate-spin" />
-                  Logging in...
-                </>
-              ) : (
-                "LOG IN"
-              )}
+              {loading ? <FaSpinner className="animate-spin mx-auto" /> : "LOG IN"}
             </button>
-
-            <div className="flex items-center my-6">
-              <div className="flex-1 h-px bg-slate-200"></div>
-              <span className="px-4 text-slate-400 text-xs font-bold uppercase">Or</span>
-              <div className="flex-1 h-px bg-slate-200"></div>
-            </div>
-
             <button 
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={googleLoading}
-              className="w-full bg-white border-2 border-slate-200 py-3.5 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+              type="button" 
+              onClick={() => setLoginMethod("social")} 
+              className="w-full text-slate-400 text-xs font-bold uppercase py-2 hover:text-slate-600"
             >
-              {googleLoading ? (
-                <FaSpinner className="animate-spin text-slate-600" />
-              ) : (
-                <FcGoogle size={22} />
-              )}
-              <span className="text-slate-700">
-                {googleLoading ? "Connecting..." : "Continue with Google"}
-              </span>
+              ← Back to Options
             </button>
           </form>
         ) : (
-          <div className="animate-in slide-in-from-right-4 duration-300">
-            <PhoneLogin onAuthSuccess={handleFinalSuccess} />
+          <div className="animate-in slide-in-from-right-4">
+            <PhoneLogin onAuthSuccess={onClose} />
+            <button 
+              onClick={() => setLoginMethod("social")} 
+              className="w-full text-slate-400 text-xs font-bold uppercase py-4 hover:text-slate-600"
+            >
+              ← Back to Options
+            </button>
           </div>
         )}
 
         <p className="mt-8 text-sm text-center text-slate-600">
-          Don't have an account?{" "}
-          <button
-            onClick={handleShowSignin}
-            className="text-emerald-600 font-bold hover:underline underline-offset-4 transition-colors"
+          New on Rezon?{" "}
+          <button 
+            onClick={() => setShowSignin(true)} 
+            className="text-emerald-600 font-bold hover:underline"
           >
             Sign Up
           </button>
         </p>
 
-        {/* Signin Modal */}
         {showSignin && (
           <Signinpopup 
-            onClose={handleCloseSignin} 
-            isOpen={showSignin}
-            onSwitchToLogin={() => setShowSignin(false)}
+            onClose={() => setShowSignin(false)} 
+            isOpen={showSignin} 
+            onSwitchToLogin={() => setShowSignin(false)} 
           />
         )}
       </div>

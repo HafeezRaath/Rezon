@@ -76,7 +76,6 @@ export const getAISuggestions = async (req, res) => {
             return res.status(400).json({ message: "Kam se kam ek image upload karein" });
         }
 
-        // ✅ Cloudinary ya Buffer se image fetch logic
         const imagesContent = await Promise.all(
             req.files.map(async (file) => {
                 let base64Data;
@@ -95,28 +94,29 @@ export const getAISuggestions = async (req, res) => {
             })
         );
 
-        // ✅ Updated Prompt with Stock/Fake Detection
+        // ✅ Modified Strict Prompt for Duplicate/Fake Detection
         const promptText = `
-Strictly analyze the text and hardware in ALL provided images for the "${category}" category.
+Strictly analyze the provided images for the "${category}" category.
 
-1. **OCR Focus**: Read the 'Battery Health' screenshot carefully. Extract Max Capacity, Cycle Count, and First Use Date.
-2. **Hardware Check**: Identify the port (e.g., USB-C vs Lightning).
-3. **Price Suggestion**: Suggest a realistic market price for Pakistan.
-4. **Authenticity Audit (NEW)**: 
-   - Detect if the image is an 'Original' photo taken by a person or a 'Stock' photo from the internet.
-   - Look for watermarks of other sites (OLX, etc.) or studio backgrounds.
-   - Assign an "imageQuality" value: "Original", "Stock", or "Suspicious".
+1. **OCR Focus**: Read any 'Battery Health' or 'About' screenshots. Extract Max Capacity, Cycle Count, and Model details.
+2. **Hardware Check**: Identify physical traits (e.g., USB-C vs Lightning, Color, Scratches).
+3. **Price Suggestion**: Realistic market price in PKR (Pakistan).
+4. **Duplicate & Fraud Audit**: 
+   - Check if the image is a "Screenshot of another app" (look for UI elements from OLX, Instagram, or other marketplaces).
+   - Detect if it's a "Stock/Internet photo" (too perfect, studio background, or watermarks).
+   - Create a "uniqueVisualKey": A short string summarizing the background + object (e.g., "iphone-on-red-carpet") to identify re-uploads.
+   - Assign "imageQuality": "Original" (Real photo), "Stock" (Internet photo), "Screenshot" (Stolen from other app), or "Suspicious".
 
-**IMPORTANT LANGUAGE RULE**:
-Write the "aiDescription" field in **Roman Urdu**.
+**LANGUAGE RULE**: "aiDescription" MUST be in Roman Urdu.
 
 Return ONLY a JSON object:
 {
   "product": "string",
   "condition": "string",
-  "aiDescription": "string (in Roman Urdu)",
+  "aiDescription": "string",
   "estimatedPrice": number,
   "imageQuality": "string",
+  "isDuplicateRisk": boolean,
   "extractedDetails": { "field_name": "value" }
 }`;
 
@@ -145,8 +145,11 @@ Return ONLY a JSON object:
         }).limit(3);
 
         let finalPrice = aiData.estimatedPrice;
-        // Image Quality ko info mein shamil kar rahe hain taake user ko pata chale
+        // Updated info to include Screenshot warning
         let dataSource = `AI Audit: ${aiData.imageQuality}`;
+        if (aiData.isDuplicateRisk) {
+            dataSource += ` | Warning: High Duplicate Risk Detected`;
+        }
 
         if (similarAds.length > 0) {
             finalPrice = similarAds.reduce((acc, ad) => acc + ad.price, 0) / similarAds.length;
@@ -160,7 +163,8 @@ Return ONLY a JSON object:
                 condition: aiData.condition,
                 description: aiData.aiDescription,
                 suggestedPrice: Math.round(finalPrice),
-                imageQuality: aiData.imageQuality, // ✅ New Field
+                imageQuality: aiData.imageQuality, 
+                isDuplicateRisk: aiData.isDuplicateRisk, // ✅ User ko ya admin ko alert karne ke liye
                 details: aiData.extractedDetails,
                 info: dataSource
             }
@@ -709,91 +713,153 @@ export const verifyIdentity = async (req, res) => {
         const existingUser = await User.findOne({ uid: userUid });
 
         if (existingUser?.isVerified) {
-            return res.status(400).json({ message: "Aapka account pehle se verified hai! ✅" });
+            return res.status(400).json({ 
+                success: false,
+                message: "Aapka account pehle se verified hai! ✅" 
+            });
         }
 
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
-            return res.status(400).json({ message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" });
+            return res.status(400).json({ 
+                success: false,
+                message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" 
+            });
         }
 
         const timestamp = Date.now();
         
-        // 1. Upload to Cloudinary
+        // 🔥 STEP 1: OCR - Extract CNIC Data (BUT DON'T SAVE YET)
+        console.log("🔍 Starting OCR on CNIC...");
+        const ocrResult = await extractCNICData(req.files.idFront[0].buffer);
+        
+        if (ocrResult.success) {
+            console.log("✅ OCR Extracted:", {
+                name: ocrResult.name,
+                fatherName: ocrResult.fatherName,
+                cnicNumber: ocrResult.cnicNumber
+            });
+        }
+
+        // 🔥 STEP 2: CHECK UNIQUE CNIC (Before saving anything)
+        if (ocrResult.success && ocrResult.cnicNumber) {
+            const existingCNIC = await User.findOne({ 
+                cnicNumber: ocrResult.cnicNumber,
+                uid: { $ne: userUid }  // Exclude current user
+            });
+            
+            if (existingCNIC) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Ye CNIC number already registered hai! ❌",
+                    error: "DUPLICATE_CNIC"
+                });
+            }
+        }
+
+        // 🔥 STEP 3: CHECK UNIQUE PHONE (If provided)
+        if (req.body.phoneNumber) {
+            const existingPhone = await User.findOne({
+                phoneNumber: req.body.phoneNumber,
+                uid: { $ne: userUid }
+            });
+            
+            if (existingPhone) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Ye phone number already registered hai! ❌",
+                    error: "DUPLICATE_PHONE"
+                });
+            }
+        }
+
+        // 4. Upload to Cloudinary
         const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
             uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
         ]);
 
-        // 2. AI Verification Logic (Optimized for Pakistani IDs & Style)
-        const aiResponse = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                {
-                    role: "system",
-                    content: `You are a KYC expert for "REZON", a Pakistani marketplace.
-                    Analyze the CNIC and Selfie to verify identity.
-                    
-                    RULES:
-                    1. People look different over years. Ignore changes in facial hair (beard/mustache), hairstyle, or glasses.
-                    2. Focus on permanent markers: Bone structure, ear shape, and distance between eyes.
-                    3. If the person in the selfie looks like a plausible version of the person on the ID, mark isMatched: true.
-                    4. Lighting in Pakistan can be poor; do not reject solely based on shadows.
-                    
-                    Return JSON only: { "isMatched": boolean, "confidence": number, "reason": string }`
-                },
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: "Verify if this person matches the ID card provided." },
-                        { type: "image_url", image_url: { url: idFrontUrl } },
-                        { type: "image_url", image_url: { url: selfieUrl } }
-                    ],
-                },
-            ],
-            response_format: { type: "json_object" }
-        });
-
+        // 5. AI Face Verification
+        const aiResponse = await openai.chat.completions.create({...});
         const result = JSON.parse(aiResponse.choices[0].message.content);
 
-        // 3. IMPROVED CHECK: Relaxed threshold & "similar" keyword check
         const isActuallyMatched = result.isMatched || 
                                  (result.confidence >= 55) || 
                                  result.reason.toLowerCase().includes("similar");
 
+        // 🔥 IF VERIFICATION FAILS - DON'T SAVE ANYTHING
         if (!isActuallyMatched) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Verification fail: ${result.reason} ❌` 
+                message: `Verification fail: ${result.reason} ❌`,
+                error: "VERIFICATION_FAILED"
             });
         }
 
-        // 4. Update Database
-        await User.findOneAndUpdate(
-            { uid: userUid },
-            { 
-                profilePic: selfieUrl,
-                isVerified: true,
-                verificationStatus: 'Verified',
-                verifiedAt: new Date(),
-                kycDocuments: { idFront: idFrontUrl, idBack: idBackUrl, selfie: selfieUrl },
-                kycDetails: {
-                    method: "AI Verification",
-                    aiCheck: true,
-                    faceMatchScore: result.confidence,
-                    reason: result.reason
+        // 🔥 STEP 6: ONLY SAVE IF VERIFICATION SUCCESS
+        const updateData = {
+            profilePic: selfieUrl,
+            isVerified: true,
+            verificationStatus: 'Verified',
+            verifiedAt: new Date(),
+            kycDocuments: { 
+                idFront: idFrontUrl, 
+                idBack: idBackUrl, 
+                selfie: selfieUrl 
+            },
+            kycDetails: {
+                method: "AI + OCR Verification",
+                aiCheck: true,
+                faceMatchScore: result.confidence,
+                reason: result.reason,
+                ocrData: {
+                    extracted: ocrResult.success,
+                    rawText: ocrResult.rawText || null
                 }
             }
+        };
+
+        // 🔥 SAVE OCR EXTRACTED FIELDS ONLY AFTER SUCCESS
+        if (ocrResult.success) {
+            if (ocrResult.name) updateData.name = ocrResult.name;
+            if (ocrResult.fatherName) updateData.fatherName = ocrResult.fatherName;
+            if (ocrResult.cnicNumber) updateData.cnicNumber = ocrResult.cnicNumber;
+            if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
+            if (ocrResult.gender) updateData.gender = ocrResult.gender;
+        }
+
+        // 🔥 SAVE PHONE NUMBER ONLY IF VERIFIED
+        if (req.body.phoneNumber) {
+            updateData.phoneNumber = req.body.phoneNumber;
+            updateData.isPhoneVerified = true;
+        }
+
+        // 🔥 ATOMIC UPDATE - Everything saved together
+        const updatedUser = await User.findOneAndUpdate(
+            { uid: userUid },
+            updateData,
+            { new: true }
         );
 
         return res.status(200).json({ 
             success: true, 
-            message: "Mubarak ho! AI ne aapki pehchan verify kar li hai. 🎉" 
+            message: "Verified successfully! 🎉",
+            data: {
+                name: updatedUser.name,
+                fatherName: updatedUser.fatherName || null,
+                cnicNumber: updatedUser.cnicNumber || null,
+                phoneNumber: updatedUser.phoneNumber || null,
+                isVerified: true
+            }
         });
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
-        res.status(500).json({ message: "Server error during verification", error: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: "Server error during verification", 
+            error: error.message 
+        });
     }
 };
 

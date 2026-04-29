@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 import PostAd from "./postad"; 
 import UpdateAd from "./updatead"; 
-import CategorySelector from "../Components/CategorySelector"; 
+//import CategorySelector from "../Components/CategorySelector"; 
 
 // 🔧 FIXED: Space removed
 const API_BASE_URL = "https://rezon.up.railway.app/api";
@@ -23,7 +23,7 @@ const API_BASE_URL = "https://rezon.up.railway.app/api";
 const Ads = ({ onClose, user }) => {
     const [ads, setAds] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showCategorySelector, setShowCategorySelector] = useState(false);
+   // const [showCategorySelector, setShowCategorySelector] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showPostModal, setShowPostModal] = useState(false);
     const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -79,7 +79,7 @@ const Ads = ({ onClose, user }) => {
     }, [fetchMyAds]);
 
     // 🎯 Category selection handler
-    const handleCategorySelect = useCallback((categoryCode) => {
+  //  const handleCategorySelect = useCallback((categoryCode) => {
         setSelectedCategory(categoryCode);
         setShowCategorySelector(false);
         setShowPostModal(true);
@@ -213,12 +213,12 @@ if (!confirmed) return;
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">No ads yet</h3>
             <p className="text-slate-500 mb-6">Start selling by posting your first ad</p>
-            <button 
+            {/* <button 
                 onClick={() => setShowCategorySelector(true)}
                 className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
             >
                 Post Your First Ad
-            </button>
+            </button> */}
         </div>
     ), [setShowCategorySelector]);
 
@@ -244,10 +244,10 @@ if (!confirmed) return;
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button
+                        {/* <button
                             onClick={() => setShowCategorySelector(true)}
                             className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 shadow-lg transition-all font-bold text-sm active:scale-95"
-                        >
+                        > */}
                             <FaPlus size={14} /> New Ad
                         </button>
                         <button
@@ -370,12 +370,12 @@ if (!confirmed) return;
             </div>
 
             {/* Modals */}
-            {showCategorySelector && (
-                <CategorySelector 
-                    onClose={() => setShowCategorySelector(false)} 
-                    onCategorySelect={handleCategorySelect}
-                />
-            )}
+            // {showCategorySelector && (
+            //     <CategorySelector 
+            //         onClose={() => setShowCategorySelector(false)} 
+            //         onCategorySelect={handleCategorySelect}
+            //     />
+            // )}
 
             {showPostModal && selectedCategory && (
                 <PostAd 

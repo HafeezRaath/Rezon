@@ -173,6 +173,16 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         }
     };
 
+    // 🔥 FIXED: Consistent chat navigation - uses /chat/list for inbox
+    const handleChatClick = useCallback(() => {
+        if (!user) {
+            setShowLogin(true);
+            return;
+        }
+        navigate('/chat/list');
+        setShowMobileMenu(false);
+    }, [user, navigate]);
+
     // 🔥 MOBILE MENU COMPONENT
     const MobileMenu = () => (
         <div
@@ -291,9 +301,10 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
                                 <FaHistory className="text-slate-500" /> My Active Ads
                             </Link>
-                            <Link to="/conversationlist" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                            {/* 🔥 FIXED: Consistent chat link */}
+                            <button onClick={handleChatClick} className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl text-left">
                                 <FaComments className="text-slate-500" /> Inbox Messages
-                            </Link>
+                            </button>
                             <button
                                 onClick={() => { setShowMobileMenu(false); handleLogout(); }}
                                 className="w-full flex items-center gap-4 px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors mt-4"
@@ -357,7 +368,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
 
-    // 🔥 BOTTOM MOBILE NAV
+    // 🔥 BOTTOM MOBILE NAV - FIXED LINKS
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
             <div className="flex items-center justify-around py-2">
@@ -378,12 +389,16 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     </div>
                     <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
                 </button>
-                <Link to="/conversations" className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('conversations') ? 'text-emerald-400' : 'text-slate-400'}`}>
+                {/* 🔥 FIXED: Consistent chat navigation */}
+                <button 
+                    onClick={handleChatClick}
+                    className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('chat') ? 'text-emerald-400' : 'text-slate-400'}`}
+                >
                     <FaComments size={20} />
                     <span className="text-[10px] font-medium">Chat</span>
-                </Link>
+                </button>
                 <button
-                    onClick={() => user ? setShowDropdown(true) : setShowLogin(true)}
+                    onClick={() => user ? navigate('/profile') : setShowLogin(true)}
                     className={`flex flex-col items-center gap-1 p-2 ${user ? 'text-emerald-400' : 'text-slate-400'}`}
                 >
                     {user ? (
@@ -396,7 +411,9 @@ const Navbar = ({ onSearch, onLocationChange }) => {
             </div>
         </div>
     );
-    if (location.pathname.includes('/chat/') || location.pathname.includes('/conversations')) {
+    
+    // 🔥 FIXED: Hide navbar on ALL chat pages (both /chat/list and /chat/:id)
+    if (location.pathname.startsWith('/chat')) {
         return null;
     }
 
@@ -479,14 +496,15 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 )}
                             </div>
 
+                            {/* 🔥 FIXED: Desktop chat link - consistent with /chat/list */}
                             {user && (
-                                <Link
-                                    to="/conversations"
+                                <button
+                                    onClick={handleChatClick}
                                     className="hidden md:flex p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative"
                                 >
                                     <FaComments size={22} />
                                     <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-slate-900"></span>
-                                </Link>
+                                </button>
                             )}
 
                             <div className="relative hidden md:block" ref={notifRef}>
@@ -525,6 +543,8 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                                 </div>
                                                 <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaUserCircle /> My Profile</Link>
                                                 <Link to="/my-ads" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaHistory /> My Ads</Link>
+                                                {/* 🔥 FIXED: Chat link in dropdown */}
+                                                <button onClick={() => { setShowDropdown(false); handleChatClick(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors text-left"><FaComments /> Messages</button>
                                                 {isAdmin(user.uid) && <Link to="/admin/dashboard" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 transition-colors"><FaUserShield /> Admin Panel</Link>}
                                                 <div className="border-t border-slate-800 mt-2">
                                                     <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-rose-400 hover:bg-rose-500/10 transition-colors"><FaSignOutAlt /> Logout</button>

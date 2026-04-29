@@ -115,13 +115,9 @@ route.get("/check-phone", authenticate, async (req, res) => {
     try {
         const { phone } = req.query;
         const exists = await User.findOne({ phoneNumber: phone });
-        res.json({
-            exists: !!exists
-        });
+        res.json({ exists: !!exists });
     } catch (error) {
-        res.status(500).json({
-            message: "Error checking phone"
-        });
+        res.status(500).json({ message: "Error checking phone" });
     }
 });
 
@@ -145,16 +141,11 @@ route.post(
 route.get("/notifications", authenticate, async (req, res) => {
     try {
         const user = await User.findOne({ uid: req.user.uid });
-        res.status(200).json({
-            notifications: user?.notifications || []
-        });
+        res.status(200).json({ notifications: user?.notifications || [] });
     } catch (error) {
-        res.status(500).json({
-            message: "Notifications fetch nahi ho saki"
-        });
+        res.status(500).json({ message: "Notifications fetch nahi ho saki" });
     }
 });
-
 
 route.put("/notifications/:id/read", authenticate, async (req, res) => {
     try {
@@ -164,12 +155,9 @@ route.put("/notifications/:id/read", authenticate, async (req, res) => {
         );
         res.status(200).json({ message: "Marked as read" });
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to mark as read"
-        });
+        res.status(500).json({ message: "Failed to mark as read" });
     }
 });
-
 
 route.put("/notifications/read-all", authenticate, async (req, res) => {
     try {
@@ -177,16 +165,11 @@ route.put("/notifications/read-all", authenticate, async (req, res) => {
             { uid: req.user.uid },
             { $set: { "notifications.$[].read": true } }
         );
-        res.status(200).json({
-            message: "All marked as read"
-        });
+        res.status(200).json({ message: "All marked as read" });
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to mark all as read"
-        });
+        res.status(500).json({ message: "Failed to mark all as read" });
     }
 });
-
 
 route.delete("/notifications/:id", authenticate, async (req, res) => {
     try {
@@ -194,13 +177,9 @@ route.delete("/notifications/:id", authenticate, async (req, res) => {
             { uid: req.user.uid },
             { $pull: { notifications: { _id: req.params.id } } }
         );
-        res.status(200).json({
-            message: "Notification deleted"
-        });
+        res.status(200).json({ message: "Notification deleted" });
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to delete"
-        });
+        res.status(500).json({ message: "Failed to delete" });
     }
 });
 
@@ -208,40 +187,20 @@ route.delete("/notifications/:id", authenticate, async (req, res) => {
 // ================= AI & ADS =================
 
 // 🤖 AI suggestions
-route.post(
-    "/ad/ai-assist",
-    authenticate,
-    uploadMemory.array("images", 10),
-    getAISuggestions
-);
-
+route.post("/ad/ai-assist", authenticate, uploadMemory.array("images", 10), getAISuggestions);
 
 // ☁️ Create Ad
-route.post(
-    "/ad",
-    authenticate,
-    uploadMemory.array("images", 10),
-    create
-);
-
+route.post("/ad", authenticate, uploadMemory.array("images", 10), create);
 
 // 📄 Public ads
 route.get("/ads", getAllAds);
 route.get("/ads/:id", getAdById);
 
-
 // 👤 User ads
 route.get("/myads", authenticate, getMyAds);
 
-
 // ✏️ Update Ad
-route.put(
-    "/ads/:id",
-    authenticate,
-    uploadMemory.array("images", 5),
-    updateAd
-);
-
+route.put("/ads/:id", authenticate, uploadMemory.array("images", 5), updateAd);
 
 // ❌ Delete Ad
 route.delete("/ads/:id", authenticate, deleteAd);
@@ -255,6 +214,7 @@ route.post("/ad/:adId/mark-sold", authenticate, markAsSold);
 
 route.get("/can-review/:adId", authenticate, canReview);
 
+// 🔥 FIXED: Reviews route - proper endpoint
 route.post("/reviews", authenticate, createReview);
 
 route.get("/reviews/seller/:sellerId", getSellerReviews);
@@ -262,15 +222,18 @@ route.get("/reviews/seller/:sellerId", getSellerReviews);
 
 // ================= REPORT SYSTEM =================
 
+// 🔥 FIXED: Reports route - proper endpoint
 route.post("/reports", authenticate, createReport);
 
 
 // ================= CHAT SYSTEM =================
 
-route.get("/chat/list/:userId", authenticate, getChatList);
+// 🔥 FIXED: Chat list route - no userId in URL, uses auth token
+route.get("/chat/list", authenticate, getChatList);
 
 route.get("/chat/:chatId", authenticate, getChatMessages);
 
+// 🔥 FIXED: Start chat - proper endpoint for initiating chat
 route.post("/chat/start", authenticate, startChat);
 
 route.post("/chat/:chatId/message", authenticate, sendMessage);
