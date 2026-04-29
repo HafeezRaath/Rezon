@@ -15,7 +15,6 @@ import {
 } from "react-icons/fa";
 import PostAd from "./postad"; 
 import UpdateAd from "./updatead"; 
-//import CategorySelector from "../Components/CategorySelector"; 
 
 // 🔧 FIXED: Space removed
 const API_BASE_URL = "https://rezon.up.railway.app/api";
@@ -23,8 +22,6 @@ const API_BASE_URL = "https://rezon.up.railway.app/api";
 const Ads = ({ onClose, user }) => {
     const [ads, setAds] = useState([]);
     const [loading, setLoading] = useState(true);
-   // const [showCategorySelector, setShowCategorySelector] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState(null);
     const [showPostModal, setShowPostModal] = useState(false);
     const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [selectedAd, setSelectedAd] = useState(null);
@@ -78,45 +75,35 @@ const Ads = ({ onClose, user }) => {
         fetchMyAds();
     }, [fetchMyAds]);
 
-    // 🎯 Category selection handler
-  //  const handleCategorySelect = useCallback((categoryCode) => {
-        setSelectedCategory(categoryCode);
-        setShowCategorySelector(false);
-        setShowPostModal(true);
-    }, []);
-
     const handlePostAdClose = useCallback(() => {
         setShowPostModal(false);
-        setSelectedCategory(null);
     }, []);
 
-    // 🗑️ Delete handler with optimistic UI - 🔧 FIXED: Better toast handling
     // 🗑️ Delete handler with confirmation
-const handleDelete = useCallback(async (id) => {
-    // ✅ YEH LINE ADD KAREIN - confirmation dialog
-   const confirmed = window.confirm("Are you sure you want to delete this ad?");
-if (!confirmed) return;
+    const handleDelete = useCallback(async (id) => {
+        const confirmed = window.confirm("Are you sure you want to delete this ad?");
+        if (!confirmed) return;
 
-    const authHeaders = getAuthHeaders();
-    if (!authHeaders) return;
+        const authHeaders = getAuthHeaders();
+        if (!authHeaders) return;
 
-    // Optimistic update
-    const previousAds = [...ads];
-    setAds(prev => prev.filter(ad => ad._id !== id));
+        // Optimistic update
+        const previousAds = [...ads];
+        setAds(prev => prev.filter(ad => ad._id !== id));
 
-    try {
-        await axios.delete(`${API_BASE_URL}/ads/${id}`, authHeaders);
-        toast.success("Ad deleted successfully!");
-    } catch (error) {
-        // Rollback on error
-        setAds(previousAds);
-        console.error("Delete Error:", error);
-        const errorMsg = error.response?.status === 403 
-            ? "You don't have permission to delete this ad"
-            : "Failed to delete ad. Please try again.";
-        toast.error(errorMsg);
-    }
-}, [ads, getAuthHeaders]);
+        try {
+            await axios.delete(`${API_BASE_URL}/ads/${id}`, authHeaders);
+            toast.success("Ad deleted successfully!");
+        } catch (error) {
+            // Rollback on error
+            setAds(previousAds);
+            console.error("Delete Error:", error);
+            const errorMsg = error.response?.status === 403 
+                ? "You don't have permission to delete this ad"
+                : "Failed to delete ad. Please try again.";
+            toast.error(errorMsg);
+        }
+    }, [ads, getAuthHeaders]);
 
     // ✏️ Edit handler
     const handleEdit = useCallback((ad) => {
@@ -205,7 +192,7 @@ if (!confirmed) return;
         };
     }, []);
 
-    // 🎨 Memoized empty state - 🔧 FIXED: Emerald theme
+    // 🎨 Memoized empty state
     const EmptyState = useMemo(() => (
         <div className="text-center py-16 px-4">
             <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -213,14 +200,14 @@ if (!confirmed) return;
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">No ads yet</h3>
             <p className="text-slate-500 mb-6">Start selling by posting your first ad</p>
-            {/* <button 
-                onClick={() => setShowCategorySelector(true)}
+            <button 
+                onClick={() => setShowPostModal(true)}
                 className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
             >
                 Post Your First Ad
-            </button> */}
+            </button>
         </div>
-    ), [setShowCategorySelector]);
+    ), []);
 
     // 🔧 FIXED: Close handler with stopPropagation
     const handleBackdropClick = useCallback((e) => {
@@ -235,7 +222,7 @@ if (!confirmed) return;
             onClick={handleBackdropClick}
         >
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-                {/* Header - 🔧 FIXED: Emerald theme */}
+                {/* Header */}
                 <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-white sticky top-0 z-10">
                     <div>
                         <h2 className="text-2xl font-black text-slate-800">My Ads</h2>
@@ -244,10 +231,10 @@ if (!confirmed) return;
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        {/* <button
-                            onClick={() => setShowCategorySelector(true)}
+                        <button
+                            onClick={() => setShowPostModal(true)}
                             className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 shadow-lg transition-all font-bold text-sm active:scale-95"
-                        > */}
+                        >
                             <FaPlus size={14} /> New Ad
                         </button>
                         <button
@@ -370,18 +357,10 @@ if (!confirmed) return;
             </div>
 
             {/* Modals */}
-            // {showCategorySelector && (
-            //     <CategorySelector 
-            //         onClose={() => setShowCategorySelector(false)} 
-            //         onCategorySelect={handleCategorySelect}
-            //     />
-            // )}
-
-            {showPostModal && selectedCategory && (
+            {showPostModal && (
                 <PostAd 
                     onClose={handlePostAdClose} 
                     onAdAdded={handleAdAdded} 
-                    category={selectedCategory}
                     user={user}
                 />
             )}
@@ -396,7 +375,7 @@ if (!confirmed) return;
                 />
             )}
 
-            {/* Mark as Sold Modal - 🔧 FIXED: Emerald theme */}
+            {/* Mark as Sold Modal */}
             {showSoldModal && selectedAdForSold && (
                 <div 
                     className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center z-[60] p-4 animate-in fade-in"

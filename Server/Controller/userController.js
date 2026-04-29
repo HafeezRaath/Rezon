@@ -780,7 +780,20 @@ export const verifyIdentity = async (req, res) => {
         ]);
 
         // 5. AI Face Verification
-        const aiResponse = await openai.chat.completions.create({...});
+        const aiResponse = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { \"isMatched\": boolean, \"confidence\": number, \"reason\": \"string\" }" },
+                        { type: "image_url", image_url: { url: idFrontUrl } },
+                        { type: "image_url", image_url: { url: selfieUrl } }
+                    ],
+                },
+            ],
+            response_format: { type: "json_object" },
+        });
         const result = JSON.parse(aiResponse.choices[0].message.content);
 
         const isActuallyMatched = result.isMatched || 
