@@ -227,46 +227,54 @@ const AllAds = ({ user }) => {
     }, [searchTerm, activeCategory, ads, sortBy]);
 
     // 🔥 FIXED: Fetch Seller Details - includes phone number
-    useEffect(() => {
-        const fetchSeller = async () => {
-            const uid = profileModalUid || selectedAd?.posted_by_uid;
-            if (!uid) return;
+   // 🔥 FIXED: Fetch Seller Details - includes phone number from AD + Profile
+useEffect(() => {
+    const fetchSeller = async () => {
+        const uid = profileModalUid || selectedAd?.posted_by_uid;
+        if (!uid) return;
 
-            try {
-                if (profileModalUid) setLoadingReviews(true);
-                
-                // 🔥 FIXED: Fetch from /users/:userId endpoint for full profile
-                const userRes = await axios.get(`${API_BASE_URL}/users/${uid}`, {
-                    timeout: 10000
-                }).catch(() => ({ data: null }));
-                
-                const reviewsRes = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, {
-                    timeout: 10000
-                });
-                
-                const reviews = reviewsRes.data?.reviews || [];
-                const seller = userRes.data || reviewsRes.data?.seller || null;
-                const avg = reviews.length > 0 
-                    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
-                    : "0.0";
+        try {
+            if (profileModalUid) setLoadingReviews(true);
+            
+            // 🔥 FIXED: Fetch from /users/:userId endpoint for full profile
+            const userRes = await axios.get(`${API_BASE_URL}/users/${uid}`, {
+                timeout: 10000
+            }).catch(() => ({ data: null }));
+            
+            const reviewsRes = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, {
+                timeout: 10000
+            });
+            
+            const reviews = reviewsRes.data?.reviews || [];
+            const seller = userRes.data || reviewsRes.data?.seller || null;
+            const avg = reviews.length > 0 
+                ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
+                : "0.0";
 
-                if (profileModalUid) {
-                    setSellerReviews(reviews);
-                    setSellerInfo(seller);
-                } else {
-                    setSellerTrust({ avg, total: reviews.length });
-                    // 🔥 FIXED: Get phone from multiple possible fields
-                    const phone = seller?.phoneNumber || seller?.phone || seller?.mobile || selectedAd?.sellerPhone || null;
-                    setSellerPhone(phone);
-                }
-                setLoadingReviews(false);
-            } catch (err) { 
-                console.error("Seller fetch error:", err);
-                setLoadingReviews(false);
+            if (profileModalUid) {
+                setSellerReviews(reviews);
+                setSellerInfo(seller);
+            } else {
+                setSellerTrust({ avg, total: reviews.length });
+                
+                // 🔥 CRITICAL FIX: Check AD's phoneNumber FIRST, then fallback to profile
+                const phone = selectedAd?.phoneNumber || 
+                              selectedAd?.sellerPhone || 
+                              seller?.phoneNumber || 
+                              seller?.phone || 
+                              seller?.mobile || 
+                              null;
+                
+                setSellerPhone(phone);
             }
-        };
-        fetchSeller();
-    }, [selectedAd, profileModalUid]);
+            setLoadingReviews(false);
+        } catch (err) { 
+            console.error("Seller fetch error:", err);
+            setLoadingReviews(false);
+        }
+    };
+    fetchSeller();
+}, [selectedAd, profileModalUid]);
 
     // 🔥 CHAT START
     const startChat = useCallback(async () => {
@@ -367,32 +375,49 @@ const AllAds = ({ user }) => {
     };
 
     // 🔥 FIXED: RENDER DETAILS PROPERLY
-    const renderDetails = (details) => {
-        if (!details) return null;
-        
-        // If details is an array
-        if (Array.isArray(details)) {
-            return details.map((item, idx) => (
-                <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Detail {idx + 1}</p>
-                    <p className="font-semibold text-slate-800 truncate">{item}</p>
+  // 🔥 FIXED: RENDER DETAILS PROPERLY - Handles both string JSON and object
+const renderDetails = (details) => {
+    if (!details) return null;
+    
+    // 🔥 CRITICAL FIX: Parse if details is a JSON string
+    let parsedDetails = details;
+    if (typeof details === 'string') {
+        try {
+            parsedDetails = JSON.parse(details);
+        } catch (e) {
+            // If parsing fails, show as single text block
+            return (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2">
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Details</p>
+                    <p className="font-semibold text-slate-800 text-sm">{details}</p>
                 </div>
-            ));
+            );
         }
-        
-        // If details is an object
-        const entries = Object.entries(details);
-        if (entries.length === 0) return null;
-        
-        return entries.map(([key, val]) => (
-            <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
-                    {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
-                </p>
-                <p className="font-semibold text-slate-800 truncate">{val}</p>
+    }
+    
+    // If parsed details is an array
+    if (Array.isArray(parsedDetails)) {
+        return parsedDetails.map((item, idx) => (
+            <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Detail {idx + 1}</p>
+                <p className="font-semibold text-slate-800 truncate">{item}</p>
             </div>
         ));
-    };
+    }
+    
+    // If details is an object
+    const entries = Object.entries(parsedDetails);
+    if (entries.length === 0) return null;
+    
+    return entries.map(([key, val]) => (
+        <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+                {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
+            </p>
+            <p className="font-semibold text-slate-800 truncate">{val}</p>
+        </div>
+    ));
+};
 
     // Get active category gradient
     const activeCategoryData = CATEGORIES.find(c => c.code === activeCategory);
@@ -552,70 +577,76 @@ const AllAds = ({ user }) => {
                         <div className="overflow-y-auto flex-1">
                             <div className="grid grid-cols-1 lg:grid-cols-2">
                                 {/* 🔥 FIXED: Image Gallery - Mobile Optimized */}
-                                <div 
-                                    className="relative h-64 sm:h-80 md:h-[500px] lg:h-[600px] bg-slate-100 lg:sticky lg:top-0"
-                                    onTouchStart={handleTouchStart}
-                                    onTouchEnd={handleTouchEnd}
-                                >
-                                    <img 
-                                        src={selectedAd.images?.[currentImageIndex] || "https://via.placeholder.com/600"} 
-                                        className="w-full h-full object-contain bg-slate-50" 
-                                        alt={selectedAd.title}
-                                    />
-                                    
-                                    {/* 🔥 DESKTOP: Arrow Buttons (Hidden on Mobile) */}
-                                    {selectedAd.images?.length > 1 && !isMobile && (
-                                        <>
-                                            <button onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
-                                                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors">
-                                                <FaArrowLeft />
-                                            </button>
-                                            <button onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors">
-                                                <FaArrowRight />
-                                            </button>
-                                        </>
-                                    )}
-                                    
-                                    {/* Image Counter */}
-                                    {selectedAd.images?.length > 1 && (
-                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
-                                            {currentImageIndex + 1} / {selectedAd.images.length}
-                                        </div>
-                                    )}
+                                {/* 🔥 FIXED: Image Gallery - Mobile Optimized */}
+<div 
+    className="relative h-64 sm:h-80 md:h-[500px] lg:h-[600px] bg-slate-100 lg:sticky lg:top-0"
+    onTouchStart={handleTouchStart}
+    onTouchEnd={handleTouchEnd}
+>
+    <img 
+        src={selectedAd.images?.[currentImageIndex] || "https://via.placeholder.com/600"} 
+        className="w-full h-full object-contain bg-slate-50" 
+        alt={selectedAd.title}
+    />
+    
+    {/* 🔥 DESKTOP: Arrow Buttons (Hidden on Mobile < 640px) */}
+    {selectedAd.images?.length > 1 && (
+        <>
+            <button 
+                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
+                className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
+            >
+                <FaArrowLeft />
+            </button>
+            <button 
+                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
+                className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
+            >
+                <FaArrowRight />
+            </button>
+        </>
+    )}
+    
+    {/* Image Counter - Always visible */}
+    {selectedAd.images?.length > 1 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
+            {currentImageIndex + 1} / {selectedAd.images.length}
+        </div>
+    )}
 
-                                    {/* 🔥 MOBILE: Dot Indicators (Hidden on Desktop) */}
-                                    {selectedAd.images?.length > 1 && isMobile && (
-                                        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2">
-                                            {selectedAd.images.map((_, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    onClick={() => setCurrentImageIndex(idx)}
-                                                    className={`transition-all duration-300 rounded-full ${
-                                                        currentImageIndex === idx 
-                                                            ? 'w-6 h-2 bg-emerald-500' 
-                                                            : 'w-2 h-2 bg-white/70'
-                                                    }`}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
+    {/* 🔥 MOBILE: Prev/Next Arrow Buttons (Visible only on mobile < 640px) */}
+    {selectedAd.images?.length > 1 && (
+        <>
+            <button 
+                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
+                className="sm:hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
+            >
+                <FaArrowLeft size={16} />
+            </button>
+            <button 
+                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
+                className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
+            >
+                <FaArrowRight size={16} />
+            </button>
+        </>
+    )}
 
-                                    {/* Thumbnail Strip - Smaller on mobile */}
-                                    {selectedAd.images?.length > 1 && (
-                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                                            {selectedAd.images.map((img, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    onClick={() => setCurrentImageIndex(idx)}
-                                                    className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} ${isMobile ? 'w-10 h-10' : 'w-12 h-12'}`}
-                                                >
-                                                    <img src={img} className="w-full h-full object-cover" alt="" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+    {/* 🔥 DESKTOP ONLY: Thumbnail Strip (Hidden on mobile) */}
+    {selectedAd.images?.length > 1 && (
+        <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 gap-2">
+            {selectedAd.images.map((img, idx) => (
+                <button
+                    key={idx}
+                    onClick={() => setCurrentImageIndex(idx)}
+                    className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} w-12 h-12`}
+                >
+                    <img src={img} className="w-full h-full object-cover" alt="" />
+                </button>
+            ))}
+        </div>
+    )}
+</div>
 
                                 {/* Details Panel */}
                                 <div className="p-4 sm:p-6 lg:p-8 bg-white">

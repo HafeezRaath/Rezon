@@ -12,7 +12,8 @@ import {
     FaPhone,
     FaInfoCircle,
     FaExclamationTriangle,
-    FaRedo
+    FaRedo,
+    FaLock
 } from 'react-icons/fa';
 import io from 'socket.io-client';
 import axios from 'axios';
@@ -37,7 +38,7 @@ const socket = io(SOCKET_URL, {
 const ChatRoom = ({ user }) => {
     const { conversationId } = useParams();
     const navigate = useNavigate();
-    
+
     const [message, setMessage] = useState("");
     const [allMessages, setAllMessages] = useState([]);
     const [chatData, setChatData] = useState(null);
@@ -46,60 +47,53 @@ const ChatRoom = ({ user }) => {
     const [isSending, setIsSending] = useState(false);
     const [isConnecting, setIsConnecting] = useState(true);
     const [connectionError, setConnectionError] = useState(false);
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [showAdDetails, setShowAdDetails] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const [socketConnected, setSocketConnected] = useState(false);
-    
+
+    // 🔥 REVIEW STATES
+    const [canReviewStatus, setCanReviewStatus] = useState(null);
+    const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
     const [showReviewModal, setShowReviewModal] = useState(false);
-    const [showReportModal, setShowReportModal] = useState(false);
-    const [reportReason, setReportReason] = useState('');
     const [reviewRating, setReviewRating] = useState(0);
     const [reviewComment, setReviewComment] = useState('');
+
+    // 🔥 REPORT STATES
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [reportReason, setReportReason] = useState('');
+    const [reportSubmitting, setReportSubmitting] = useState(false);
 
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const inputRef = useRef(null);
     const containerRef = useRef(null);
     const textareaRef = useRef(null);
-    const isMobile = useRef(false);
 
-    // 🔥 DETECT MOBILE on mount
+    // 🔥 DETECT MOBILE
+    const [isMobile, setIsMobile] = useState(false);
     useEffect(() => {
-        isMobile.current = window.innerWidth < 1024;
-        const handleResize = () => { isMobile.current = window.innerWidth < 1024; };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // 🔥 KEYBOARD HANDLING - Proper visualViewport approach for mobile
+    // 🔥 KEYBOARD HANDLING - Mobile responsive
     useEffect(() => {
         const handleVisualResize = () => {
             if (!window.visualViewport) return;
-            
-            const vv = window.visualViewport;
-            const windowHeight = window.innerHeight;
-            const keyboardH = Math.max(0, windowHeight - vv.height);
-            
-            setKeyboardHeight(keyboardH);
-            
-            // Scroll messages to bottom when keyboard opens
-            if (keyboardH > 100) {
-                setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-                }, 150);
-            }
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            }, 100);
         };
 
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleVisualResize);
-            window.visualViewport.addEventListener('scroll', handleVisualResize);
         }
-        
+
         return () => {
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleVisualResize);
-                window.visualViewport.removeEventListener('scroll', handleVisualResize);
             }
         };
     }, []);
@@ -116,7 +110,7 @@ const ChatRoom = ({ user }) => {
         if (!date) return "Offline";
         const seenDate = new Date(date);
         if (isNaN(seenDate.getTime())) return "Offline";
-        
+
         const now = new Date();
         const diffMs = now - seenDate;
         const diffMins = Math.floor(diffMs / 60000);
@@ -127,11 +121,11 @@ const ChatRoom = ({ user }) => {
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffHours < 24) return `${diffHours}h ago`;
         if (diffDays < 7) return `${diffDays}d ago`;
-        
+
         return seenDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }, []);
 
-    // 🔥 FETCH CHAT HISTORY - Independent of socket
+    // 🔥 FETCH CHAT HISTORY
     const fetchHistory = useCallback(async () => {
         if (!user || !conversationId) return;
         setIsLoadingHistory(true);
@@ -149,11 +143,16 @@ const ChatRoom = ({ user }) => {
             if (res.data) {
                 setChatData(res.data);
                 setAllMessages(res.data.messages || []);
-                
+
                 const other = res.data.otherUser;
                 if (other) {
                     setIsOnline(other.isOnline || false);
                     setLastSeen(other.lastSeen);
+                }
+
+                // 🔥 CHECK REVIEW ELIGIBILITY
+                if (res.data.adDetails?._id) {
+                    checkReviewEligibility(res.data.adDetails._id);
                 }
             }
         } catch (err) {
@@ -169,14 +168,37 @@ const ChatRoom = ({ user }) => {
         fetchHistory();
     }, [fetchHistory]);
 
-    // 🔥 SOCKET CONNECTION - Proper lifecycle management
+    // 🔥 CHECK REVIEW ELIGIBILITY
+    const checkReviewEligibility = useCallback(async (adId) => {
+        if (!adId || !user) return;
+
+        setCheckingReviewEligibility(true);
+        try {
+            const token = await user.getIdToken();
+            const res = await axios.get(
+                `${API_BASE_URL}/can-review/${adId}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    timeout: 10000
+                }
+            );
+
+            setCanReviewStatus(res.data);
+        } catch (err) {
+            console.error("Review eligibility check failed:", err);
+            setCanReviewStatus({ canReview: false });
+        } finally {
+            setCheckingReviewEligibility(false);
+        }
+    }, [user]);
+
+    // 🔥 SOCKET CONNECTION
     useEffect(() => {
         if (!user || !conversationId) return;
 
         setConnectionError(false);
         setIsConnecting(true);
 
-        // Connect socket
         socket.auth = { userId: user.uid };
         socket.connect();
 
@@ -224,13 +246,13 @@ const ChatRoom = ({ user }) => {
     useEffect(() => {
         const handleReceiveMessage = (data) => {
             if (data.chatId !== conversationId) return;
-            
+
             setAllMessages(prev => {
                 const existingIndex = prev.findIndex(m => 
                     (data.tempId && m.tempId === data.tempId) || 
                     (data._id && m._id === data._id)
                 );
-                
+
                 if (existingIndex !== -1) {
                     const newMessages = [...prev];
                     newMessages[existingIndex] = { 
@@ -242,7 +264,7 @@ const ChatRoom = ({ user }) => {
                     };
                     return newMessages;
                 }
-                
+
                 return [...prev, { ...data, pending: false }];
             });
         };
@@ -273,7 +295,7 @@ const ChatRoom = ({ user }) => {
         };
     }, [conversationId, chatData, user]);
 
-    // 🔥 AUTO SCROLL with IntersectionObserver for smart scrolling
+    // 🔥 AUTO SCROLL
     useEffect(() => {
         const timer = setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -298,7 +320,7 @@ const ChatRoom = ({ user }) => {
             failed: false,
             read: false
         };
-        
+
         setAllMessages(prev => [...prev, optimisticMsg]);
         setMessage("");
         setIsSending(true);
@@ -315,7 +337,6 @@ const ChatRoom = ({ user }) => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // Update with server response
             if (res.data) {
                 setAllMessages(prev => prev.map(m => 
                     m.tempId === tempId ? { ...m, ...res.data, pending: false, failed: false } : m
@@ -358,7 +379,7 @@ const ChatRoom = ({ user }) => {
 
     const ad = chatData?.adDetails;
 
-    // 🔥 VIEW AD - Navigate to specific ad
+    // 🔥 VIEW AD
     const handleViewAd = useCallback(() => {
         if (ad?._id) {
             navigate(`/ad/${ad._id}`);
@@ -371,20 +392,35 @@ const ChatRoom = ({ user }) => {
             toast.error("Please enter a reason");
             return;
         }
+
+        if (!ad?._id) {
+            toast.error("Ad information not available");
+            return;
+        }
+
+        setReportSubmitting(true);
         try {
             const token = await user.getIdToken();
             await axios.post(`${API_BASE_URL}/reports`, {
                 reportedUserId: otherUser?.uid,
+                adId: ad?._id,
                 reason: reportReason,
-                chatId: conversationId
-            }, { headers: { Authorization: `Bearer ${token}` } });
-            toast.success("Report submitted");
+                description: reportReason
+            }, { 
+                headers: { Authorization: `Bearer ${token}` } 
+            });
+
+            toast.success("Report submitted to admin");
             setShowReportModal(false);
             setReportReason('');
+
         } catch (err) {
-            toast.error(err.response?.data?.message || "Failed to report");
+            console.error("Report error:", err);
+            toast.error(err.response?.data?.message || "Failed to submit report");
+        } finally {
+            setReportSubmitting(false);
         }
-    }, [reportReason, otherUser, conversationId, user]);
+    }, [reportReason, otherUser, ad, user]);
 
     // 🔥 HANDLE REVIEW
     const handleReview = useCallback(async () => {
@@ -392,22 +428,50 @@ const ChatRoom = ({ user }) => {
             toast.error("Please select a rating");
             return;
         }
+
+        if (!canReviewStatus?.canReview) {
+            toast.error("You are not eligible to review this seller");
+            setShowReviewModal(false);
+            return;
+        }
+
         try {
             const token = await user.getIdToken();
             await axios.post(`${API_BASE_URL}/reviews`, {
                 sellerId: otherUser?.uid,
+                adId: ad?._id,
                 rating: reviewRating,
-                comment: reviewComment,
-                adId: ad?._id
+                comment: reviewComment
             }, { headers: { Authorization: `Bearer ${token}` } });
-            toast.success("Review submitted");
+
+            toast.success("Review submitted successfully!");
             setShowReviewModal(false);
             setReviewRating(0);
             setReviewComment('');
+
+            // Update status to hide button
+            setCanReviewStatus(prev => ({ ...prev, canReview: false, alreadyReviewed: true }));
+
         } catch (err) {
+            console.error("Review error:", err);
             toast.error(err.response?.data?.message || "Failed to submit review");
         }
-    }, [reviewRating, reviewComment, otherUser, ad, user]);
+    }, [reviewRating, reviewComment, otherUser, ad, user, canReviewStatus]);
+
+    // 🔥 HANDLE REVIEW CLICK
+    const handleReviewClick = useCallback(() => {
+        if (!canReviewStatus?.canReview) {
+            if (canReviewStatus?.alreadyReviewed) {
+                toast.error("You have already reviewed this seller");
+            } else if (canReviewStatus?.expired) {
+                toast.error("Review period expired (30 days)");
+            } else {
+                toast.error("Only selected buyer can leave review");
+            }
+            return;
+        }
+        setShowReviewModal(true);
+    }, [canReviewStatus]);
 
     // 🔥 GO BACK
     const handleGoBack = useCallback(() => {
@@ -453,7 +517,6 @@ const ChatRoom = ({ user }) => {
             className="fixed inset-0 bg-slate-50 flex justify-center z-[60] overflow-hidden"
             style={{ 
                 height: '100dvh',
-                // Desktop: account for navbar (75px), Mobile: full screen
                 top: 0,
                 paddingTop: 'env(safe-area-inset-top, 0px)',
                 paddingBottom: 'env(safe-area-inset-bottom, 0px)'
@@ -464,8 +527,8 @@ const ChatRoom = ({ user }) => {
                 md:w-full md:max-w-none 
                 lg:max-w-4xl lg:h-[calc(100dvh-20px)] lg:mt-[10px] lg:rounded-2xl lg:border lg:border-slate-200
             ">
-                
-                {/* 🔥 HEADER - Fixed at top */}
+
+                {/* 🔥 HEADER */}
                 <div className="flex-none h-14 sm:h-16 md:h-18 border-b border-slate-100 flex items-center justify-between bg-white z-[70] px-3 sm:px-4 md:px-6 shrink-0 shadow-sm"
                     style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
                 >
@@ -476,7 +539,7 @@ const ChatRoom = ({ user }) => {
                         >
                             <FaArrowLeft className="text-lg md:text-xl" />
                         </button>
-                        
+
                         <div className="relative flex-shrink-0">
                             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold uppercase shadow-md text-sm">
                                 {otherUser?.name?.charAt(0) || "U"}
@@ -485,7 +548,7 @@ const ChatRoom = ({ user }) => {
                                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-white rounded-full animate-pulse"></span>
                             )}
                         </div>
-                        
+
                         <div className="min-w-0 flex-1 ml-2">
                             <h3 className="font-extrabold text-slate-800 text-sm sm:text-base truncate leading-tight">
                                 {otherUser?.name || "Customer"}
@@ -495,16 +558,41 @@ const ChatRoom = ({ user }) => {
                             </p>
                         </div>
                     </div>
-                    
+
                     {/* Action Buttons */}
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                        <button 
-                            onClick={() => setShowReviewModal(true)} 
-                            className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-yellow-200 hover:bg-yellow-100 active:scale-95 transition-transform min-h-[36px]"
-                        >
-                            <FaStar size={12} /> <span className="hidden sm:inline">Rate</span>
-                        </button>
-                        
+                        {/* 🔥 REVIEW BUTTON - ELIGIBLE */}
+                        {canReviewStatus?.canReview && (
+                            <button 
+                                onClick={handleReviewClick} 
+                                className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-yellow-200 hover:bg-yellow-100 active:scale-95 transition-transform min-h-[36px]"
+                            >
+                                <FaStar size={12} /> <span className="hidden sm:inline">Rate</span>
+                            </button>
+                        )}
+
+                        {/* 🔥 REVIEW BUTTON - NOT ELIGIBLE */}
+                        {canReviewStatus && !canReviewStatus?.canReview && !checkingReviewEligibility && (
+                            <button 
+                                onClick={handleReviewClick}
+                                className="flex items-center gap-1 bg-slate-100 text-slate-400 px-2 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-slate-200 cursor-not-allowed min-h-[36px]"
+                                title={canReviewStatus?.alreadyReviewed ? "Already reviewed" : canReviewStatus?.expired ? "Review expired" : "Not eligible"}
+                            >
+                                <FaLock size={10} /> <span className="hidden sm:inline">Rate</span>
+                            </button>
+                        )}
+
+                        {/* 🔥 REVIEW CHECKING */}
+                        {checkingReviewEligibility && (
+                            <button 
+                                disabled
+                                className="flex items-center gap-1 bg-slate-100 text-slate-400 px-2 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-slate-200 cursor-wait min-h-[36px]"
+                            >
+                                <FaSpinner className="animate-spin" size={10} />
+                            </button>
+                        )}
+
+                        {/* 🔥 REPORT BUTTON */}
                         <button 
                             onClick={() => setShowReportModal(true)} 
                             className="flex items-center gap-1 bg-rose-50 text-rose-600 px-2 sm:px-3 py-2 rounded-full text-[11px] sm:text-xs font-bold border border-rose-200 hover:bg-rose-100 active:scale-95 transition-transform min-h-[36px]"
@@ -514,7 +602,7 @@ const ChatRoom = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 🔥 AD STRIP - Clickable */}
+                {/* 🔥 AD STRIP */}
                 {ad && (
                     <div 
                         onClick={handleViewAd}
@@ -539,10 +627,10 @@ const ChatRoom = ({ user }) => {
                     </div>
                 )}
 
-                {/* 🔥 MESSAGES AREA - Scrollable */}
+                {/* 🔥 MESSAGES AREA */}
                 <div 
                     ref={messagesContainerRef}
-                    className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-[#f8fafc] scroll-smooth"
+                    className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-[#f8fafc] scroll-smooth min-h-0"
                     style={{ 
                         WebkitOverflowScrolling: 'touch',
                         overscrollBehavior: 'contain'
@@ -595,13 +683,12 @@ const ChatRoom = ({ user }) => {
                     )}
                     <div ref={messagesEndRef} />
                 </div>
-                
-                {/* 🔥 INPUT AREA - Fixed at bottom with keyboard handling */}
+
+                {/* 🔥 INPUT AREA */}
                 <div 
                     className="flex-none bg-white border-t border-slate-100 p-2 sm:p-3 md:p-4"
                     style={{ 
-                        paddingBottom: `max(env(safe-area-inset-bottom, 0px), ${keyboardHeight > 0 ? '8px' : '12px'})`,
-                        transition: 'padding-bottom 0.2s ease'
+                        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)'
                     }}
                 >
                     <div className="flex items-end gap-2 md:gap-3 max-w-4xl mx-auto">
@@ -638,26 +725,39 @@ const ChatRoom = ({ user }) => {
                             <FaExclamationTriangle />
                             <h3 className="font-bold text-lg">Report User</h3>
                         </div>
-                        <p className="text-slate-500 text-sm mb-4">Reporting: <span className="font-semibold text-slate-700">{otherUser?.name}</span></p>
+
+                        <div className="bg-slate-50 rounded-xl p-3 mb-4">
+                            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Reporting</p>
+                            <p className="font-bold text-slate-700 text-sm">{otherUser?.name || "User"}</p>
+                            {ad?.title && (
+                                <p className="text-xs text-slate-500 mt-1 truncate">Ad: {ad.title}</p>
+                            )}
+                        </div>
+
                         <textarea
                             value={reportReason}
                             onChange={(e) => setReportReason(e.target.value)}
-                            placeholder="Why are you reporting this user?"
+                            placeholder="Describe the issue in detail (e.g. Fake listing, Scam, Harassment, etc.)"
                             className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none"
                             rows={4}
                         />
                         <div className="flex gap-3 mt-4">
                             <button 
-                                onClick={() => setShowReportModal(false)}
+                                onClick={() => {
+                                    setShowReportModal(false);
+                                    setReportReason('');
+                                }}
                                 className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50"
                             >
                                 Cancel
                             </button>
                             <button 
                                 onClick={handleReport}
-                                className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700"
+                                disabled={!reportReason.trim() || !ad?._id || reportSubmitting}
+                                className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                Submit Report
+                                {reportSubmitting ? <FaSpinner className="animate-spin" /> : <FaFlag />}
+                                {reportSubmitting ? 'Submitting...' : 'Submit'}
                             </button>
                         </div>
                     </div>
@@ -672,8 +772,15 @@ const ChatRoom = ({ user }) => {
                             <FaStar />
                             <h3 className="font-bold text-lg">Rate Seller</h3>
                         </div>
-                        <p className="text-slate-500 text-sm mb-4">Rating: <span className="font-semibold text-slate-700">{otherUser?.name}</span></p>
-                        
+
+                        <div className="bg-yellow-50 rounded-xl p-3 mb-4 border border-yellow-100">
+                            <p className="text-xs text-yellow-600 uppercase tracking-wider mb-1">Rating</p>
+                            <p className="font-bold text-slate-700 text-sm">{otherUser?.name || "Seller"}</p>
+                            {ad?.title && (
+                                <p className="text-xs text-slate-500 mt-1 truncate">For: {ad.title}</p>
+                            )}
+                        </div>
+
                         <div className="flex justify-center gap-2 mb-4">
                             {[1, 2, 3, 4, 5].map((star) => (
                                 <button
@@ -685,7 +792,7 @@ const ChatRoom = ({ user }) => {
                                 </button>
                             ))}
                         </div>
-                        
+
                         <textarea
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
@@ -695,14 +802,19 @@ const ChatRoom = ({ user }) => {
                         />
                         <div className="flex gap-3 mt-4">
                             <button 
-                                onClick={() => setShowReviewModal(false)}
+                                onClick={() => {
+                                    setShowReviewModal(false);
+                                    setReviewRating(0);
+                                    setReviewComment('');
+                                }}
                                 className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50"
                             >
                                 Cancel
                             </button>
                             <button 
                                 onClick={handleReview}
-                                className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-semibold hover:bg-yellow-600"
+                                disabled={reviewRating === 0}
+                                className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-semibold hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Submit Review
                             </button>
