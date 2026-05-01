@@ -1,19 +1,18 @@
 import dotenv from 'dotenv';
-dotenv.config(); // ← 🔥 SABSE PEHLE! Environment variables load hone chahiye
+dotenv.config(); // ← 🔥 SABSE PEHLE!
 
 import Ad from "../model/userModel.js";
 import User from "../model/user.js";
 import Review from "../model/Review.js";
 import Report from "../model/Report.js";
 import Chat from "../model/chat.js";
-import crypto from 'crypto'; // ✅ Built-in, 0% Crash Rate
+import crypto from 'crypto';
 import sharp from 'sharp';
-
 import fs from 'fs';
 import path from 'path';
 import mongoose from "mongoose";
 import OpenAI from "openai";
-import { v2 as cloudinary } from 'cloudinary'; // ✅ Cloudinary import
+import { v2 as cloudinary } from 'cloudinary';
 import streamifier from 'streamifier';
 
 // ✅ Ab env variables load ho chuke hain
@@ -21,17 +20,15 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
   api_secret: process.env.CLOUDINARY_API_SECRET 
-});// ✅ Buffer upload ke liye
+});
 
-// userController.js mein isay update karein:
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 🔧 FIX 1: BASE_URL added for production
 const BASE_URL = process.env.NODE_ENV === 'production' 
     ? 'https://rezon.up.railway.app' 
     : 'http://localhost:8000';
 
-// ✅ Cloudinary Buffer Upload Helper (KYC ke liye)
+// ✅ Cloudinary Buffer Upload Helper
 const uploadBufferToCloudinary = (buffer, folder, filename) => {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -69,7 +66,7 @@ const CATEGORY_FIELD_MAP = {
 const ALLOWED_CATEGORIES = Object.keys(CATEGORY_FIELD_MAP);
 
 // ==========================================
-// ✨ AI SMART ASSIST (Analyze & Suggest Price)
+// ✨ AI SMART ASSIST
 // ==========================================
 export const getAISuggestions = async (req, res) => {
     try {
@@ -88,7 +85,7 @@ export const getAISuggestions = async (req, res) => {
                     const arrayBuffer = await response.arrayBuffer();
                     base64Data = Buffer.from(arrayBuffer).toString('base64');
                 }
-                
+
                 return {
                     type: "image_url",
                     image_url: { url: `data:image/jpeg;base64,${base64Data}` }
@@ -96,7 +93,6 @@ export const getAISuggestions = async (req, res) => {
             })
         );
 
-        // ✅ Modified Strict Prompt for Duplicate/Fake Detection
         const promptText = `
 Strictly analyze the provided images for the "${category}" category.
 
@@ -138,7 +134,6 @@ Return ONLY a JSON object:
 
         const aiData = JSON.parse(response.choices[0].message.content);
 
-        // Similar Ads check for pricing
         const similarAds = await Ad.find({
             category: category,
             title: { $regex: aiData.product.split(' ')[0], $options: 'i' },
@@ -147,7 +142,6 @@ Return ONLY a JSON object:
         }).limit(3);
 
         let finalPrice = aiData.estimatedPrice;
-        // Updated info to include Screenshot warning
         let dataSource = `AI Audit: ${aiData.imageQuality}`;
         if (aiData.isDuplicateRisk) {
             dataSource += ` | Warning: High Duplicate Risk Detected`;
@@ -166,7 +160,7 @@ Return ONLY a JSON object:
                 description: aiData.aiDescription,
                 suggestedPrice: Math.round(finalPrice),
                 imageQuality: aiData.imageQuality, 
-                isDuplicateRisk: aiData.isDuplicateRisk, // ✅ User ko ya admin ko alert karne ke liye
+                isDuplicateRisk: aiData.isDuplicateRisk,
                 details: aiData.extractedDetails,
                 info: dataSource
             }
@@ -180,26 +174,24 @@ Return ONLY a JSON object:
 // ==========================================
 // USER REGISTRATION
 // ==========================================
-// userController.js - registerUser
 export const registerUser = async (req, res) => {
     try {
-        const { uid, name, email, photoURL, provider } = req.body;  // ← photoURL add karo
+        const { uid, name, email, photoURL, provider } = req.body;
         let user = await User.findOne({ uid });
 
         if (user) {
             user.name = name;
             user.email = email;
-            if (photoURL) user.photoURL = photoURL;  // ← Update karo
+            if (photoURL) user.profilePic = photoURL;
             await user.save();
             return res.status(200).json({ message: "User profile updated", user });
         }
 
-        // New user - photoURL bhi save karo
         user = new User({ 
             uid, 
             name, 
             email,
-            photoURL: photoURL || null,  // ← Add karo
+            profilePic: photoURL || null,
             provider: provider || "password"
         });
         await user.save();
@@ -209,11 +201,9 @@ export const registerUser = async (req, res) => {
     }
 };
 
-
 // ==========================================
-// 🛡️ CREATE AD (Final Stable Hashing)
+// 🛡️ CREATE AD (With Duplicate Detection)
 // ==========================================
-// Controller mein create function ko aise update karein:
 export const create = async (req, res) => {
     try {
         console.log("🔍 POST AD REQUEST:", {
@@ -224,7 +214,6 @@ export const create = async (req, res) => {
 
         const posted_by_uid = req.user.uid;
 
-        // ✅ VALIDATION
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ 
                 success: false,
@@ -240,7 +229,6 @@ export const create = async (req, res) => {
         if (!description?.trim()) return res.status(400).json({ success: false, message: "📝 Description is required" });
         if (!category) return res.status(400).json({ success: false, message: "🏷️ Category is required" });
 
-        // 🛡️ AI QUALITY GUARD (Stock/Screenshot block)
         if (imageQualityByAI === "Stock" || imageQualityByAI === "Screenshot") {
             return res.status(400).json({ 
                 success: false,
@@ -248,17 +236,14 @@ export const create = async (req, res) => {
             });
         }
 
-        // 🛡️ DUPLICATE SHIELD (MD5 Hashing)
+        // 🛡️ DUPLICATE SHIELD
         const imageHashes = [];
         for (const file of req.files) {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
-
-            // Check if hash already exists in any active ad
             const duplicate = await Ad.findOne({ 
                 imageHashes: hash, 
                 isDeleted: false 
             });
-
             if (duplicate) {
                 return res.status(400).json({ 
                     success: false,
@@ -268,12 +253,10 @@ export const create = async (req, res) => {
             imageHashes.push(hash);
         }
 
-        // ☁️ CLOUDINARY UPLOAD
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
-        // ✅ PARSE DETAILS (JSON string se object banana)
         let parsedDetails = {};
         if (req.body.details) {
             try {
@@ -281,11 +264,10 @@ export const create = async (req, res) => {
                     ? JSON.parse(req.body.details) 
                     : req.body.details;
             } catch (e) {
-                console.log("⚠️ Details parse failed, using empty object");
+                console.log("⚠️ Details parse failed");
             }
         }
 
-        // ✅ SAVE AD
         const newAd = new Ad({
             images: imageUrls,
             imageHashes: imageHashes,
@@ -302,7 +284,6 @@ export const create = async (req, res) => {
         });
 
         await newAd.save();
-
         console.log("✅ AD SAVED:", newAd._id);
 
         res.status(201).json({ 
@@ -373,7 +354,7 @@ export const getMyAds = async (req, res) => {
 };
 
 // ==========================================
-// UPDATE AD (FIXED FOR CLOUDINARY)
+// UPDATE AD (FIXED)
 // ==========================================
 export const updateAd = async (req, res) => {
     try {
@@ -386,11 +367,10 @@ export const updateAd = async (req, res) => {
         if (currentAd.status === 'Sold') return res.status(400).json({ message: "Sold items cannot be edited" });
 
         const updateData = { ...req.body };
-        
-        // ✅ Parse JSON strings from FormData
+
         let existingImages = [];
         let imagesToDelete = [];
-        
+
         try {
             if (req.body.existingImages) existingImages = JSON.parse(req.body.existingImages);
             if (req.body.imagesToDelete) imagesToDelete = JSON.parse(req.body.imagesToDelete);
@@ -398,7 +378,6 @@ export const updateAd = async (req, res) => {
             console.log("Parse error:", e);
         }
 
-        // ✅ Delete marked images from Cloudinary
         if (imagesToDelete.length > 0) {
             for (const imageUrl of imagesToDelete) {
                 try {
@@ -410,7 +389,6 @@ export const updateAd = async (req, res) => {
             }
         }
 
-        // ✅ Upload new images
         let newImageUrls = [];
         if (req.files && req.files.length > 0) {
             newImageUrls = await Promise.all(
@@ -418,15 +396,12 @@ export const updateAd = async (req, res) => {
             );
         }
 
-        // ✅ Merge images: existing (not deleted) + new
         updateData.images = [...existingImages, ...newImageUrls];
-        
-        // ✅ Parse details
+
         if (updateData.details && typeof updateData.details === 'string') {
             try { updateData.details = JSON.parse(updateData.details); } catch (e) {}
         }
 
-        // ✅ Remove temp fields
         delete updateData.existingImages;
         delete updateData.imagesToDelete;
 
@@ -448,11 +423,9 @@ export const deleteAd = async (req, res) => {
         if (!ad) return res.status(404).json({ message: "Ad not found" });
         if (ad.posted_by_uid !== req.user.uid) return res.status(403).json({ message: "Ownership Mismatch" });
 
-        // ✅ OPTIONAL: Cloudinary se bhi images delete karo
         if (ad.images && ad.images.length > 0) {
             for (const imageUrl of ad.images) {
                 try {
-                    // Public ID extract karo URL se
                     const publicId = imageUrl.split('/').slice(-2).join('/').split('.')[0];
                     await cloudinary.uploader.destroy(publicId);
                 } catch (err) {
@@ -471,128 +444,84 @@ export const deleteAd = async (req, res) => {
 // ==========================================
 // MARK AS SOLD CONTROLLERS
 // ==========================================
-// userController.js - Modify existing function
 export const getChatUsersForAd = async (req, res) => {
     try {
         const { adId } = req.params;
         const sellerUid = req.user.uid;
 
-        // Check if ad belongs to seller
         const ad = await Ad.findById(adId);
-        if (!ad) {
-            return res.status(404).json({ message: "Ad nahi mili" });
-        }
-        
-        if (ad.posted_by_uid !== sellerUid) {
-            return res.status(403).json({ message: "Sirf owner dekh sakta hai" });
-        }
+        if (!ad) return res.status(404).json({ message: "Ad nahi mili" });
+        if (ad.posted_by_uid !== sellerUid) return res.status(403).json({ message: "Sirf owner dekh sakta hai" });
 
-        // Get all chats for this ad
         const chats = await Chat.find({
             adId: adId,
             participants: { $in: [sellerUid] }
         });
 
         if (!chats.length) {
-            return res.status(404).json({  // ✅ Yahan .json() likhna tha
-                message: "Is ad pe koi chat nahi hai",
-                buyers: [] 
-            });
+            return res.status(404).json({ message: "Is ad pe koi chat nahi hai", buyers: [] });
         }
 
-        // Get unique buyer UIDs (excluding seller)
         const buyerUids = [...new Set(
-            chats.flatMap(chat =>
-                chat.participants.filter(uid => uid !== sellerUid)
-            )
+            chats.flatMap(chat => chat.participants.filter(uid => uid !== sellerUid))
         )];
 
-        // Get buyer details with last message preview
         const buyers = await Promise.all(
             buyerUids.map(async (uid) => {
                 const user = await User.findOne({ uid }).select("name uid profilePic rating");
-                
-                // Get last message from chat
                 const chat = chats.find(c => c.participants.includes(uid));
-                const lastMessage = chat?.lastMessage || "";
-                
                 return {
                     ...user?.toObject(),
-                    lastMessage: lastMessage.substring(0, 50),
+                    lastMessage: chat?.lastMessage?.substring(0, 50) || "",
                     chatId: chat?._id
                 };
             })
         );
 
-        res.status(200).json({
-            adTitle: ad.title,
-            adPrice: ad.price,
-            buyers: buyers
-        });
-
+        res.status(200).json({ adTitle: ad.title, adPrice: ad.price, buyers });
     } catch (error) {
         console.error("Get Chat Users Error:", error);
         res.status(500).json({ message: "Users load nahi huay", error: error.message });
     }
 };
 
-// userController.js - Modify markAsSold
 export const markAsSold = async (req, res) => {
     try {
         const { adId } = req.params;
-        const { buyerUid, buyerObjectId } = req.body; // buyerObjectId bhi bhejein
+        const { buyerUid, buyerObjectId } = req.body;
         const sellerUid = req.user.uid;
 
         if (!buyerUid || !buyerObjectId) {
-            return res.status(400).json({ 
-                message: "Buyer select karna zaroori hai. Kaunse user ko becha hai?" 
-            });
+            return res.status(400).json({ message: "Buyer select karna zaroori hai" });
         }
 
         const ad = await Ad.findById(adId);
-        if (!ad) {
-            return res.status(404).json({ message: "Ad nahi mili" });
-        }
+        if (!ad) return res.status(404).json({ message: "Ad nahi mili" });
+        if (ad.posted_by_uid !== sellerUid) return res.status(403).json({ message: "Sirf owner mark kar sakta hai" });
+        if (ad.status === 'Sold') return res.status(400).json({ message: "Yeh item already sold hai" });
 
-        if (ad.posted_by_uid !== sellerUid) {
-            return res.status(403).json({ message: "Sirf owner mark kar sakta hai" });
-        }
-
-        if (ad.status === 'Sold') {
-            return res.status(400).json({ message: "Yeh item already sold hai" });
-        }
-
-        // ✅ Verify buyer actually chatted on this ad
         const chatExists = await Chat.findOne({
             adId: adId,
             participants: { $all: [sellerUid, buyerUid] }
         });
-
         if (!chatExists) {
-            return res.status(400).json({ 
-                message: "Yeh buyer is ad par message nahi kiya. Pehle chat karein." 
-            });
+            return res.status(400).json({ message: "Yeh buyer is ad par message nahi kiya" });
         }
 
         const buyer = await User.findOne({ uid: buyerUid });
-        if (!buyer) {
-            return res.status(404).json({ message: "Buyer nahi mila database mein" });
-        }
+        if (!buyer) return res.status(404).json({ message: "Buyer nahi mila" });
 
         const deleteDate = new Date();
         deleteDate.setDate(deleteDate.getDate() + 30);
 
-        // ✅ Save with buyer reference
         ad.status = 'Sold';
-        ad.soldTo = buyer._id;  // MongoDB ObjectId
-        ad.soldToUid = buyerUid; // Firebase UID
+        ad.soldTo = buyer._id;
+        ad.soldToUid = buyerUid;
         ad.soldAt = new Date();
         ad.isDeleted = true;
         ad.deleteAfter = deleteDate;
-
         await ad.save();
 
-        // ✅ Create notification for buyer
         await User.findByIdAndUpdate(buyer._id, {
             $push: {
                 notifications: {
@@ -608,57 +537,36 @@ export const markAsSold = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "🎉 Item successfully sold! Buyer can now leave a review.",
-            soldTo: {
-                name: buyer.name,
-                uid: buyerUid,
-                _id: buyer._id
-            },
+            message: "🎉 Item successfully sold!",
+            soldTo: { name: buyer.name, uid: buyerUid, _id: buyer._id },
             soldAt: ad.soldAt,
-            autoDeleteOn: deleteDate,
-            canReview: true
+            autoDeleteOn: deleteDate
         });
-
     } catch (error) {
         console.error("Mark Sold Error:", error);
         res.status(500).json({ message: "Server error", error: error.message });
     }
 };
 
-// userController.js - Modify canReview
 export const canReview = async (req, res) => {
     try {
         const { adId } = req.params;
         const buyerUid = req.user.uid;
 
         const buyer = await User.findOne({ uid: buyerUid });
-        if (!buyer) {
-            return res.status(404).json({ message: "User nahi mila" });
-        }
+        if (!buyer) return res.status(404).json({ message: "User nahi mila" });
 
         const ad = await Ad.findOne({
             _id: adId,
             status: 'Sold',
-            $or: [
-                { soldTo: buyer._id },
-                { soldToUid: buyerUid }
-            ]
+            $or: [{ soldTo: buyer._id }, { soldToUid: buyerUid }]
         });
 
         if (!ad) {
-            return res.status(403).json({
-                canReview: false,
-                message: "Sirf actual buyer hi review de sakta hai"
-            });
+            return res.status(403).json({ canReview: false, message: "Sirf actual buyer hi review de sakta hai" });
         }
 
-        // Check if already reviewed
-        const existingReview = await Review.findOne({
-            buyerId: buyer._id,
-            adId: adId
-        });
-
-        // Check if within 30 days
+        const existingReview = await Review.findOne({ buyerId: buyer._id, adId: adId });
         const daysSinceSold = Math.floor((new Date() - ad.soldAt) / (1000 * 60 * 60 * 24));
         const canStillReview = daysSinceSold <= 30;
 
@@ -666,19 +574,15 @@ export const canReview = async (req, res) => {
             canReview: !existingReview && canStillReview,
             alreadyReviewed: !!existingReview,
             expired: !canStillReview,
-            daysRemaining: Math.max(0, 30 - daysSinceSold),
-            message: existingReview ? "Already reviewed" : 
-                     !canStillReview ? "Review period expired (30 days)" : 
-                     "Eligible for review"
+            daysRemaining: Math.max(0, 30 - daysSinceSold)
         });
-
     } catch (error) {
         res.status(500).json({ message: "Error checking eligibility" });
     }
 };
 
 // ==========================================
-// REVIEWS & RATINGS CONTROLLERS
+// REVIEWS & RATINGS
 // ==========================================
 export const createReview = async (req, res) => {
     try {
@@ -688,46 +592,23 @@ export const createReview = async (req, res) => {
         if (!rating || rating < 1 || rating > 5) {
             return res.status(400).json({ message: "Valid rating (1-5) zaroori hai" });
         }
-
         if (!adId || !mongoose.Types.ObjectId.isValid(adId)) {
             return res.status(400).json({ message: "Valid Ad ID chahiye" });
         }
 
         const buyer = await User.findOne({ uid: buyerUid });
         const seller = await User.findOne({ uid: sellerId });
+        if (!buyer || !seller) return res.status(404).json({ message: "User nahi mila." });
 
-        if (!buyer || !seller) {
-            return res.status(404).json({ message: "User nahi mila." });
-        }
-
-        const ad = await Ad.findOne({
-            _id: adId,
-            status: 'Sold',
-            soldTo: buyer._id
-        });
-
+        const ad = await Ad.findOne({ _id: adId, status: 'Sold', soldTo: buyer._id });
         if (!ad) {
-            return res.status(403).json({
-                message: "❌ Aap is item ko review nahi kar sakte. Sirf actual buyer review de sakta hai."
-            });
+            return res.status(403).json({ message: "❌ Sirf actual buyer review de sakta hai." });
         }
 
-        const existingReview = await Review.findOne({
-            buyerId: buyer._id,
-            adId: adId
-        });
+        const existingReview = await Review.findOne({ buyerId: buyer._id, adId: adId });
+        if (existingReview) return res.status(400).json({ message: "⚠️ Already reviewed" });
 
-        if (existingReview) {
-            return res.status(400).json({ message: "⚠️ Aap already review de chuke ho is item ko" });
-        }
-
-        const newReview = new Review({
-            buyerId: buyer._id,
-            sellerId: seller._id,
-            adId,
-            rating,
-            comment
-        });
+        const newReview = new Review({ buyerId: buyer._id, sellerId: seller._id, adId, rating, comment });
         await newReview.save();
 
         const allReviews = await Review.find({ sellerId: seller._id });
@@ -738,7 +619,6 @@ export const createReview = async (req, res) => {
         });
 
         res.status(201).json({ message: "✅ Review saved!", review: newReview });
-
     } catch (error) {
         console.error("Review Error:", error.message);
         res.status(500).json({ message: "Review save nahi ho saka." });
@@ -756,10 +636,7 @@ export const getSellerReviews = async (req, res) => {
             .populate("adId", "title images")
             .sort({ createdAt: -1 });
 
-        res.status(200).json({
-            seller: seller,
-            reviews: reviews
-        });
+        res.status(200).json({ seller, reviews });
     } catch (error) {
         res.status(500).json({ message: "Failed to load reviews" });
     }
@@ -779,25 +656,18 @@ export const createReport = async (req, res) => {
 
         const reporterUser = await User.findOne({ uid: reporterUid });
         const targetUser = await User.findOne({ uid: reportedUserId });
-
-        if (!reporterUser) {
-            return res.status(404).json({ message: "Aapka account database mein nahi mila." });
-        }
-        if (!targetUser) {
-            return res.status(404).json({ message: "Jis user ko report kar rahe hain wo nahi mila." });
-        }
+        if (!reporterUser) return res.status(404).json({ message: "Aapka account nahi mila." });
+        if (!targetUser) return res.status(404).json({ message: "Target user nahi mila." });
 
         const newReport = new Report({
             reporterId: reporterUser._id,
             reportedUserId: targetUser._id,
-            adId: adId,
-            reason: reason,
-            description: description
+            adId,
+            reason,
+            description
         });
-
         await newReport.save();
         res.status(201).json({ message: "Report Admin ko bhej di gayi hai." });
-
     } catch (error) {
         console.error("Report Error:", error.message);
         res.status(500).json({ message: "Report fail ho gayi" });
@@ -805,7 +675,7 @@ export const createReport = async (req, res) => {
 };
 
 // ==========================================
-// 🛡️ LOCAL IDENTITY VERIFICATION (KYC) - FIXED FOR CLOUDINARY
+// 🛡️ KYC VERIFICATION (FIXED SYNTAX)
 // ==========================================
 export const verifyIdentity = async (req, res) => {
     try {
@@ -827,11 +697,10 @@ export const verifyIdentity = async (req, res) => {
         }
 
         const timestamp = Date.now();
-        
-        // 🔥 STEP 1: OCR - Extract CNIC Data (BUT DON'T SAVE YET)
+
         console.log("🔍 Starting OCR on CNIC...");
         const ocrResult = await extractCNICData(req.files.idFront[0].buffer);
-        
+
         if (ocrResult.success) {
             console.log("✅ OCR Extracted:", {
                 name: ocrResult.name,
@@ -840,13 +709,11 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 STEP 2: CHECK UNIQUE CNIC (Before saving anything)
         if (ocrResult.success && ocrResult.cnicNumber) {
             const existingCNIC = await User.findOne({ 
                 cnicNumber: ocrResult.cnicNumber,
-                uid: { $ne: userUid }  // Exclude current user
+                uid: { $ne: userUid }
             });
-            
             if (existingCNIC) {
                 return res.status(409).json({
                     success: false,
@@ -856,13 +723,11 @@ export const verifyIdentity = async (req, res) => {
             }
         }
 
-        // 🔥 STEP 3: CHECK UNIQUE PHONE (If provided)
         if (req.body.phoneNumber) {
             const existingPhone = await User.findOne({
                 phoneNumber: req.body.phoneNumber,
                 uid: { $ne: userUid }
             });
-            
             if (existingPhone) {
                 return res.status(409).json({
                     success: false,
@@ -872,21 +737,23 @@ export const verifyIdentity = async (req, res) => {
             }
         }
 
-        // 4. Upload to Cloudinary
         const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
             uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
         ]);
 
-        // 5. AI Face Verification
+        // 🔥 FIXED: Template literal use karo, escape nahi
         const aiResponse = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { \\"isMatched\\": boolean, \\"confidence\\": number, \\"reason\\": \\"string\\" }" },
+                        { 
+                            type: "text", 
+                            text: `Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { "isMatched": boolean, "confidence": number, "reason": "string" }`
+                        },
                         { type: "image_url", image_url: { url: idFrontUrl } },
                         { type: "image_url", image_url: { url: selfieUrl } }
                     ],
@@ -894,13 +761,13 @@ export const verifyIdentity = async (req, res) => {
             ],
             response_format: { type: "json_object" },
         });
+
         const result = JSON.parse(aiResponse.choices[0].message.content);
 
         const isActuallyMatched = result.isMatched || 
                                  (result.confidence >= 55) || 
                                  result.reason.toLowerCase().includes("similar");
 
-        // 🔥 IF VERIFICATION FAILS - DON'T SAVE ANYTHING
         if (!isActuallyMatched) {
             return res.status(400).json({ 
                 success: false, 
@@ -909,30 +776,21 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 STEP 6: ONLY SAVE IF VERIFICATION SUCCESS
         const updateData = {
             profilePic: selfieUrl,
             isVerified: true,
             verificationStatus: 'Verified',
             verifiedAt: new Date(),
-            kycDocuments: { 
-                idFront: idFrontUrl, 
-                idBack: idBackUrl, 
-                selfie: selfieUrl 
-            },
+            kycDocuments: { idFront: idFrontUrl, idBack: idBackUrl, selfie: selfieUrl },
             kycDetails: {
                 method: "AI + OCR Verification",
                 aiCheck: true,
                 faceMatchScore: result.confidence,
                 reason: result.reason,
-                ocrData: {
-                    extracted: ocrResult.success,
-                    rawText: ocrResult.rawText || null
-                }
+                ocrData: { extracted: ocrResult.success, rawText: ocrResult.rawText || null }
             }
         };
 
-        // 🔥 SAVE OCR EXTRACTED FIELDS ONLY AFTER SUCCESS
         if (ocrResult.success) {
             if (ocrResult.name) updateData.name = ocrResult.name;
             if (ocrResult.fatherName) updateData.fatherName = ocrResult.fatherName;
@@ -941,13 +799,11 @@ export const verifyIdentity = async (req, res) => {
             if (ocrResult.gender) updateData.gender = ocrResult.gender;
         }
 
-        // 🔥 SAVE PHONE NUMBER ONLY IF VERIFIED
         if (req.body.phoneNumber) {
             updateData.phoneNumber = req.body.phoneNumber;
             updateData.isPhoneVerified = true;
         }
 
-        // 🔥 ATOMIC UPDATE - Everything saved together
         const updatedUser = await User.findOneAndUpdate(
             { uid: userUid },
             updateData,
@@ -977,17 +833,13 @@ export const verifyIdentity = async (req, res) => {
 };
 
 // ==========================================
-// 👤 GET CURRENT USER DETAILS
+// 👤 GET CURRENT USER
 // ==========================================
 export const me = async (req, res) => {
     try {
         const userUid = req.user.uid;
         const user = await User.findOne({ uid: userUid });
-
-        if (!user) {
-            return res.status(404).json({ message: "User database mein nahi mila" });
-        }
-
+        if (!user) return res.status(404).json({ message: "User database mein nahi mila" });
         res.status(200).json(user);
     } catch (error) {
         console.error("🔥 Me API Error:", error);
@@ -1002,14 +854,11 @@ export const updateAdStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        
         if (!['Active', 'Reserved', 'Sold', 'Hidden'].includes(status)) {
             return res.status(400).json({ message: "Invalid status" });
         }
-        
         const ad = await Ad.findByIdAndUpdate(id, { status }, { new: true });
         if (!ad) return res.status(404).json({ message: "Ad not found" });
-        
         res.status(200).json({ message: "Status updated successfully", ad });
     } catch (error) {
         console.error("Update Status Error:", error);
@@ -1018,12 +867,11 @@ export const updateAdStatus = async (req, res) => {
 };
 
 // ==========================================
-// 💬 CHAT SYSTEM CONTROLLERS
+// 💬 CHAT SYSTEM
 // ==========================================
 export const getChatList = async (req, res) => {
     try {
         const { userId } = req.params;
-        
         if (req.user.uid !== userId) {
             return res.status(403).json({ message: "Access denied. Apni hi chats dekh sakte hain." });
         }
@@ -1032,17 +880,13 @@ export const getChatList = async (req, res) => {
             participants: { $in: [userId] },
             deletedBy: { $nin: [userId] }
         })
-        .populate({
-            path: 'adId',
-            select: 'title images price'
-        })
+        .populate({ path: 'adId', select: 'title images price' })
         .sort({ updatedAt: -1 });
 
         const formattedChats = await Promise.all(
             chats.map(async (chat) => {
                 const otherUserId = chat.participants.find(p => p !== userId);
                 const otherUser = await User.findOne({ uid: otherUserId }).select('name profilePic');
-                
                 return {
                     _id: chat._id,
                     otherUserName: otherUser?.name || "Unknown User",
@@ -1071,10 +915,7 @@ export const getChatMessages = async (req, res) => {
         const userId = req.user.uid;
 
         const chat = await Chat.findById(chatId).populate('adId', 'title images price posted_by_uid');
-        if (!chat) {
-            return res.status(404).json({ message: "Chat nahi mili" });
-        }
-
+        if (!chat) return res.status(404).json({ message: "Chat nahi mili" });
         if (!chat.participants.includes(userId)) {
             return res.status(403).json({ message: "Access denied. Aap is chat mein nahi hain." });
         }
@@ -1086,10 +927,7 @@ export const getChatMessages = async (req, res) => {
                 unreadCount++;
             }
         });
-        
-        if (unreadCount > 0) {
-            await chat.save();
-        }
+        if (unreadCount > 0) await chat.save();
 
         const otherUserId = chat.participants.find(p => p !== userId);
         const otherUser = await User.findOne({ uid: otherUserId }).select('name profilePic uid');
@@ -1113,61 +951,38 @@ export const sendMessage = async (req, res) => {
         const { message, recipientId, tempId } = req.body;
         const senderId = req.user.uid;
 
-        if (!message?.trim()) {
-            return res.status(400).json({ message: "Message empty nahi ho sakta" });
-        }
+        if (!message?.trim()) return res.status(400).json({ message: "Message empty nahi ho sakta" });
 
-        // 1. Save to database
         const updatedChat = await Chat.findByIdAndUpdate(
             chatId,
             { 
-                $push: { 
-                    messages: { 
-                        senderId, 
-                        message: message.trim(), 
-                        timestamp: new Date(),
-                        read: false 
-                    } 
-                },
-                $set: { 
-                    lastMessage: message.trim(), 
-                    updatedAt: new Date() 
-                } 
+                $push: { messages: { senderId, message: message.trim(), timestamp: new Date(), read: false } },
+                $set: { lastMessage: message.trim(), updatedAt: new Date() } 
             },
             { new: true }
         ).populate('adId', 'title images');
 
-        if (!updatedChat) {
-            return res.status(404).json({ message: "Chat nahi mili" });
-        }
+        if (!updatedChat) return res.status(404).json({ message: "Chat nahi mili" });
 
         const savedMessage = updatedChat.messages[updatedChat.messages.length - 1];
-
-        // 2. 🔥 FIXED: Emit to chat room (not just recipient)
         const io = req.app.get("io");
-        
-        // Emit to chat room so both participants receive it
+
         io.to(chatId).emit("receive_message", {
             _id: savedMessage._id,
             senderId: savedMessage.senderId,
             message: savedMessage.message,
             timestamp: savedMessage.timestamp,
-            chatId: chatId,
-            tempId: tempId // For optimistic update matching
+            chatId,
+            tempId
         });
 
-        // Also notify recipient if they're not in the room
         io.to(recipientId).emit("new_message_notification", {
             chatId,
             message: savedMessage.message,
             senderId
         });
 
-        res.status(200).json({ 
-            success: true, 
-            data: savedMessage 
-        });
-
+        res.status(200).json({ success: true, data: savedMessage });
     } catch (error) {
         console.error("🔥 SendMessage Error:", error);
         res.status(500).json({ message: "Message send nahi ho saka" });
@@ -1180,23 +995,15 @@ export const deleteChat = async (req, res) => {
         const userId = req.user.uid;
 
         const chat = await Chat.findById(chatId);
-        if (!chat) {
-            return res.status(404).json({ message: "Chat nahi mili" });
-        }
-
-        if (!chat.participants.includes(userId)) {
-            return res.status(403).json({ message: "Access denied" });
-        }
+        if (!chat) return res.status(404).json({ message: "Chat nahi mili" });
+        if (!chat.participants.includes(userId)) return res.status(403).json({ message: "Access denied" });
 
         if (!chat.deletedBy.includes(userId)) {
             chat.deletedBy.push(userId);
             await chat.save();
         }
 
-        res.status(200).json({ 
-            success: true,
-            message: "Conversation delete ho gayi" 
-        });
+        res.status(200).json({ success: true, message: "Conversation delete ho gayi" });
     } catch (error) {
         console.error("🔥 Delete Chat Error:", error);
         res.status(500).json({ message: "Delete nahi ho saka", error: error.message });
@@ -1206,42 +1013,20 @@ export const deleteChat = async (req, res) => {
 export const startChat = async (req, res) => {
     try {
         const { buyerId, sellerId, adId } = req.body;
-
         if (!buyerId || !sellerId || !adId) {
             return res.status(400).json({ message: "Buyer, Seller aur Ad ID lazmi hain" });
         }
 
-        let chat = await Chat.findOne({
-            adId: adId,
-            participants: { $all: [buyerId, sellerId] }
-        });
-
+        let chat = await Chat.findOne({ adId, participants: { $all: [buyerId, sellerId] } });
         if (chat) {
             chat.deletedBy = chat.deletedBy.filter(id => id !== buyerId && id !== sellerId);
             await chat.save();
-            
-            return res.status(200).json({ 
-                success: true,
-                chatId: chat._id,
-                message: "Existing chat restore ho gayi" 
-            });
+            return res.status(200).json({ success: true, chatId: chat._id, message: "Existing chat restore ho gayi" });
         }
 
-        chat = new Chat({
-            participants: [buyerId, sellerId],
-            adId: adId,
-            messages: [],
-            lastMessage: "",
-            deletedBy: [] 
-        });
-        
+        chat = new Chat({ participants: [buyerId, sellerId], adId, messages: [], lastMessage: "", deletedBy: [] });
         await chat.save();
-
-        res.status(201).json({ 
-            success: true,
-            chatId: chat._id,
-            message: "Nayi chat shuru ho gayi" 
-        });
+        res.status(201).json({ success: true, chatId: chat._id, message: "Nayi chat shuru ho gayi" });
     } catch (error) {
         console.error("🔥 Start Chat Error:", error);
         res.status(500).json({ message: "Chat start nahi ho saki", error: error.message });
