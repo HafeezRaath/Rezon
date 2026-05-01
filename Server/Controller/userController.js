@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config(); // ← 🔥 SABSE PEHLE! Environment variables load hone chahiye
+
 import Ad from "../model/userModel.js";
 import User from "../model/user.js";
 import Review from "../model/Review.js";
@@ -8,19 +11,18 @@ import sharp from 'sharp';
 
 import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
 import mongoose from "mongoose";
 import OpenAI from "openai";
 import { v2 as cloudinary } from 'cloudinary'; // ✅ Cloudinary import
 import streamifier from 'streamifier';
 
+// ✅ Ab env variables load ho chuke hain
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });// ✅ Buffer upload ke liye
 
-dotenv.config();
 // userController.js mein isay update karein:
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -178,19 +180,28 @@ Return ONLY a JSON object:
 // ==========================================
 // USER REGISTRATION
 // ==========================================
+// userController.js - registerUser
 export const registerUser = async (req, res) => {
     try {
-        const { uid, name, email } = req.body;
+        const { uid, name, email, photoURL, provider } = req.body;  // ← photoURL add karo
         let user = await User.findOne({ uid });
 
         if (user) {
             user.name = name;
             user.email = email;
+            if (photoURL) user.photoURL = photoURL;  // ← Update karo
             await user.save();
             return res.status(200).json({ message: "User profile updated", user });
         }
 
-        user = new User({ uid, name, email });
+        // New user - photoURL bhi save karo
+        user = new User({ 
+            uid, 
+            name, 
+            email,
+            photoURL: photoURL || null,  // ← Add karo
+            provider: provider || "password"
+        });
         await user.save();
         res.status(201).json({ message: "User registered successfully", user });
     } catch (error) {
@@ -205,56 +216,108 @@ export const registerUser = async (req, res) => {
 // Controller mein create function ko aise update karein:
 export const create = async (req, res) => {
     try {
-        const posted_by_uid = req.user.uid;
-        if (!req.files || req.files.length === 0) return res.status(400).json({ message: "Images required" });
+        console.log("🔍 POST AD REQUEST:", {
+            files: req.files?.length,
+            bodyFields: Object.keys(req.body),
+            user: req.user?.uid
+        });
 
-        // ✅ 1.req.body se missing fields nikalien
+        const posted_by_uid = req.user.uid;
+
+        // ✅ VALIDATION
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ 
+                success: false,
+                message: "📸 Images required" 
+            });
+        }
+
         const { price, title, description, category, condition, location, imageQualityByAI } = req.body;
 
-        // 🛡️ AI QUALITY GUARD
-        if (imageQualityByAI === "Stock") {
-            return res.status(400).json({ message: "🛡️ Rezon Security: Internet photos not allowed." });
+        if (!title?.trim()) return res.status(400).json({ success: false, message: "📝 Title is required" });
+        if (!price || isNaN(Number(price))) return res.status(400).json({ success: false, message: "💰 Valid price is required" });
+        if (!location?.trim()) return res.status(400).json({ success: false, message: "📍 Location is required" });
+        if (!description?.trim()) return res.status(400).json({ success: false, message: "📝 Description is required" });
+        if (!category) return res.status(400).json({ success: false, message: "🏷️ Category is required" });
+
+        // 🛡️ AI QUALITY GUARD (Stock/Screenshot block)
+        if (imageQualityByAI === "Stock" || imageQualityByAI === "Screenshot") {
+            return res.status(400).json({ 
+                success: false,
+                message: "🛡️ Rezon Security: Internet photos / screenshots not allowed." 
+            });
         }
 
         // 🛡️ DUPLICATE SHIELD (MD5 Hashing)
-        const currentHashes = [];
+        const imageHashes = [];
         for (const file of req.files) {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
-            currentHashes.push(hash);
+
+            // Check if hash already exists in any active ad
+            const duplicate = await Ad.findOne({ 
+                imageHashes: hash, 
+                isDeleted: false 
+            });
+
+            if (duplicate) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai. Nayi photo upload karein." 
+                });
+            }
+            imageHashes.push(hash);
         }
 
-        const duplicate = await Ad.findOne({ imageHashes: { $in: currentHashes }, isDeleted: false });
-        if (duplicate) {
-            return res.status(400).json({ message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai." });
-        }
-
-        // 🛡️ CLOUDINARY UPLOAD
+        // ☁️ CLOUDINARY UPLOAD
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
-        // ✅ 2. new Ad mein sari required fields pass karein
+        // ✅ PARSE DETAILS (JSON string se object banana)
+        let parsedDetails = {};
+        if (req.body.details) {
+            try {
+                parsedDetails = typeof req.body.details === 'string' 
+                    ? JSON.parse(req.body.details) 
+                    : req.body.details;
+            } catch (e) {
+                console.log("⚠️ Details parse failed, using empty object");
+            }
+        }
+
+        // ✅ SAVE AD
         const newAd = new Ad({
-            images: imageUrls, 
-            imageHashes: currentHashes,
-            title, 
-            description,   // 👈 Ab error nahi aayega
-            location,      // 👈 Ab error nahi aayega
-            condition,     // 👈 Ab error nahi aayega
-            price: Number(price), 
-            category, 
+            images: imageUrls,
+            imageHashes: imageHashes,
+            title: title.trim(),
+            description: description.trim(),
+            location: location.trim(),
+            condition: condition || "Used",
+            price: Number(price),
+            category,
             posted_by_uid,
             status: 'Active',
-            aiAuditStatus: imageQualityByAI,
-            details: req.body.details || {} // Mixed type ke liye empty object
+            aiAuditStatus: imageQualityByAI || "Original",
+            details: parsedDetails
         });
 
         await newAd.save();
-        res.status(201).json({ success: true, message: "Ad Posted successfully!" });
+
+        console.log("✅ AD SAVED:", newAd._id);
+
+        res.status(201).json({ 
+            success: true, 
+            message: "Ad Posted successfully! 🎉",
+            data: newAd
+        });
 
     } catch (error) {
-        console.error("🔥 Server Error:", error.message);
-        res.status(500).json({ message: "Post failed", error: error.message });
+        console.error("🔥 CREATE AD ERROR:", error);
+        res.status(500).json({ 
+            success: false,
+            message: "Post failed", 
+            error: error.message 
+        });
     }
 };
 
@@ -316,26 +379,63 @@ export const updateAd = async (req, res) => {
     try {
         const adId = req.params.id;
         const userUid = req.user.uid;
-        const updateData = { ...req.body };
         const currentAd = await Ad.findById(adId);
 
         if (!currentAd) return res.status(404).json({ message: "Ad not found" });
         if (currentAd.posted_by_uid !== userUid) return res.status(403).json({ message: "Ownership Mismatch" });
+        if (currentAd.status === 'Sold') return res.status(400).json({ message: "Sold items cannot be edited" });
 
-        if (currentAd.status === 'Sold') {
-            return res.status(400).json({ message: "Sold items cannot be edited" });
+        const updateData = { ...req.body };
+        
+        // ✅ Parse JSON strings from FormData
+        let existingImages = [];
+        let imagesToDelete = [];
+        
+        try {
+            if (req.body.existingImages) existingImages = JSON.parse(req.body.existingImages);
+            if (req.body.imagesToDelete) imagesToDelete = JSON.parse(req.body.imagesToDelete);
+        } catch (e) {
+            console.log("Parse error:", e);
         }
 
-        // ✅ FIXED: Cloudinary URLs direct use karo
+        // ✅ Delete marked images from Cloudinary
+        if (imagesToDelete.length > 0) {
+            for (const imageUrl of imagesToDelete) {
+                try {
+                    const publicId = imageUrl.split('/').slice(-2).join('/').split('.')[0];
+                    await cloudinary.uploader.destroy(publicId);
+                } catch (err) {
+                    console.log("Cloudinary delete error:", err);
+                }
+            }
+        }
+
+        // ✅ Upload new images
+        let newImageUrls = [];
         if (req.files && req.files.length > 0) {
-            const newImageUrls = req.files.map(file => file.path); // Already Cloudinary URLs
-            updateData.images = [...(currentAd.images || []), ...newImageUrls];
+            newImageUrls = await Promise.all(
+                req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
+            );
         }
+
+        // ✅ Merge images: existing (not deleted) + new
+        updateData.images = [...existingImages, ...newImageUrls];
+        
+        // ✅ Parse details
+        if (updateData.details && typeof updateData.details === 'string') {
+            try { updateData.details = JSON.parse(updateData.details); } catch (e) {}
+        }
+
+        // ✅ Remove temp fields
+        delete updateData.existingImages;
+        delete updateData.imagesToDelete;
 
         const updatedAd = await Ad.findByIdAndUpdate(adId, updateData, { new: true });
-        res.status(200).json({ message: "Ad Updated Successfully", data: updatedAd });
+        res.status(200).json({ success: true, message: "Ad Updated Successfully", data: updatedAd });
+
     } catch (error) {
-        res.status(500).json({ errorMessage: error.message });
+        console.error("Update Error:", error);
+        res.status(500).json({ success: false, message: "Update failed", error: error.message });
     }
 };
 
@@ -786,7 +886,7 @@ export const verifyIdentity = async (req, res) => {
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { \"isMatched\": boolean, \"confidence\": number, \"reason\": \"string\" }" },
+                        { type: "text", text: "Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { \\"isMatched\\": boolean, \\"confidence\\": number, \\"reason\\": \\"string\\" }" },
                         { type: "image_url", image_url: { url: idFrontUrl } },
                         { type: "image_url", image_url: { url: selfieUrl } }
                     ],

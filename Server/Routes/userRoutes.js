@@ -45,12 +45,14 @@ const uploadMemory = multer({
 
 // ================= USER AUTH & PROFILE (TOP PRIORITY) =================
 
+// 🔥 FIXED: Both /register and /auth/register for frontend compatibility
 route.post("/register", registerUser);
+route.post("/auth/register", registerUser);
 
 // ✅ GET: Profile data lene ke liye
 route.get("/users/me", authenticate, me);
 
-// ✅ PUT: Profile update karne ke liye (Aapka original code)
+// ✅ PUT: Profile update karne ke liye
 route.put("/users/me", authenticate, async (req, res) => {
     try {
         const { phoneNumber, password, isPhoneVerified } = req.body;

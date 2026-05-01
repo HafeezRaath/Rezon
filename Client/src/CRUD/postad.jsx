@@ -228,43 +228,54 @@ const PostAd = ({ onClose, onAdAdded }) => {
     };
 
     const submitAd = async (e) => {
-        if(e) e.preventDefault();
-        
-        if(!formData.title || !formData.price || !formData.location || !formData.description) {
-            return toast.error("Title, Price, Location aur Description lazmi hain!");
-        }
+    if(e) e.preventDefault();
+    
+    // ✅ VALIDATION
+    if(!formData.title.trim() || !formData.price || !formData.location.trim() || !formData.description.trim()) {
+        return toast.error("Title, Price, Location aur Description lazmi hain!");
+    }
 
-        const token = localStorage.getItem("firebaseIdToken");
-        setLoading(true);
-        const postData = new FormData();
-        
-        postData.append("title", formData.title);
-        postData.append("price", formData.price);
-        postData.append("description", formData.description);
-        postData.append("location", formData.location);
-        postData.append("condition", formData.condition);
-        postData.append("category", selectedCat.id);
-        postData.append("phoneNumber", formData.phoneNumber || userPhone);
-        postData.append("imageQualityByAI", formData.imageQuality);
-        postData.append("details", JSON.stringify(formData.categoryDetails));
-        formData.images.forEach(f => postData.append("images", f));
+    const token = localStorage.getItem("firebaseIdToken");  // ← Yeh missing tha!
+    if (!token) {
+        return toast.error("Please login first!");
+    }
 
-        try {
-            const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            toast.success("Ad Posted Successfully! 🚀");
-            
-            // ✅ Form band kar do
-            if (onAdAdded) onAdAdded(res.data);
-            onClose(); // Yeh form band karega
-            
-        } catch (err) { 
-            toast.error(err.response?.data?.message || "Failed to post ad."); 
-        }
-        finally { setLoading(false); }
-    };
+    setLoading(true);
+    const postData = new FormData();  // ← Yeh missing tha!
+    
+    postData.append("title", formData.title);
+    postData.append("price", formData.price);
+    postData.append("description", formData.description);
+    postData.append("location", formData.location);
+    postData.append("condition", formData.condition);
+    postData.append("category", selectedCat.id);
+    postData.append("phoneNumber", formData.phoneNumber || userPhone);
+    postData.append("imageQualityByAI", formData.imageQuality);
+    postData.append("details", JSON.stringify(formData.categoryDetails));
+    
+    // Images append karo
+    formData.images.forEach(f => postData.append("images", f));
+
+    try {
+        const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        
+        toast.success("Ad Posted Successfully! 🚀");
+        if (onAdAdded) onAdAdded(res.data.data);
+        onClose();
+        
+    } catch (err) { 
+        const errorMsg = err.response?.data?.message || "Failed to post ad.";
+        toast.error(errorMsg);
+        console.error("Post Ad Error:", err.response?.data);
+    } finally { 
+        setLoading(false); 
+    }
+};
 
     const modalContent = (
         <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-2 sm:p-4 z-[9999]" onClick={onClose}>

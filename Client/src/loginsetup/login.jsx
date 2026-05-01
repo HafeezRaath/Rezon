@@ -14,7 +14,7 @@ const API_BASE_URL = "https://rezon.up.railway.app/api";
 
 export default function LoginPopup({ onClose, isOpen }) {
   const [showPassword, setShowPassword] = useState(false);
-  const [loginMethod, setLoginMethod] = useState("social"); // social | email | phone
+  const [loginMethod, setLoginMethod] = useState("social");
   const [showSignin, setShowSignin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,40 +29,43 @@ export default function LoginPopup({ onClose, isOpen }) {
     }
   }, [isOpen]);
 
-  // 🔥 FIXED: Backend sync function - EXACTLY like Signinpopup
+  // 🔥 FIXED: Backend sync - MANDATORY hai, fail ho toh throw karo
   const syncUserToBackend = async (firebaseUser) => {
     try {
       const idToken = await firebaseUser.getIdToken(true);
-      
-      // 🔥 Store token in localStorage (like Signinpopup does)
+
+      // Store token
       localStorage.setItem("firebaseIdToken", idToken);
 
-      // 🔥 Send EXACT same data as Signinpopup
-      await axios.post(`${API_BASE_URL}/register`, {
+      const res = await axios.post(`${API_BASE_URL}/register`, {
         uid: firebaseUser.uid,
         name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Rezon User",
         email: firebaseUser.email,
-        photoURL: firebaseUser.photoURL,
+        profilePic: firebaseUser.photoURL || "",  // ✅ profilePic use karo (schema mein yeh hai)
         provider: firebaseUser.providerData?.[0]?.providerId || "password"
       }, {
         headers: {
           Authorization: `Bearer ${idToken}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 10000  // 10 second timeout
       });
 
-      console.log("✅ User synced to backend successfully");
+      console.log("✅ User synced to backend:", res.data);
       return true;
 
     } catch (err) {
-      // 🔥 Same error handling as Signinpopup - don't fail login if backend sync fails
-      console.error("Backend sync error:", err.response?.data || err.message);
-      // User is still logged in via Firebase, backend sync is best-effort
-      return false;
+      // 🔥 FAIL ho gaya toh throw karo - login fail hoga
+      console.error("🔥 Backend sync failed:", err.response?.data || err.message);
+      throw new Error(
+        err.response?.data?.message || 
+        err.response?.data?.error || 
+        "Server error during login. Please try again."
+      );
     }
   };
 
-  // 🔥 FIXED: Email login with backend sync
+  // 🔥 FIXED: Email login with MANDATORY backend sync
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -80,7 +83,7 @@ export default function LoginPopup({ onClose, isOpen }) {
 
       if (!firebaseUser) throw new Error("Login failed - no user data");
 
-      // Step 2: Sync to backend (same as Signinpopup)
+      // Step 2: MANDATORY backend sync
       await syncUserToBackend(firebaseUser);
 
       toast.success("Welcome back! Login successful.", { id: toastId });
@@ -89,7 +92,12 @@ export default function LoginPopup({ onClose, isOpen }) {
 
     } catch (error) {
       console.error("Email login error:", error);
-      
+
+      // 🔥 Backend sync fail hua toh Firebase se logout karo
+      if (error.message?.includes("Server error") || error.message?.includes("sync")) {
+        try { await auth.signOut(); } catch(e) {}
+      }
+
       const errorMessages = {
         "auth/user-not-found": "No account found with this email. Please sign up first.",
         "auth/wrong-password": "Incorrect password. Please try again.",
@@ -105,7 +113,7 @@ export default function LoginPopup({ onClose, isOpen }) {
     }
   };
 
-  // 🔥 FIXED: Google login with backend sync (matches Signinpopup exactly)
+  // 🔥 FIXED: Google login with MANDATORY backend sync
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
@@ -117,7 +125,7 @@ export default function LoginPopup({ onClose, isOpen }) {
 
       if (!firebaseUser) throw new Error("No user data from Google");
 
-      // 🔥 Sync to backend (same pattern as Signinpopup)
+      // 🔥 MANDATORY sync
       await syncUserToBackend(firebaseUser);
 
       toast.success(`Welcome ${firebaseUser.displayName || "User"}! 🎉`, { id: toastId });
@@ -127,6 +135,11 @@ export default function LoginPopup({ onClose, isOpen }) {
     } catch (error) {
       console.error("Google login error:", error);
 
+      // 🔥 Backend sync fail hua toh logout
+      if (error.message?.includes("Server error") || error.message?.includes("sync")) {
+        try { await auth.signOut(); } catch(e) {}
+      }
+
       const errorMessages = {
         "auth/popup-closed-by-user": "Sign-in cancelled.",
         "auth/popup-blocked": "Popup blocked! Please allow popups.",
@@ -134,7 +147,7 @@ export default function LoginPopup({ onClose, isOpen }) {
         "auth/cancelled-popup-request": "Sign-in cancelled.",
       };
 
-      toast.error(errorMessages[error.code] || "Google login failed", { id: toastId });
+      toast.error(errorMessages[error.code] || error.message || "Google login failed", { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -148,7 +161,7 @@ export default function LoginPopup({ onClose, isOpen }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="relative w-full max-w-md bg-white shadow-2xl rounded-3xl p-6 md:p-8 border-t-8 border-emerald-600 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-        
+
         <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-all text-xl">
           <FaTimes />
         </button>
