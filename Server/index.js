@@ -151,3 +151,14 @@ mongoose.connect(MONGO_URL).then(() => {
   console.error("❌ DB Error:", err);
   process.exit(1);
 });
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config();
+}
+
+// Production mein Railway automatically variables inject karta hai
+console.log("🔍 ENV CHECK:", {
+    node_env: process.env.NODE_ENV || 'not set',
+    openai: process.env.OPENAI_API_KEY ? "✅ Set" : "❌ Missing",
+    mongo: process.env.MONGO_URI ? "✅ Set" : "❌ Missing",
+    cloud: process.env.CLOUDINARY_CLOUD_NAME ? "✅ Set" : "❌ Missing"
+});

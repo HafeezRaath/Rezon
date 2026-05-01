@@ -23,6 +23,20 @@ cloudinary.config({
 });
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openaiInstance = null;
+
+const getOpenAI = () => {
+    if (!openaiInstance) {
+        const apiKey = process.env.OPENAI_API_KEY;
+        console.log("🔍 OPENAI_API_KEY:", apiKey ? "✅ Found" : "❌ Missing");
+        
+        if (!apiKey) {
+            throw new Error('OPENAI_API_KEY is not configured');
+        }
+        openaiInstance = new OpenAI({ apiKey });
+    }
+    return openaiInstance;
+};
 
 const BASE_URL = process.env.NODE_ENV === 'production' 
     ? 'https://rezon.up.railway.app' 
