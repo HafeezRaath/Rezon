@@ -70,12 +70,17 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
 
-    // SYNC SEARCH WITH URL
+    // SYNC SEARCH + LOCATION WITH URL
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const urlSearch = params.get("search");
+        const urlLocation = params.get("location");
+
         if (urlSearch) {
             setSearchQuery(urlSearch);
+        }
+        if (urlLocation) {
+            setSelectedLocation(urlLocation);
         }
     }, [location.search]);
 
@@ -184,7 +189,13 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const clearSearch = () => {
         setSearchQuery("");
         onSearch?.("");
-        navigate(location.pathname);
+        // 🔥 Clear search but keep location param if set
+        const params = new URLSearchParams();
+        if (selectedLocation && selectedLocation !== 'Pakistan') {
+            params.set('location', selectedLocation);
+        }
+        const queryString = params.toString();
+        navigate(queryString ? `/?${queryString}` : '/');
     };
 
     const handleChatClick = useCallback(() => {
@@ -276,6 +287,16 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                         setSelectedLocation(loc);
                                         setShowLocDropdown(false);
                                         onLocationChange?.(loc);
+
+                                        // 🔥 Update URL with location + preserve search
+                                        const params = new URLSearchParams(location.search);
+                                        if (loc && loc !== 'Pakistan') {
+                                            params.set('location', loc);
+                                        } else {
+                                            params.delete('location');
+                                        }
+                                        const queryString = params.toString();
+                                        navigate(queryString ? `/?${queryString}` : '/');
                                     }}
                                 />
                             </div>
@@ -430,22 +451,22 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     return (
         <>
-            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 overflow-hidden ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
-                } border-b border-slate-800/60 h-16 md:h-auto`}>
+            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-2.5 sm:py-3 md:py-5'
+                } border-b border-slate-800/60`}>
 
                 <div className="max-w-[1600px] mx-auto px-3 sm:px-4 md:px-6 lg:px-12">
-                    <div className="flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
+                    <div className="flex items-center justify-between gap-2 sm:gap-4 h-full">
 
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             <button
-                                className="lg:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0"
+                                className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 bg-slate-800 rounded-lg sm:rounded-xl flex items-center justify-center text-slate-400 shrink-0"
                                 onClick={() => setShowMobileMenu(true)}
                             >
                                 <FaBars size={20} />
                             </button>
 
                             <Link to="/" className="flex items-center gap-2 sm:gap-3 group" onClick={clearSearch}>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all shrink-0">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-lg sm:rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all shrink-0">
                                     <span className="text-white font-black text-lg sm:text-xl md:text-2xl">R</span>
                                 </div>
                                 <div className="hidden sm:flex flex-col leading-none">
@@ -483,14 +504,14 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                         {/* Mobile search trigger */}
                         <button
-                            className="lg:hidden flex-1 min-w-0 max-w-[140px] sm:max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-2.5 sm:py-3 px-3 sm:px-4 text-left text-slate-400 flex items-center gap-2 sm:gap-3"
+                            className="lg:hidden flex-1 min-w-0 max-w-[120px] xs:max-w-[160px] sm:max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-2 px-2 sm:py-3 sm:px-4 text-left text-slate-400 flex items-center gap-2 shrink-0"
                             onClick={() => setShowMobileSearch(true)}
                         >
                             <FaSearch size={16} className="shrink-0" />
-                            <span className="text-sm truncate">{searchQuery || "Search..."}</span>
+                            <span className="text-xs sm:text-sm truncate">{searchQuery || "Search..."}</span>
                         </button>
 
-                        <div className="flex items-center gap-1 sm:gap-2 md:gap-4 shrink-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 shrink-0">
 
                             <div className="hidden xl:block relative">
                                 <button
@@ -513,6 +534,16 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                                 setSelectedLocation(loc);
                                                 setShowLocDropdown(false);
                                                 onLocationChange?.(loc);
+
+                                                // 🔥 Update URL with location + preserve search
+                                                const params = new URLSearchParams(location.search);
+                                                if (loc && loc !== 'Pakistan') {
+                                                    params.set('location', loc);
+                                                } else {
+                                                    params.delete('location');
+                                                }
+                                                const queryString = params.toString();
+                                                navigate(queryString ? `/?${queryString}` : '/');
                                             }}
                                         />
                                     </div>
@@ -589,7 +620,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </div>
 
                             <button
-                                className="md:hidden w-9 h-9 sm:w-10 sm:h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0"
+                                className="md:hidden w-9 h-9 sm:w-10 sm:h-10 bg-slate-800 rounded-lg sm:rounded-xl flex items-center justify-center text-slate-400 shrink-0 ml-1"
                                 onClick={() => user ? navigate('/profile') : setShowLogin(true)}
                             >
                                 {user ? (
@@ -603,7 +634,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </div>
             </header>
 
-            <div className={`transition-all duration-300 ${scrolled ? 'h-16 md:h-20' : 'h-16 md:h-24'}`} />
+            <div className={`transition-all duration-300 ${scrolled ? 'h-14 sm:h-16 md:h-20' : 'h-14 sm:h-16 md:h-24'}`} />
 
             <MobileMenu />
             <MobileSearch />

@@ -30,7 +30,7 @@ import {
 
 import authenticate from "../authMiddleware.js";
 import User from "../model/user.js";
-import Ad from "../model/ad.js";  // 🔥 FIXED: Ad model import missing tha
+import Ad from "../model/userModel.js";  // 🔥 FIXED: Ad model import missing tha
 
 const route = express.Router();
 

@@ -22,7 +22,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ==========================================
-// 🌐 CORS SETUP - FIXED
+// 🌐 CORS SETUP - CLEAN & SIMPLE
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
@@ -34,44 +34,12 @@ const allowedOrigins = [
   "http://localhost:3000"
 ];
 
-// 🔥 FIXED: Proper CORS with preflight handling
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
-    res.header("Access-Control-Allow-Credentials", "true");
-  }
-  
-  // 🔥 CRITICAL: Handle OPTIONS preflight immediately
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  
-  next();
-});
-
-// Also keep cors() as backup
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("❌ CORS Blocked:", origin);
-      callback(new Error('CORS Policy Blocked: ' + origin));
-    }
-  },
+  origin: allowedOrigins,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
 }));
-
-// 🔥 EXTRA: Explicit OPTIONS handler for all routes
-app.options("*", (req, res) => {
-  res.status(200).end();
-});
 
 // Middlewares
 app.use(express.json({ limit: '50mb' }));
@@ -170,7 +138,7 @@ const MONGO_URL = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URL).then(() => {
   console.log("✅ MongoDB Connected");
-  
+
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port: ${PORT}`);
   });

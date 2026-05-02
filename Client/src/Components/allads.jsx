@@ -10,7 +10,7 @@ import {
     FaChevronLeft, FaChevronRight, FaCircle, FaSpinner
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-import LocationDropdown from "./LocationDropdown";
+
 
 // 🔧 FIXED: API URL without space
 const API_BASE_URL = "https://rezon.up.railway.app/api";
@@ -131,10 +131,12 @@ const AllAds = ({ user }) => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     
-    // 🔥 READ SEARCH FROM URL (Navbar se ya refresh pe)
+    // 🔥 READ SEARCH + LOCATION FROM URL (Navbar se ya refresh pe)
     const urlSearch = searchParams.get('search') || '';
+    const urlLocation = searchParams.get('location') || '';
     const [searchTerm, setSearchTerm] = useState(urlSearch);
     const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
+    const [selectedLocation, setSelectedLocation] = useState(urlLocation);
     
     const [ads, setAds] = useState([]);
     const [filteredAds, setFilteredAds] = useState([]);
@@ -154,7 +156,7 @@ const AllAds = ({ user }) => {
     const [sellerInfo, setSellerInfo] = useState(null);
     const [sellerReviews, setSellerReviews] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
-    const [selectedLocation, setSelectedLocation] = useState("");
+    
     
     // 🔥 REPORT MODAL STATES
     const [showReportModal, setShowReportModal] = useState(false);
@@ -172,12 +174,17 @@ const AllAds = ({ user }) => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // 🔥 SYNC: URL → State (jab Navbar se search ho ya page refresh ho)
+    // 🔥 SYNC: URL → State (jab Navbar se search/location change ho ya page refresh ho)
     useEffect(() => {
-        const current = searchParams.get('search') || '';
-        if (current !== searchTerm) {
-            setSearchTerm(current);
-            setDebouncedSearch(current);
+        const currentSearch = searchParams.get('search') || '';
+        const currentLocation = searchParams.get('location') || '';
+
+        if (currentSearch !== searchTerm) {
+            setSearchTerm(currentSearch);
+            setDebouncedSearch(currentSearch);
+        }
+        if (currentLocation !== selectedLocation) {
+            setSelectedLocation(currentLocation);
         }
     }, [searchParams]);
 
@@ -187,15 +194,14 @@ const AllAds = ({ user }) => {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // 🔥 SYNC: Debounced → URL (address bar update karo)
+    // 🔥 SYNC: Debounced → URL (address bar update karo, location preserve)
     useEffect(() => {
         const current = searchParams.get('search') || '';
         if (debouncedSearch !== current) {
-            if (debouncedSearch.trim()) {
-                setSearchParams({ search: debouncedSearch.trim() });
-            } else {
-                setSearchParams({});
-            }
+            const params = new URLSearchParams();
+            if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+            if (selectedLocation) params.set('location', selectedLocation);
+            setSearchParams(params);
         }
     }, [debouncedSearch]);
 
@@ -526,7 +532,7 @@ const AllAds = ({ user }) => {
                                 </span>
                             )}
                             <button 
-                                onClick={() => { setSearchTerm(''); setSelectedLocation(''); }}
+                                onClick={() => setSearchTerm('')}
                                 className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1"
                             >
                                 <FaTimes size={10} /> Clear All
@@ -578,13 +584,10 @@ const AllAds = ({ user }) => {
                             <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs" />
                         </div>
                         
-                        {/* Mobile Location Dropdown */}
-                        <div className="sm:hidden">
-                            <LocationDropdown 
-                                selected={selectedLocation} 
-                                onChange={setSelectedLocation} 
-                            />
-                        </div>
+                        {/* Search status */}
+                        <span className="text-xs text-slate-500 font-medium">
+                            {debouncedSearch ? `Searching: "${debouncedSearch}"` : 'All results'}
+                        </span>
                     </div>
 
                     <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
@@ -625,15 +628,17 @@ const AllAds = ({ user }) => {
                         </div>
                         <h3 className="text-xl font-bold text-slate-800 mb-2">No items found</h3>
                         <p className="text-slate-500">
-                            {debouncedSearch 
-                                ? `No results for "${debouncedSearch}". Try different keywords.` 
-                                : selectedLocation 
-                                    ? `No ads available in ${selectedLocation}. Try a different location.` 
-                                    : "Try adjusting your search or filters"}
+                            {debouncedSearch || selectedLocation
+                                ? `No results${debouncedSearch ? ` for "${debouncedSearch}"` : ''}${selectedLocation ? ` in ${selectedLocation}` : ''}. Try different keywords or location.` 
+                                : "Try adjusting your search or category"}
                         </p>
                         {(debouncedSearch || selectedLocation) && (
                             <button 
-                                onClick={() => { setSearchTerm(''); setSelectedLocation(''); }}
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setSelectedLocation('');
+                                    setSearchParams({});
+                                }}
                                 className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
                             >
                                 Clear All Filters
