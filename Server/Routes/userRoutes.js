@@ -241,6 +241,8 @@ route.post("/chat/start", authenticate, startChat);
 route.post("/chat/:chatId/message", authenticate, sendMessage);
 
 route.delete("/chat/:chatId", authenticate, deleteChat);
+// Admin Route (Add this to your routes.js)
+route.put("/admin/ads/:id/status", authenticate, updateAdStatus);
 
 
 export default route;
