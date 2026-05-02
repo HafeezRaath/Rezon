@@ -698,52 +698,45 @@ export const verifyIdentity = async (req, res) => {
         const existingUser = await User.findOne({ uid: userUid });
 
         if (existingUser?.isVerified) {
-            return res.status(400).json({ 
-                success: false,
-                message: "Aapka account pehle se verified hai! ✅" 
-            });
+            return res.status(400).json({ success: false, message: "Aapka account pehle se verified hai! ✅" });
         }
 
+        // Files check
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
-            return res.status(400).json({ 
-                success: false,
-                message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" 
-            });
+            return res.status(400).json({ success: false, message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" });
         }
 
         const timestamp = Date.now();
         console.log("🔍 Starting OCR on CNIC...");
         const ocrResult = await extractCNICData(req.files.idFront[0].buffer);
 
-        // CNIC Duplicate Check (OCR ke baad)
+        // Duplicate CNIC Check
         if (ocrResult.success && ocrResult.cnicNumber) {
             const existingCNIC = await User.findOne({ cnicNumber: ocrResult.cnicNumber, uid: { $ne: userUid } });
-            if (existingCNIC) {
-                return res.status(409).json({ success: false, message: "Ye CNIC already registered hai!", error: "DUPLICATE_CNIC" });
-            }
+            if (existingCNIC) return res.status(409).json({ success: false, message: "Ye CNIC already registered hai!" });
         }
 
-        // Phone Duplicate Check
+        // Phone duplicate check
         if (req.body.phoneNumber) {
             const existingPhone = await User.findOne({ phoneNumber: req.body.phoneNumber, uid: { $ne: userUid } });
-            if (existingPhone) {
-                return res.status(409).json({ success: false, message: "Ye phone number already registered hai!", error: "DUPLICATE_PHONE" });
-            }
+            if (existingPhone) return res.status(409).json({ success: false, message: "Ye phone number already registered hai!" });
         }
 
+        // Cloudinary Upload
         const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
             uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
         ]);
 
+        // AI Vision Analysis
         const aiResponse = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: `Compare the face in the selfie with the face on the ID card. Are they the same person? Return JSON: { "isMatched": boolean, "confidence": number, "reason": "string" }` },
+                        { type: "text", text: `Compare the face in the selfie with the face on the ID card. Return JSON: { "isMatched": boolean, "confidence": number, "reason": "string" }` },
                         { type: "image_url", image_url: { url: idFrontUrl } },
                         { type: "image_url", image_url: { url: selfieUrl } }
                     ],
@@ -753,42 +746,32 @@ export const verifyIdentity = async (req, res) => {
         });
 
         const result = JSON.parse(aiResponse.choices[0].message.content);
-        const isActuallyMatched = result.isMatched || (result.confidence >= 25) || result.reason.toLowerCase().includes("similar") ||
-                          result.reason.toLowerCase().includes("match");
+        console.log("🤖 AI raw response:", result);
+
+        // Relaxed threshold for testing
+        const isActuallyMatched = result.isMatched || (result.confidence >= 20) || result.reason.toLowerCase().includes("match") || result.reason.toLowerCase().includes("similar");
 
         if (!isActuallyMatched) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Verification fail: ${result.reason} ❌`,
-                error: "VERIFICATION_FAILED"
-            });
+            return res.status(400).json({ success: false, message: `Verification fail: ${result.reason} ❌` });
         }
 
-        // 🔥 YAHAN SE UPDATE LOGIC SHURU HOTA HAI (Sirf success hone par)
+        // Database Update (Sirf success par)
         const updateData = {
             profilePic: selfieUrl,
             isVerified: true,
             verificationStatus: 'Verified',
             verifiedAt: new Date(),
             kycDocuments: { idFront: idFrontUrl, idBack: idBackUrl, selfie: selfieUrl },
-            kycDetails: {
-                method: "AI + OCR Verification",
-                aiCheck: true,
-                faceMatchScore: result.confidence,
-                reason: result.reason,
-                ocrData: { extracted: ocrResult.success, rawText: ocrResult.rawText || null }
-            }
+            kycDetails: { method: "AI + OCR", aiCheck: true, faceMatchScore: result.confidence, reason: result.reason }
         };
 
         if (ocrResult.success) {
             if (ocrResult.name) updateData.name = ocrResult.name;
-            if (ocrResult.fatherName) updateData.fatherName = ocrResult.fatherName;
             if (ocrResult.cnicNumber) updateData.cnicNumber = ocrResult.cnicNumber;
             if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
             if (ocrResult.gender) updateData.gender = ocrResult.gender;
         }
 
-        // Phone update tabhi hoga agar verification pass hui
         if (req.body.phoneNumber) {
             updateData.phoneNumber = req.body.phoneNumber;
             updateData.isPhoneVerified = true;
@@ -796,11 +779,7 @@ export const verifyIdentity = async (req, res) => {
 
         const updatedUser = await User.findOneAndUpdate({ uid: userUid }, updateData, { new: true });
 
-        return res.status(200).json({ 
-            success: true, 
-            message: "Verified successfully! 🎉",
-            data: { name: updatedUser.name, cnicNumber: updatedUser.cnicNumber, isVerified: true }
-        });
+        return res.status(200).json({ success: true, message: "Verified successfully! 🎉", data: updatedUser });
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);

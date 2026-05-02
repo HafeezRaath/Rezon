@@ -287,6 +287,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                     <div className="relative">
                                         <input 
                                             type="password" 
+                                            autoComplete="new-password"
                                             placeholder="Create Password" 
                                             disabled={loading}
                                             onChange={(e) => setPassword(e.target.value)}
@@ -300,6 +301,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                     <div className="relative">
                                         <input 
                                             type="password" 
+                                            autoComplete="new-password"
                                             placeholder="Confirm Password" 
                                             disabled={loading}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
