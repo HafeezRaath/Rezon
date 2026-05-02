@@ -140,3 +140,4 @@ const parseCNICText = (text) => {
         confidence: name && cnicNumber ? 'high' : (name || cnicNumber ? 'medium' : 'low')
     };
 };
+export { extractCNICData };

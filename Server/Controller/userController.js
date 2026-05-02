@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config(); // ← 🔥 SABSE PEHLE!
-import { extractCNICData } from "../utils/ocrHelper.js";
+
+import { extractCNICData } from "../CNIC_OCR_Integration.js";
 import Ad from "../model/userModel.js";
 import User from "../model/user.js";
 import Review from "../model/Review.js";
