@@ -177,17 +177,18 @@ const AllAds = ({ user }) => {
 
     // 🔥 SYNC: URL → State (jab Navbar se search/location change ho ya page refresh ho)
     useEffect(() => {
-        const currentSearch = searchParams.get('search') || '';
-        const currentLocation = searchParams.get('location') || '';
+    const currentSearch = searchParams.get('search') || '';
+    const currentLocation = searchParams.get('location') || '';
 
-        if (currentSearch !== searchTerm) {
-            setSearchTerm(currentSearch);
-            setDebouncedSearch(currentSearch);
-        }
-        if (currentLocation !== selectedLocation) {
-            setSelectedLocation(currentLocation);
-        }
-    }, [searchParams]);
+    // Sirf tab update karein agar value waqai change hui ho
+    if (currentSearch !== searchTerm) setSearchTerm(currentSearch);
+    if (currentLocation !== selectedLocation) setSelectedLocation(currentLocation);
+    
+    // Agar params khali hain to filters ko bhi reset kar dein
+    if (!currentSearch && !currentLocation) {
+        setActiveCategory("All");
+    }
+}, [searchParams]);
 
     // 🔥 DEBOUNCE: Type karne pe 500ms wait karo phir API call karo
     useEffect(() => {
@@ -492,7 +493,7 @@ const AllAds = ({ user }) => {
                                 <input 
                                     type="text" 
                                     placeholder="Search iPhone, Car, Laptop..." 
-                                    className="w-full pl-12 pr-10 py-4 rounded-2xl bg-white/95 backdrop-blur text-slate-800 placeholder:text-slate-400 shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30"
+                                    className="w-full pl-12 pr-10 py-4 rounded-2xl bg-white/95 backdrop-blur text-black placeholder:text-slate-400 shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30"
                                     value={searchTerm} 
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -533,11 +534,18 @@ const AllAds = ({ user }) => {
                                 </span>
                             )}
                             <button 
-                                onClick={() => setSearchTerm('')}
-                                className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1"
-                            >
-                                <FaTimes size={10} /> Clear All
-                            </button>
+    onClick={() => {
+        // 1. State reset
+        setSearchTerm('');
+        setSelectedLocation('');
+        
+        // 2. 🔥 URL Params ko empty karein (Yeh sabse zaroori hai)
+        setSearchParams({}); 
+    }}
+    className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+>
+    <FaTimes size={10} /> Clear All
+</button>
                         </div>
                     )}
                 </div>
