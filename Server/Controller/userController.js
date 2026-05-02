@@ -698,75 +698,152 @@ export const verifyIdentity = async (req, res) => {
         const existingUser = await User.findOne({ uid: userUid });
 
         if (existingUser?.isVerified) {
-            return res.status(400).json({ success: false, message: "Aapka account pehle se verified hai! ✅" });
+            return res.status(400).json({ 
+                success: false,
+                message: "Aapka account pehle se verified hai! ✅" 
+            });
         }
 
-        // Files check
         if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
-            return res.status(400).json({ success: false, message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" });
+            return res.status(400).json({ 
+                success: false,
+                message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" 
+            });
         }
 
         const timestamp = Date.now();
+
         console.log("🔍 Starting OCR on CNIC...");
         const ocrResult = await extractCNICData(req.files.idFront[0].buffer);
 
-        // Duplicate CNIC Check
+        if (ocrResult.success) {
+            console.log("✅ OCR Extracted:", {
+                name: ocrResult.name,
+                fatherName: ocrResult.fatherName,
+                cnicNumber: ocrResult.cnicNumber
+            });
+        }
+
         if (ocrResult.success && ocrResult.cnicNumber) {
-            const existingCNIC = await User.findOne({ cnicNumber: ocrResult.cnicNumber, uid: { $ne: userUid } });
-            if (existingCNIC) return res.status(409).json({ success: false, message: "Ye CNIC already registered hai!" });
+            const existingCNIC = await User.findOne({ 
+                cnicNumber: ocrResult.cnicNumber,
+                uid: { $ne: userUid }
+            });
+            if (existingCNIC) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Ye CNIC number already registered hai! ❌",
+                    error: "DUPLICATE_CNIC"
+                });
+            }
         }
 
-        // Phone duplicate check
         if (req.body.phoneNumber) {
-            const existingPhone = await User.findOne({ phoneNumber: req.body.phoneNumber, uid: { $ne: userUid } });
-            if (existingPhone) return res.status(409).json({ success: false, message: "Ye phone number already registered hai!" });
+            const existingPhone = await User.findOne({
+                phoneNumber: req.body.phoneNumber,
+                uid: { $ne: userUid }
+            });
+            if (existingPhone) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Ye phone number already registered hai! ❌",
+                    error: "DUPLICATE_PHONE"
+                });
+            }
         }
 
-        // Cloudinary Upload
         const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
             uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
             uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
         ]);
 
-        // AI Vision Analysis
-        const aiResponse = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: `Compare the face in the selfie with the face on the ID card. Return JSON: { "isMatched": boolean, "confidence": number, "reason": "string" }` },
-                        { type: "image_url", image_url: { url: idFrontUrl } },
-                        { type: "image_url", image_url: { url: selfieUrl } }
-                    ],
-                },
-            ],
-            response_format: { type: "json_object" },
-        });
+        // 🔥 NEW: Retry logic + temperature 0
+        let bestResult = null;
+        let maxConfidence = 0;
+        const maxRetries = 3;
 
-        const result = JSON.parse(aiResponse.choices[0].message.content);
-        console.log("🤖 AI raw response:", result);
+        for (let i = 0; i < maxRetries; i++) {
+            console.log(`🔄 Face Match Attempt ${i + 1}/${maxRetries}...`);
+            
+            const aiResponse = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                temperature: 0, // ← 🔥 Same result har baar
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { 
+                                type: "text", 
+                                text: `You are a biometric face comparison system. Compare the face in Image 1 (ID card) with the face in Image 2 (live selfie).
 
-        // Relaxed threshold for testing
-        const isActuallyMatched = result.isMatched || (result.confidence >= 20) || result.reason.toLowerCase().includes("match") || result.reason.toLowerCase().includes("similar");
+Rules:
+1. Look at facial structure: eyes, nose, jawline, eyebrows, face shape
+2. Ignore: hairstyle changes, lighting differences, facial expression, aging, glasses, beard/mustache growth
+3. Return ONLY this JSON format:
+{
+  "isMatched": boolean,
+  "confidence": number (0-100),
+  "reason": "brief explanation in English"
+}
 
-        if (!isActuallyMatched) {
-            return res.status(400).json({ success: false, message: `Verification fail: ${result.reason} ❌` });
+Be strict but fair. If same person with minor differences, confidence should be 70+.`
+                            },
+                            { type: "image_url", image_url: { url: idFrontUrl } },
+                            { type: "image_url", image_url: { url: selfieUrl } }
+                        ],
+                    },
+                ],
+                response_format: { type: "json_object" },
+            });
+
+            const result = JSON.parse(aiResponse.choices[0].message.content);
+            console.log(`📊 Attempt ${i + 1} Result:`, result);
+
+            if (result.confidence > maxConfidence) {
+                maxConfidence = result.confidence;
+                bestResult = result;
+            }
+
+            // Agar ek baar mein 70+ mil jaye, break kar do
+            if (result.confidence >= 70 && result.isMatched) {
+                console.log("✅ High confidence match found, stopping retries.");
+                break;
+            }
         }
 
-        // Database Update (Sirf success par)
+        console.log("🏆 Best Result:", bestResult);
+
+        // 🔥 Threshold logic improved
+        const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 50;
+
+        if (!isActuallyMatched) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Verification failed: ${bestResult.reason} (Confidence: ${bestResult.confidence}%) ❌`,
+                error: "VERIFICATION_FAILED",
+                debug: { confidence: bestResult.confidence, reason: bestResult.reason }
+            });
+        }
+
         const updateData = {
             profilePic: selfieUrl,
             isVerified: true,
             verificationStatus: 'Verified',
             verifiedAt: new Date(),
             kycDocuments: { idFront: idFrontUrl, idBack: idBackUrl, selfie: selfieUrl },
-            kycDetails: { method: "AI + OCR", aiCheck: true, faceMatchScore: result.confidence, reason: result.reason }
+            kycDetails: {
+                method: "AI + OCR Verification",
+                aiCheck: true,
+                faceMatchScore: bestResult.confidence,
+                reason: bestResult.reason,
+                ocrData: { extracted: ocrResult.success, rawText: ocrResult.rawText || null }
+            }
         };
 
         if (ocrResult.success) {
             if (ocrResult.name) updateData.name = ocrResult.name;
+            if (ocrResult.fatherName) updateData.fatherName = ocrResult.fatherName;
             if (ocrResult.cnicNumber) updateData.cnicNumber = ocrResult.cnicNumber;
             if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
             if (ocrResult.gender) updateData.gender = ocrResult.gender;
@@ -777,13 +854,32 @@ export const verifyIdentity = async (req, res) => {
             updateData.isPhoneVerified = true;
         }
 
-        const updatedUser = await User.findOneAndUpdate({ uid: userUid }, updateData, { new: true });
+        const updatedUser = await User.findOneAndUpdate(
+            { uid: userUid },
+            updateData,
+            { new: true }
+        );
 
-        return res.status(200).json({ success: true, message: "Verified successfully! 🎉", data: updatedUser });
+        return res.status(200).json({ 
+            success: true, 
+            message: "Verified successfully! 🎉",
+            data: {
+                name: updatedUser.name,
+                fatherName: updatedUser.fatherName || null,
+                cnicNumber: updatedUser.cnicNumber || null,
+                phoneNumber: updatedUser.phoneNumber || null,
+                isVerified: true,
+                confidence: bestResult.confidence
+            }
+        });
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
-        res.status(500).json({ success: false, message: "Server error", error: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: "Server error during verification", 
+            error: error.message 
+        });
     }
 };
 
