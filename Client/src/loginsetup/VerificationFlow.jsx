@@ -134,59 +134,51 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         setSelfie(null);
     }, []);
 
-    const handleFinalSubmit = useCallback(async () => {
-        if (!selfie || !idFront || !idBack) {
-            toast.error("Please complete all steps (Front, Back & Selfie) 📸");
-            return;
-        }
+   const handleFinalSubmit = useCallback(async () => {
+    if (!selfie || !idFront || !idBack) {
+        toast.error("Please complete all steps (Front, Back & Selfie) 📸");
+        return;
+    }
 
-        setLoading(true);
-        const toastId = toast.loading("AI is analyzing your ID and Face... 🤖", {
-            style: { minWidth: '250px' },
+    setLoading(true);
+    const toastId = toast.loading("AI is analyzing your ID and Face... 🤖");
+
+    try {
+        const token = await auth.currentUser?.getIdToken(true);
+        if (!token) throw new Error("Session expired.");
+
+        // ❌ YEH PUT CALL YAHAN SE DELETE KAR DEIN (jo purana profile update kar raha tha)
+        // Aise hi rehne dein, hum backend (controller) mein verification ke sath hi save karenge.
+
+        // 2. KYC Documents upload for AI check
+        const formData = new FormData();
+        formData.append('idFront', idFront); 
+        formData.append('idBack', idBack);
+        formData.append('phoneNumber', phone); // ✅ Phone number yahan bhejein
+        
+        const selfieBlob = await fetch(selfie).then(r => r.blob());
+        formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
+
+        const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${token}`
+            },
+            timeout: 90000 
         });
 
-        try {
-            const token = await auth.currentUser?.getIdToken(true);
-            if (!token) throw new Error("Session expired. Please login again.");
-
-            // 1. Update Profile Info
-            await axios.put(`https://rezon.up.railway.app/api/users/me`, {
-                phoneNumber: phone,
-                password: password,
-                isPhoneVerified: true
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            // 2. KYC Documents upload for AI check
-            const formData = new FormData();
-            formData.append('idFront', idFront); 
-            formData.append('idBack', idBack);
-            
-            const selfieBlob = await fetch(selfie).then(r => r.blob());
-            formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
-
-            const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
-                headers: { 
-                    'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${token}`
-                },
-                timeout: 90000 
-            });
-
-            if (verifyRes.data?.success) {
-                toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
-                onComplete?.(verifyRes.data.profileUrl); 
-                setTimeout(() => onClose?.(), 2000);
-            }
-        } catch (err) {
-            console.error("KYC Error Details:", err.response); // Debugging 404
-            const errorMsg = err.response?.data?.message || "Verification failed. Check lighting and ID.";
-            toast.error(errorMsg, { id: toastId, duration: 6000 });
-        } finally {
-            setLoading(false);
+        if (verifyRes.data?.success) {
+            toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
+            onComplete?.(); 
+            setTimeout(() => onClose?.(), 2000);
         }
-    }, [selfie, idFront, idBack, password, phone, onComplete, onClose]);
+    } catch (err) {
+        const errorMsg = err.response?.data?.message || "Verification failed.";
+        toast.error(errorMsg, { id: toastId, duration: 6000 });
+    } finally {
+        setLoading(false);
+    }
+}, [selfie, idFront, idBack, phone, password, onComplete, onClose]);
 
     useEffect(() => {
         const handleEscape = (e) => {
