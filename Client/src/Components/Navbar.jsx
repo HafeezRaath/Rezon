@@ -179,7 +179,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
             setShowLogin(true);
             return;
         }
-        navigate('/chat/list');
+        navigate('/conversations');
         setShowMobileMenu(false);
     }, [user, navigate]);
 
