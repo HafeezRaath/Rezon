@@ -23,7 +23,8 @@ import {
     getChatMessages,
     sendMessage,
     deleteChat,
-    startChat
+    startChat,
+    updateAdStatus
 } from "../Controller/userController.js";
 
 import authenticate from "../authMiddleware.js";
