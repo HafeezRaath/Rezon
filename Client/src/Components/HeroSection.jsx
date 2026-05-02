@@ -5,7 +5,6 @@ import { auth } from "../firebase.config";
 import axios from "axios";
 import toast from "react-hot-toast";
 
-// 🔧 FIXED: API URL without space
 const getApiUrl = () => {
     const isLocal = window.location.hostname === "localhost" || 
                     window.location.hostname === "127.0.0.1";
@@ -14,10 +13,10 @@ const getApiUrl = () => {
         : "https://rezon.up.railway.app/api";
 };
 
-const HeroSection = ({ setShowLogin, setShowAds, setShowVerification }) => {
+// 🔥 Props sirf setShowLogin chahiye ab
+const HeroSection = ({ setShowLogin }) => {
     const navigate = useNavigate();
 
-    // 🔧 FIXED: Better error handling
     const handleStartSelling = useCallback(async () => {
         const currentUser = auth.currentUser;
 
@@ -41,31 +40,25 @@ const HeroSection = ({ setShowLogin, setShowAds, setShowVerification }) => {
 
             if (!res.data?.isVerified) {
                 toast("Please verify your identity first 🛡️", { icon: '⚠️' });
-                setShowVerification(true);
+                navigate('/verify');  // 🔥 Verify page par bhejo
             } else {
-                setShowAds(true);
+                navigate('/post-ad');  // 🔥 PostAd.jsx khulega
             }
         } catch (err) {
             toast.dismiss(toastId);
             console.error("Verification check failed:", err);
             
-            // 🔧 FIXED: Specific error handling
             if (err.code === 'ECONNABORTED') {
                 toast.error("Request timeout. Please check your connection.");
             } else if (err.response?.status === 401) {
                 toast.error("Session expired. Please login again.");
                 setShowLogin(true);
-            } else if (err.response?.status === 404) {
-                // User not found in DB - show verification
-                setShowVerification(true);
             } else {
                 toast.error("Unable to verify status. Please try again.");
-                // Don't auto-open verification on unknown errors
             }
         }
-    }, [setShowLogin, setShowAds, setShowVerification]);
+    }, [setShowLogin, navigate]);
 
-    // 🔧 FIXED: Emerald theme classes
     const theme = {
         primary: "emerald",
         gradient: "from-emerald-500 to-teal-600",
@@ -88,7 +81,6 @@ const HeroSection = ({ setShowLogin, setShowAds, setShowVerification }) => {
                             className="w-full h-auto rounded-3xl shadow-2xl border-8 border-white transform group-hover:scale-[1.02] transition-transform duration-500"
                             loading="eager"
                         />
-                        {/* Floating Badge - 🔧 FIXED: Emerald theme */}
                         <div className="absolute -bottom-6 -right-6 bg-white p-4 rounded-2xl shadow-xl hidden lg:block animate-in slide-in-from-bottom-2">
                             <p className={`${theme.badge.split(' ')[1]} font-black text-xl`}>100% Secure</p>
                             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">AI Verified Deals</p>
@@ -98,31 +90,30 @@ const HeroSection = ({ setShowLogin, setShowAds, setShowVerification }) => {
 
                 {/* Right: Content */}
                 <div className="md:w-1/2 w-full text-center md:text-left flex flex-col items-center md:items-start pl-0 md:pl-10">
-                    {/* Icon/Emoji - 🔧 FIXED: Emerald background */}
                     <div className={`${theme.iconBg} w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-6 shadow-sm`}>
                         📦
                     </div>
 
-                    {/* Heading - 🔧 FIXED: Emerald accent */}
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 leading-[1.1] mb-6 tracking-tight">
                         Pakistan's <span className="text-emerald-600">Smartest</span> Way to Buy & Sell
                     </h1>
 
-                    {/* Supporting Text */}
                     <p className="text-slate-600 text-lg md:text-xl font-medium max-w-md mb-10 leading-relaxed">
                         Discover Pakistan's first AI-powered resale marketplace — where verified listings meet local trust. 
                     </p>
 
-                    {/* CTA Buttons - 🔧 FIXED: Emerald theme */}
                     <div className="flex flex-wrap gap-4 justify-center md:justify-start w-full">
+                        {/* 🔥 Start Selling → PostAd.jsx */}
                         <button 
                             onClick={handleStartSelling}
                             className={`${theme.buttonPrimary} text-white px-10 py-4 rounded-2xl text-lg font-bold shadow-xl transition-all active:scale-95 flex items-center gap-2`}
                         >
                             Start Selling Now
                         </button>
+                        
+                        {/* 🔥 Browse Products → Home (All Ads) */}
                         <button 
-                            onClick={() => navigate('/categories/mobiles')}
+                            onClick={() => navigate('/')}  
                             className={`bg-white border-2 border-slate-200 text-slate-700 px-10 py-4 rounded-2xl text-lg font-bold ${theme.buttonSecondary} transition-all active:scale-95`}
                         >
                             Browse Store
