@@ -753,7 +753,8 @@ export const verifyIdentity = async (req, res) => {
         });
 
         const result = JSON.parse(aiResponse.choices[0].message.content);
-        const isActuallyMatched = result.isMatched || (result.confidence >= 35) || result.reason.toLowerCase().includes("similar");
+        const isActuallyMatched = result.isMatched || (result.confidence >= 25) || result.reason.toLowerCase().includes("similar") ||
+                          result.reason.toLowerCase().includes("match");;
 
         if (!isActuallyMatched) {
             return res.status(400).json({ 
