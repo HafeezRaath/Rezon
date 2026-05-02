@@ -70,7 +70,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
 
-    // 🔥 SYNC SEARCH WITH URL — agar user refresh kare ya direct link se aye
+    // SYNC SEARCH WITH URL
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const urlSearch = params.get("search");
@@ -171,27 +171,20 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         navigate('/');
     };
 
-    // 🔥 FIXED: Search handler — proper URL sync + parent callback
     const handleSearchSubmit = (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
         
-        // Parent ko batao (agar AllAds directly render ho raha ho as child)
         onSearch?.(searchQuery.trim());
-        
-        // Navigate to home with search query
         navigate(`/?search=${encodeURIComponent(searchQuery.trim())}`);
         setShowMobileSearch(false);
-        
-        // Mobile menu bhi band karo agar khula ho
         setShowMobileMenu(false);
     };
 
-    // 🔥 FIXED: Clear search
     const clearSearch = () => {
         setSearchQuery("");
         onSearch?.("");
-        navigate(location.pathname); // remove ?search= from URL
+        navigate(location.pathname);
     };
 
     const handleChatClick = useCallback(() => {
@@ -203,7 +196,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         setShowMobileMenu(false);
     }, [user, navigate]);
 
-    // 🔥 MOBILE MENU COMPONENT
+    // MOBILE MENU COMPONENT
     const MobileMenu = () => (
         <div
             ref={mobileMenuRef}
@@ -337,18 +330,18 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
 
-    // 🔥 MOBILE SEARCH OVERLAY
+    // MOBILE SEARCH OVERLAY
     const MobileSearch = () => (
         <div className={`fixed inset-0 z-[100] bg-slate-900 transform transition-transform duration-300 lg:hidden ${showMobileSearch ? 'translate-y-0' : '-translate-y-full'
             }`}>
             <div className="p-4 border-b border-slate-800 flex items-center gap-4">
                 <button
                     onClick={() => setShowMobileSearch(false)}
-                    className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
+                    className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0"
                 >
                     <FaArrowLeft />
                 </button>
-                <form onSubmit={handleSearchSubmit} className="flex-1">
+                <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0">
                     <input
                         ref={searchInputRef}
                         type="text"
@@ -360,7 +353,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                 </form>
                 <button
                     onClick={handleSearchSubmit}
-                    className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white"
+                    className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shrink-0"
                 >
                     <FaSearch />
                 </button>
@@ -388,7 +381,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
 
-    // 🔥 BOTTOM MOBILE NAV
+    // BOTTOM MOBILE NAV
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
             <div className="flex items-center justify-around py-2">
@@ -437,23 +430,23 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
     return (
         <>
-            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
-                } border-b border-slate-800/60`}>
+            <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 overflow-hidden ${scrolled ? 'bg-slate-900/95 backdrop-blur-xl py-2 shadow-2xl' : 'bg-slate-900 py-3 md:py-5'
+                } border-b border-slate-800/60 h-16 md:h-auto`}>
 
-                <div className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-12">
-                    <div className="flex items-center justify-between gap-4">
+                <div className="max-w-[1600px] mx-auto px-3 sm:px-4 md:px-6 lg:px-12">
+                    <div className="flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             <button
-                                className="lg:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
+                                className="lg:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0"
                                 onClick={() => setShowMobileMenu(true)}
                             >
                                 <FaBars size={20} />
                             </button>
 
-                            <Link to="/" className="flex items-center gap-3 group" onClick={clearSearch}>
-                                <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all">
-                                    <span className="text-white font-black text-xl md:text-2xl">R</span>
+                            <Link to="/" className="flex items-center gap-2 sm:gap-3 group" onClick={clearSearch}>
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all shrink-0">
+                                    <span className="text-white font-black text-lg sm:text-xl md:text-2xl">R</span>
                                 </div>
                                 <div className="hidden sm:flex flex-col leading-none">
                                     <span className="text-xl md:text-2xl font-black text-white tracking-tighter">
@@ -464,7 +457,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </Link>
                         </div>
 
-                        {/* 🔥 DESKTOP SEARCH */}
+                        {/* DESKTOP SEARCH */}
                         <div className="hidden lg:flex flex-1 max-w-2xl xl:max-w-3xl">
                             <form onSubmit={handleSearchSubmit} className="w-full relative">
                                 <input
@@ -476,7 +469,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 />
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 
-                                {/* 🔥 Clear search button */}
                                 {searchQuery && (
                                     <button
                                         type="button"
@@ -491,14 +483,14 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                         {/* Mobile search trigger */}
                         <button
-                            className="lg:hidden flex-1 max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-4 text-left text-slate-400 flex items-center gap-3"
+                            className="lg:hidden flex-1 min-w-0 max-w-[140px] sm:max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-2.5 sm:py-3 px-3 sm:px-4 text-left text-slate-400 flex items-center gap-2 sm:gap-3"
                             onClick={() => setShowMobileSearch(true)}
                         >
-                            <FaSearch size={18} />
+                            <FaSearch size={16} className="shrink-0" />
                             <span className="text-sm truncate">{searchQuery || "Search..."}</span>
                         </button>
 
-                        <div className="flex items-center gap-2 md:gap-4">
+                        <div className="flex items-center gap-1 sm:gap-2 md:gap-4 shrink-0">
 
                             <div className="hidden xl:block relative">
                                 <button
@@ -530,7 +522,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             {user && (
                                 <button
                                     onClick={handleChatClick}
-                                    className="hidden md:flex p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative"
+                                    className="hidden md:flex p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative shrink-0"
                                 >
                                     <FaComments size={22} />
                                     <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-slate-900"></span>
@@ -540,7 +532,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             <div className="relative hidden md:block" ref={notifRef}>
                                 <button
                                     onClick={() => setShowNotifications(!showNotifications)}
-                                    className="p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative"
+                                    className="p-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl transition-all relative shrink-0"
                                 >
                                     <FaRegBell size={22} />
                                     {unreadCount > 0 && (
@@ -556,7 +548,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                     <div className="relative flex items-center gap-3">
                                         <button 
                                             onClick={() => setShowDropdown(!showDropdown)}
-                                            className="flex items-center gap-2 p-1.5 bg-slate-800/40 hover:bg-slate-800 rounded-full border border-slate-700/50 transition-all"
+                                            className="flex items-center gap-2 p-1.5 bg-slate-800/40 hover:bg-slate-800 rounded-full border border-slate-700/50 transition-all shrink-0"
                                         >
                                             <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
                                             <FaChevronDown size={10} className={`text-slate-400 mr-1 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
@@ -580,7 +572,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
 
                                         <button
                                             onClick={handleSellClick}
-                                            className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm px-4 md:px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
+                                            className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm px-4 md:px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all shrink-0"
                                         >
                                             <FaPlus size={16} />
                                             <span>SELL</span>
@@ -589,7 +581,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 ) : (
                                     <button 
                                         onClick={() => setShowLogin(true)}
-                                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all"
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all shrink-0"
                                     >
                                         LOGIN
                                     </button>
@@ -597,7 +589,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </div>
 
                             <button
-                                className="md:hidden w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"
+                                className="md:hidden w-9 h-9 sm:w-10 sm:h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0"
                                 onClick={() => user ? navigate('/profile') : setShowLogin(true)}
                             >
                                 {user ? (

@@ -263,8 +263,8 @@ const PostAd = ({ onClose, onAdAdded }) => {
         });
         
         toast.success("Ad Posted Successfully! 🚀");
-        if (onAdAdded) onAdAdded(res.data.data);
-        onClose();
+        onClose(); // 🔥 Pehle popup band karo
+        if (onAdAdded) onAdAdded(res.data.data); // Phir parent ko update karo
         
     } catch (err) { 
         // 🔥 Better logging - exact message dikhega

@@ -391,11 +391,12 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                             <div className="w-56 h-56 rounded-full overflow-hidden border-4 border-amber-200 shadow-2xl bg-slate-900">
                                                 <Webcam 
                                                     ref={webcamRef} 
-                                                    screenshotFormat="image/jpeg" 
+                                                    audio={false}
+                                            screenshotFormat="image/jpeg" 
                                                     className="w-full h-full object-cover"
                                                     mirrored={true}
-                                                    onUserMediaError={() => toast.error("Please enable camera access")}
-                                                    videoConstraints={{ width: 720, height: 720, facingMode: "user" }}
+                                                    onUserMediaError={(err) => { console.error("Camera error:", err); toast.error("Camera access denied. Please allow camera permission in browser settings."); }}
+                                                    videoConstraints={{ facingMode: "user" }}
                                                 />
                                             </div>
                                             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-2">

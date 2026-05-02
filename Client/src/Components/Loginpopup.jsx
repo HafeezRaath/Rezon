@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { FcGoogle } from "react-icons/fc";
 import { FaEye, FaEyeSlash, FaSpinner, FaTimes, FaEnvelope, FaPhone, FaLock, FaApple, FaFacebook } from "react-icons/fa";
 import { auth, google } from "../firebase.config";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import toast from "react-hot-toast";
 import axios from "axios";
 import Signinpopup from "./Signinpopup";
@@ -20,6 +20,18 @@ export default function LoginPopup({ onClose, isOpen }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const hasClosedRef = useRef(false);
+
+  // 🔥 AUTO-CLOSE: Jaise hi login ho, popup khud band ho jaye
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && isOpen && !hasClosedRef.current) {
+        hasClosedRef.current = true;
+        onClose();
+      }
+    });
+    return () => unsubscribe();
+  }, [isOpen, onClose]);
 
   // Prevent background scroll
   useEffect(() => {

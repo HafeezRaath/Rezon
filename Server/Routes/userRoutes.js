@@ -1,3 +1,4 @@
+
 import express from "express";
 import multer from "multer";
 import bcrypt from "bcrypt";
@@ -29,6 +30,7 @@ import {
 
 import authenticate from "../authMiddleware.js";
 import User from "../model/user.js";
+import Ad from "../model/ad.js";  // 🔥 FIXED: Ad model import missing tha
 
 const route = express.Router();
 
@@ -96,7 +98,9 @@ route.put("/users/me", authenticate, async (req, res) => {
         });
     }
 });
-router.get('/ads', async (req, res) => {
+
+// 🔥 FIXED: router → route (yahi error tha)
+route.get('/ads', async (req, res) => {
     const { search, category, location } = req.query;
     let query = {};
     
@@ -116,6 +120,7 @@ router.get('/ads', async (req, res) => {
     const ads = await Ad.find(query).sort({ createdAt: -1 });
     res.json(ads);
 });
+
 // ✅ PATCH: Extra Safety (Agar Railway PUT block kare to ye chale ga)
 route.patch("/users/me", authenticate, async (req, res) => {
     try {
