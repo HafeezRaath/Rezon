@@ -22,7 +22,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ==========================================
-// 🌐 CORS SETUP
+// 🌐 CORS SETUP - FIXED
 // ==========================================
 const allowedOrigins = [
   "https://rezon.raathdeveloper.com",
@@ -30,21 +30,48 @@ const allowedOrigins = [
   "https://raathdeveloper.com",
   "https://www.raathdeveloper.com",
   "https://rezon.up.railway.app",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "http://localhost:3000"
 ];
 
+// 🔥 FIXED: Proper CORS with preflight handling
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+    res.header("Access-Control-Allow-Credentials", "true");
+  }
+  
+  // 🔥 CRITICAL: Handle OPTIONS preflight immediately
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// Also keep cors() as backup
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('CORS Policy Blocked this request'));
+      console.log("❌ CORS Blocked:", origin);
+      callback(new Error('CORS Policy Blocked: ' + origin));
     }
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
 }));
+
+// 🔥 EXTRA: Explicit OPTIONS handler for all routes
+app.options("*", (req, res) => {
+  res.status(200).end();
+});
 
 // Middlewares
 app.use(express.json({ limit: '50mb' }));
@@ -151,11 +178,11 @@ mongoose.connect(MONGO_URL).then(() => {
   console.error("❌ DB Error:", err);
   process.exit(1);
 });
+
 if (process.env.NODE_ENV !== 'production') {
     dotenv.config();
 }
 
-// Production mein Railway automatically variables inject karta hai
 console.log("🔍 ENV CHECK:", {
     node_env: process.env.NODE_ENV || 'not set',
     openai: process.env.OPENAI_API_KEY ? "✅ Set" : "❌ Missing",
