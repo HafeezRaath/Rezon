@@ -227,21 +227,20 @@ const PostAd = ({ onClose, onAdAdded }) => {
         return formData.categoryDetails[dependField] === dependValue;
     };
 
-    const submitAd = async (e) => {
+   const submitAd = async (e) => {
     if(e) e.preventDefault();
     
-    // ✅ VALIDATION
     if(!formData.title.trim() || !formData.price || !formData.location.trim() || !formData.description.trim()) {
         return toast.error("Title, Price, Location aur Description lazmi hain!");
     }
 
-    const token = localStorage.getItem("firebaseIdToken");  // ← Yeh missing tha!
+    const token = localStorage.getItem("firebaseIdToken");
     if (!token) {
         return toast.error("Please login first!");
     }
 
     setLoading(true);
-    const postData = new FormData();  // ← Yeh missing tha!
+    const postData = new FormData();
     
     postData.append("title", formData.title);
     postData.append("price", formData.price);
@@ -250,17 +249,16 @@ const PostAd = ({ onClose, onAdAdded }) => {
     postData.append("condition", formData.condition);
     postData.append("category", selectedCat.id);
     postData.append("phoneNumber", formData.phoneNumber || userPhone);
-    postData.append("imageQualityByAI", formData.imageQuality);
+    postData.append("imageQualityByAI", formData.imageQuality || "Original");
     postData.append("details", JSON.stringify(formData.categoryDetails));
     
-    // Images append karo
     formData.images.forEach(f => postData.append("images", f));
 
     try {
         const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
             headers: { 
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'multipart/form-data'
+                Authorization: `Bearer ${token}`
+                // 🔥 Content-Type HATA DIYA - Axios khud handle karega
             }
         });
         
@@ -269,9 +267,14 @@ const PostAd = ({ onClose, onAdAdded }) => {
         onClose();
         
     } catch (err) { 
-        const errorMsg = err.response?.data?.message || "Failed to post ad.";
+        // 🔥 Better logging - exact message dikhega
+        const errorData = err.response?.data;
+        const errorMsg = errorData?.message || errorData?.error || "Failed to post ad.";
+        
+        console.error("Post Ad Full Error:", errorData);
+        console.error("Status:", err.response?.status);
+        
         toast.error(errorMsg);
-        console.error("Post Ad Error:", err.response?.data);
     } finally { 
         setLoading(false); 
     }

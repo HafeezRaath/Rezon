@@ -229,6 +229,7 @@ export const create = async (req, res) => {
 
         const posted_by_uid = req.user.uid;
 
+        // 1. Images check
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ 
                 success: false,
@@ -236,53 +237,102 @@ export const create = async (req, res) => {
             });
         }
 
-        const { price, title, description, category, condition, location, imageQualityByAI } = req.body;
+        // 2. Extract fields
+        const { 
+            price, 
+            title, 
+            description, 
+            category, 
+            condition, 
+            location, 
+            imageQualityByAI,
+            contactNumber,
+            details 
+        } = req.body;
 
-        if (!title?.trim()) return res.status(400).json({ success: false, message: "📝 Title is required" });
-        if (!price || isNaN(Number(price))) return res.status(400).json({ success: false, message: "💰 Valid price is required" });
-        if (!location?.trim()) return res.status(400).json({ success: false, message: "📍 Location is required" });
-        if (!description?.trim()) return res.status(400).json({ success: false, message: "📝 Description is required" });
-        if (!category) return res.status(400).json({ success: false, message: "🏷️ Category is required" });
+        // 3. Required field validation
+        if (!title?.trim()) {
+            return res.status(400).json({ success: false, message: "📝 Title is required" });
+        }
+        if (!price || isNaN(Number(price)) || Number(price) <= 0) {
+            return res.status(400).json({ success: false, message: "💰 Valid price is required" });
+        }
+        if (!location?.trim()) {
+            return res.status(400).json({ success: false, message: "📍 Location is required" });
+        }
+        if (!description?.trim()) {
+            return res.status(400).json({ success: false, message: "📝 Description is required" });
+        }
+        if (!category || !ALLOWED_CATEGORIES.includes(category)) {
+            return res.status(400).json({ success: false, message: "🏷️ Valid category is required" });
+        }
 
-        if (imageQualityByAI === "Stock" || imageQualityByAI === "Screenshot") {
+        // 4. AI Image Quality Check (with default fallback)
+        const aiQuality = imageQualityByAI || "Original";
+        if (aiQuality === "Stock" || aiQuality === "Screenshot") {
             return res.status(400).json({ 
                 success: false,
                 message: "🛡️ Rezon Security: Internet photos / screenshots not allowed." 
             });
         }
 
-        // 🛡️ DUPLICATE SHIELD
+        // 5. 🛡️ DUPLICATE SHIELD (Parallel processing)
         const imageHashes = [];
-        for (const file of req.files) {
+        const duplicateChecks = req.files.map(async (file) => {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
             const duplicate = await Ad.findOne({ 
                 imageHashes: hash, 
                 isDeleted: false 
             });
             if (duplicate) {
+                throw new Error(`DUPLICATE_IMAGE:${hash}`);
+            }
+            return hash;
+        });
+
+        try {
+            const hashes = await Promise.all(duplicateChecks);
+            imageHashes.push(...hashes);
+        } catch (err) {
+            if (err.message.startsWith('DUPLICATE_IMAGE')) {
                 return res.status(400).json({ 
                     success: false,
                     message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai. Nayi photo upload karein." 
                 });
             }
-            imageHashes.push(hash);
+            throw err;
         }
 
+        // 6. Upload images to Cloudinary
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
+        // 7. Parse details
         let parsedDetails = {};
-        if (req.body.details) {
+        if (details) {
             try {
-                parsedDetails = typeof req.body.details === 'string' 
-                    ? JSON.parse(req.body.details) 
-                    : req.body.details;
+                parsedDetails = typeof details === 'string' 
+                    ? JSON.parse(details) 
+                    : details;
             } catch (e) {
-                console.log("⚠️ Details parse failed");
+                console.log("⚠️ Details parse failed:", e.message);
             }
         }
 
+        // 8. Validate required category fields (optional but recommended)
+        const requiredFields = CATEGORY_FIELD_MAP[category] || [];
+        const missingFields = requiredFields.filter(field => !parsedDetails[field]);
+        if (missingFields.length > 0 && category === "Mobile") {
+            console.log("⚠️ Missing fields for", category, ":", missingFields);
+            // Don't block, just log - or uncomment to enforce:
+            // return res.status(400).json({
+            //     success: false,
+            //     message: `Missing required fields: ${missingFields.join(', ')}`
+            // });
+        }
+
+        // 9. Create Ad
         const newAd = new Ad({
             images: imageUrls,
             imageHashes: imageHashes,
@@ -294,7 +344,8 @@ export const create = async (req, res) => {
             category,
             posted_by_uid,
             status: 'Active',
-            aiAuditStatus: imageQualityByAI || "Original",
+            aiAuditStatus: aiQuality,
+            contactNumber: contactNumber || null, // ← Save contact number
             details: parsedDetails
         });
 

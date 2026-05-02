@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";  // ← ADD THIS
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase.config";
 
@@ -27,7 +28,7 @@ function App() {
   // --- 🔐 AUTH STATE ---
   const [user, setUser] = useState(null);
 
-  // --- ⚙️ UI STATES (Hero & Navbar Logic) ---
+  // --- ⚙️ UI STATES ---
   const [showLogin, setShowLogin] = useState(false);
   const [showAds, setShowAds] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
@@ -39,7 +40,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- 🔍 HANDLERS ---
   const handleSearch = (query) => {
     navigate(`/?search=${encodeURIComponent(query)}`);
   };
@@ -55,7 +55,30 @@ function App() {
 
   return (
     <>
-      {/* 🟢 NAVBAR: Passing all required props */}
+      {/* 🔥 TOASTER - Z-Index 99999 taake modal se upar dikhe */}
+      <Toaster 
+        position="top-center"
+        containerStyle={{ zIndex: 99999 }}
+        toastOptions={{
+          style: {
+            background: '#fff',
+            color: '#000',
+            fontWeight: 'bold',
+            padding: '16px 24px',
+            borderRadius: '16px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+          },
+          success: {
+            style: { background: '#10b981', color: '#fff' },
+            iconTheme: { primary: '#fff', secondary: '#10b981' }
+          },
+          error: {
+            style: { background: '#ef4444', color: '#fff' },
+            iconTheme: { primary: '#fff', secondary: '#ef4444' }
+          }
+        }}
+      />
+
       <Navbar 
         user={user} 
         onSearch={handleSearch} 
@@ -63,7 +86,6 @@ function App() {
       /> 
 
       <Routes location={background || location}>
-        {/* 🏠 HOME: Passing states to trigger HeroSection logic */}
         <Route path="/" element={
           <Home 
             user={user} 
@@ -74,10 +96,13 @@ function App() {
         } />
         
         <Route path="/profile" element={<Profile user={user}/>}/>
+        
+        {/* 🔥 PostAd as normal route (not modal) - user can refresh */}
         <Route path="/post-ad" element={<PostAd user={user} />} />
+        
         <Route path="/update-ad/:id" element={<UpdateAd user={user} />} />
         
-        {/* 📱 CATEGORIES */}
+        {/* Categories */}
         <Route path="/mobiles" element={<CategoryAds user={user} category="Mobile" />} /> 
         <Route path="/vehicles" element={<CategoryAds user={user} category="Car" />} /> 
         <Route path="/property-for-sale" element={<CategoryAds user={user} category="PropertySale" />} />
@@ -86,15 +111,15 @@ function App() {
         <Route path="/furniture" element={<CategoryAds user={user} category="Furniture" />} />
         <Route path="/category/:slug" element={<CategoryAds user={user} />} /> 
 
-        {/* 💬 CHAT */}
+        {/* Chat */}
         <Route path="/conversations" element={<ConversationList user={user} />} />
         <Route path="/chat/:conversationId" element={<ChatRoom user={user} />} />
         
-        {/* 🔑 AUTH */}
+        {/* Auth */}
         <Route path="/PhoneLogin" element={<PhoneLogin user={user}/>}/>
         <Route path="/verify" element={<VerificationFlow user={user} />} />
         
-        {/* 🛡️ ADMIN */}
+        {/* Admin */}
         <Route path="/admin/*" element={
           user && isAdmin(user.uid) ? (
             <AdminPanel />
@@ -114,7 +139,7 @@ function App() {
           )
         } />
         
-        {/* ⚠️ 404 */}
+        {/* 404 */}
         <Route path="*" element={
           <div className="min-h-screen flex items-center justify-center bg-slate-50">
             <div className="text-center">
@@ -128,7 +153,7 @@ function App() {
         } />
       </Routes>
 
-      {/* 📦 MODAL ROUTES (background state) */}
+      {/* Modal Routes */}
       {background && (
         <Routes>
           <Route path="/login" element={<LoginPopup onClose={() => navigate(-1)} />} />
@@ -137,7 +162,7 @@ function App() {
         </Routes>
       )}
 
-      {/* 🛠️ MANUAL POPUP TRIGGER (Optional: if not using /login route) */}
+      {/* Manual Popups */}
       {showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
     </>
   );
