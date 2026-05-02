@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { 
     FaSearch, FaStar, FaMapMarkerAlt, FaPhoneAlt, FaUserCircle, 
     FaCheckCircle, FaArrowLeft, FaArrowRight, FaFlag, FaShieldAlt,
     FaTimes, FaWhatsapp, FaCommentDots, FaHeart, FaShareAlt,
     FaFilter, FaSort, FaBolt, FaEye, FaClock, FaTag,
     FaThLarge, FaList, FaChevronDown, FaCheck,
-    FaChevronLeft, FaChevronRight, FaCircle
+    FaChevronLeft, FaChevronRight, FaCircle, FaSpinner
 } from "react-icons/fa";
 import toast from "react-hot-toast";
+import LocationDropdown from "./LocationDropdown";
 
 // 🔧 FIXED: API URL without space
 const API_BASE_URL = "https://rezon.up.railway.app/api";
@@ -39,7 +40,7 @@ const handleCallSeller = (phoneNumber) => {
         toast.error("Seller phone number not available");
         return;
     }
-    const cleanNumber = phoneNumber.replace(/[\\s-]/g, '');
+    const cleanNumber = phoneNumber.replace(/[\s-]/g, '');
     window.location.href = `tel:${cleanNumber}`;
     toast.success(`Dialing ${phoneNumber}...`, { icon: '📞' });
 };
@@ -128,13 +129,19 @@ const AdCard = ({ ad, onClick, isListView }) => {
 // 🔥 MAIN COMPONENT
 const AllAds = ({ user }) => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    
+    // 🔥 READ SEARCH FROM URL (Navbar se ya refresh pe)
+    const urlSearch = searchParams.get('search') || '';
+    const [searchTerm, setSearchTerm] = useState(urlSearch);
+    const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
+    
     const [ads, setAds] = useState([]);
     const [filteredAds, setFilteredAds] = useState([]);
-    const [searchTerm, setSearchTerm] = useState("");
     const [activeCategory, setActiveCategory] = useState("All");
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
-    const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'price-low' | 'price-high'
+    const [viewMode, setViewMode] = useState('grid');
+    const [sortBy, setSortBy] = useState('newest');
     const [showFilters, setShowFilters] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     
@@ -147,6 +154,7 @@ const AllAds = ({ user }) => {
     const [sellerInfo, setSellerInfo] = useState(null);
     const [sellerReviews, setSellerReviews] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState("");
     
     // 🔥 REPORT MODAL STATES
     const [showReportModal, setShowReportModal] = useState(false);
@@ -164,7 +172,34 @@ const AllAds = ({ user }) => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // Fetch Ads
+    // 🔥 SYNC: URL → State (jab Navbar se search ho ya page refresh ho)
+    useEffect(() => {
+        const current = searchParams.get('search') || '';
+        if (current !== searchTerm) {
+            setSearchTerm(current);
+            setDebouncedSearch(current);
+        }
+    }, [searchParams]);
+
+    // 🔥 DEBOUNCE: Type karne pe 500ms wait karo phir API call karo
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // 🔥 SYNC: Debounced → URL (address bar update karo)
+    useEffect(() => {
+        const current = searchParams.get('search') || '';
+        if (debouncedSearch !== current) {
+            if (debouncedSearch.trim()) {
+                setSearchParams({ search: debouncedSearch.trim() });
+            } else {
+                setSearchParams({});
+            }
+        }
+    }, [debouncedSearch]);
+
+    // 🔥 FETCH ADS (backend search ke saath)
     useEffect(() => {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
@@ -172,7 +207,14 @@ const AllAds = ({ user }) => {
         const fetchAds = async () => {
             setLoading(true);
             try {
-                const res = await axios.get(`${API_BASE_URL}/ads`, {
+                // 🔥 BACKEND KO SEARCH PARAM BHEJO
+                const params = new URLSearchParams();
+                if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim());
+                
+                const queryString = params.toString();
+                const url = `${API_BASE_URL}/ads${queryString ? `?${queryString}` : ''}`;
+                
+                const res = await axios.get(url, {
                     signal: abortControllerRef.current.signal,
                     timeout: 15000
                 });
@@ -189,9 +231,9 @@ const AllAds = ({ user }) => {
         
         fetchAds();
         return () => abortControllerRef.current?.abort();
-    }, []);
+    }, [debouncedSearch]);
 
-    // Filter & Sort Logic
+    // Filter & Sort Logic (client-side)
     useEffect(() => {
         let result = [...ads];
         
@@ -200,9 +242,18 @@ const AllAds = ({ user }) => {
             result = result.filter(ad => ad.category === activeCategory);
         }
         
-        // Search filter
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
+        // 🔥 LOCATION FILTER
+        if (selectedLocation) {
+            const loc = selectedLocation.toLowerCase();
+            result = result.filter(ad => {
+                const adLoc = (ad.location || "").toLowerCase();
+                return adLoc.includes(loc);
+            });
+        }
+        
+        // 🔥 CLIENT-SIDE SEARCH FALLBACK (title, description, location)
+        if (debouncedSearch) {
+            const term = debouncedSearch.toLowerCase();
             result = result.filter(ad => 
                 ad.title?.toLowerCase().includes(term) ||
                 ad.description?.toLowerCase().includes(term) ||
@@ -224,57 +275,54 @@ const AllAds = ({ user }) => {
         }
         
         setFilteredAds(result);
-    }, [searchTerm, activeCategory, ads, sortBy]);
+    }, [debouncedSearch, activeCategory, ads, sortBy, selectedLocation]);
 
-    // 🔥 FIXED: Fetch Seller Details - includes phone number
-   // 🔥 FIXED: Fetch Seller Details - includes phone number from AD + Profile
-useEffect(() => {
-    const fetchSeller = async () => {
-        const uid = profileModalUid || selectedAd?.posted_by_uid;
-        if (!uid) return;
+    // 🔥 FIXED: Fetch Seller Details
+    useEffect(() => {
+        const fetchSeller = async () => {
+            const uid = profileModalUid || selectedAd?.posted_by_uid;
+            if (!uid) return;
 
-        try {
-            if (profileModalUid) setLoadingReviews(true);
-            
-            // 🔥 FIXED: Fetch from /users/:userId endpoint for full profile
-            const userRes = await axios.get(`${API_BASE_URL}/users/${uid}`, {
-                timeout: 10000
-            }).catch(() => ({ data: null }));
-            
-            const reviewsRes = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, {
-                timeout: 10000
-            });
-            
-            const reviews = reviewsRes.data?.reviews || [];
-            const seller = userRes.data || reviewsRes.data?.seller || null;
-            const avg = reviews.length > 0 
-                ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
-                : "0.0";
-
-            if (profileModalUid) {
-                setSellerReviews(reviews);
-                setSellerInfo(seller);
-            } else {
-                setSellerTrust({ avg, total: reviews.length });
+            try {
+                if (profileModalUid) setLoadingReviews(true);
                 
-                // 🔥 CRITICAL FIX: Check AD's phoneNumber FIRST, then fallback to profile
-                const phone = selectedAd?.phoneNumber || 
-                              selectedAd?.sellerPhone || 
-                              seller?.phoneNumber || 
-                              seller?.phone || 
-                              seller?.mobile || 
-                              null;
+                const userRes = await axios.get(`${API_BASE_URL}/users/${uid}`, {
+                    timeout: 10000
+                }).catch(() => ({ data: null }));
                 
-                setSellerPhone(phone);
+                const reviewsRes = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, {
+                    timeout: 10000
+                });
+                
+                const reviews = reviewsRes.data?.reviews || [];
+                const seller = userRes.data || reviewsRes.data?.seller || null;
+                const avg = reviews.length > 0 
+                    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
+                    : "0.0";
+
+                if (profileModalUid) {
+                    setSellerReviews(reviews);
+                    setSellerInfo(seller);
+                } else {
+                    setSellerTrust({ avg, total: reviews.length });
+                    
+                    const phone = selectedAd?.phoneNumber || 
+                                  selectedAd?.sellerPhone || 
+                                  seller?.phoneNumber || 
+                                  seller?.phone || 
+                                  seller?.mobile || 
+                                  null;
+                    
+                    setSellerPhone(phone);
+                }
+                setLoadingReviews(false);
+            } catch (err) { 
+                console.error("Seller fetch error:", err);
+                setLoadingReviews(false);
             }
-            setLoadingReviews(false);
-        } catch (err) { 
-            console.error("Seller fetch error:", err);
-            setLoadingReviews(false);
-        }
-    };
-    fetchSeller();
-}, [selectedAd, profileModalUid]);
+        };
+        fetchSeller();
+    }, [selectedAd, profileModalUid]);
 
     // 🔥 CHAT START
     const startChat = useCallback(async () => {
@@ -304,7 +352,7 @@ useEffect(() => {
         }
     }, [user, selectedAd, navigate]);
 
-    // 🔥 FIXED: REPORT AD - Direct report modal
+    // 🔥 REPORT AD
     const handleReportClick = useCallback(() => {
         if (!user) {
             toast.error("Please login first!");
@@ -313,7 +361,7 @@ useEffect(() => {
         setShowReportModal(true);
     }, [user]);
 
-    // 🔥 FIXED: SUBMIT REPORT
+    // 🔥 SUBMIT REPORT
     const submitReport = useCallback(async () => {
         if (!reportReason.trim()) {
             toast.error("Please enter a reason for reporting");
@@ -364,10 +412,8 @@ useEffect(() => {
         const diff = touchStartX.current - e.changedTouches[0].clientX;
         if (Math.abs(diff) > 50) {
             if (diff > 0) {
-                // Swipe left - next
                 setCurrentImageIndex(p => (p + 1) % (selectedAd?.images?.length || 1));
             } else {
-                // Swipe right - prev
                 setCurrentImageIndex(p => (p - 1 + (selectedAd?.images?.length || 1)) % (selectedAd?.images?.length || 1));
             }
         }
@@ -375,49 +421,44 @@ useEffect(() => {
     };
 
     // 🔥 FIXED: RENDER DETAILS PROPERLY
-  // 🔥 FIXED: RENDER DETAILS PROPERLY - Handles both string JSON and object
-const renderDetails = (details) => {
-    if (!details) return null;
-    
-    // 🔥 CRITICAL FIX: Parse if details is a JSON string
-    let parsedDetails = details;
-    if (typeof details === 'string') {
-        try {
-            parsedDetails = JSON.parse(details);
-        } catch (e) {
-            // If parsing fails, show as single text block
-            return (
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2">
-                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Details</p>
-                    <p className="font-semibold text-slate-800 text-sm">{details}</p>
-                </div>
-            );
+    const renderDetails = (details) => {
+        if (!details) return null;
+        
+        let parsedDetails = details;
+        if (typeof details === 'string') {
+            try {
+                parsedDetails = JSON.parse(details);
+            } catch (e) {
+                return (
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Details</p>
+                        <p className="font-semibold text-slate-800 text-sm">{details}</p>
+                    </div>
+                );
+            }
         }
-    }
-    
-    // If parsed details is an array
-    if (Array.isArray(parsedDetails)) {
-        return parsedDetails.map((item, idx) => (
-            <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Detail {idx + 1}</p>
-                <p className="font-semibold text-slate-800 truncate">{item}</p>
+        
+        if (Array.isArray(parsedDetails)) {
+            return parsedDetails.map((item, idx) => (
+                <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Detail {idx + 1}</p>
+                    <p className="font-semibold text-slate-800 truncate">{item}</p>
+                </div>
+            ));
+        }
+        
+        const entries = Object.entries(parsedDetails);
+        if (entries.length === 0) return null;
+        
+        return entries.map(([key, val]) => (
+            <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+                    {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
+                </p>
+                <p className="font-semibold text-slate-800 truncate">{val}</p>
             </div>
         ));
-    }
-    
-    // If details is an object
-    const entries = Object.entries(parsedDetails);
-    if (entries.length === 0) return null;
-    
-    return entries.map(([key, val]) => (
-        <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
-                {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
-            </p>
-            <p className="font-semibold text-slate-800 truncate">{val}</p>
-        </div>
-    ));
-};
+    };
 
     // Get active category gradient
     const activeCategoryData = CATEGORIES.find(c => c.code === activeCategory);
@@ -437,18 +478,61 @@ const renderDetails = (details) => {
                             </p>
                         </div>
                         
-                        {/* Search Bar */}
-                        <div className="relative max-w-md w-full">
-                            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input 
-                                type="text" 
-                                placeholder="Search anything..." 
-                                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/95 backdrop-blur text-slate-800 placeholder:text-slate-400 shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30"
-                                value={searchTerm} 
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                        {/* 🔥 Search Bar + Location Dropdown */}
+                        <div className="flex flex-col sm:flex-row gap-3 max-w-2xl w-full">
+                            <div className="relative flex-1">
+                                <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search iPhone, Car, Laptop..." 
+                                    className="w-full pl-12 pr-10 py-4 rounded-2xl bg-white/95 backdrop-blur text-slate-800 placeholder:text-slate-400 shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30"
+                                    value={searchTerm} 
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                {/* 🔥 Clear search button */}
+                                {searchTerm && (
+                                    <button 
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                    >
+                                        <FaTimes size={16} />
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {/* 🔥 LOCATION DROPDOWN */}
+                            <div className="sm:w-64">
+                                <LocationDropdown 
+                                    selected={selectedLocation} 
+                                    onChange={setSelectedLocation} 
+                                />
+                            </div>
                         </div>
                     </div>
+                    
+                    {/* 🔥 Active Filters Tags */}
+                    {(selectedLocation || debouncedSearch) && (
+                        <div className="mt-4 flex items-center gap-2 flex-wrap">
+                            {debouncedSearch && (
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaSearch size={10} />
+                                    "{debouncedSearch}"
+                                </span>
+                            )}
+                            {selectedLocation && (
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaMapMarkerAlt size={10} />
+                                    {selectedLocation}
+                                </span>
+                            )}
+                            <button 
+                                onClick={() => { setSearchTerm(''); setSelectedLocation(''); }}
+                                className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1"
+                            >
+                                <FaTimes size={10} /> Clear All
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -493,6 +577,14 @@ const renderDetails = (details) => {
                             </select>
                             <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs" />
                         </div>
+                        
+                        {/* Mobile Location Dropdown */}
+                        <div className="sm:hidden">
+                            <LocationDropdown 
+                                selected={selectedLocation} 
+                                onChange={setSelectedLocation} 
+                            />
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
@@ -532,7 +624,21 @@ const renderDetails = (details) => {
                             <FaSearch className="text-4xl text-slate-300" />
                         </div>
                         <h3 className="text-xl font-bold text-slate-800 mb-2">No items found</h3>
-                        <p className="text-slate-500">Try adjusting your search or filters</p>
+                        <p className="text-slate-500">
+                            {debouncedSearch 
+                                ? `No results for "${debouncedSearch}". Try different keywords.` 
+                                : selectedLocation 
+                                    ? `No ads available in ${selectedLocation}. Try a different location.` 
+                                    : "Try adjusting your search or filters"}
+                        </p>
+                        {(debouncedSearch || selectedLocation) && (
+                            <button 
+                                onClick={() => { setSearchTerm(''); setSelectedLocation(''); }}
+                                className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+                            >
+                                Clear All Filters
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
@@ -576,77 +682,76 @@ const renderDetails = (details) => {
 
                         <div className="overflow-y-auto flex-1">
                             <div className="grid grid-cols-1 lg:grid-cols-2">
-                                {/* 🔥 FIXED: Image Gallery - Mobile Optimized */}
-                                {/* 🔥 FIXED: Image Gallery - Mobile Optimized */}
-<div 
-    className="relative h-64 sm:h-80 md:h-[500px] lg:h-[600px] bg-slate-100 lg:sticky lg:top-0"
-    onTouchStart={handleTouchStart}
-    onTouchEnd={handleTouchEnd}
->
-    <img 
-        src={selectedAd.images?.[currentImageIndex] || "https://via.placeholder.com/600"} 
-        className="w-full h-full object-contain bg-slate-50" 
-        alt={selectedAd.title}
-    />
-    
-    {/* 🔥 DESKTOP: Arrow Buttons (Hidden on Mobile < 640px) */}
-    {selectedAd.images?.length > 1 && (
-        <>
-            <button 
-                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
-                className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
-            >
-                <FaArrowLeft />
-            </button>
-            <button 
-                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
-                className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
-            >
-                <FaArrowRight />
-            </button>
-        </>
-    )}
-    
-    {/* Image Counter - Always visible */}
-    {selectedAd.images?.length > 1 && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
-            {currentImageIndex + 1} / {selectedAd.images.length}
-        </div>
-    )}
+                                {/* Image Gallery */}
+                                <div 
+                                    className="relative h-64 sm:h-80 md:h-[500px] lg:h-[600px] bg-slate-100 lg:sticky lg:top-0"
+                                    onTouchStart={handleTouchStart}
+                                    onTouchEnd={handleTouchEnd}
+                                >
+                                    <img 
+                                        src={selectedAd.images?.[currentImageIndex] || "https://via.placeholder.com/600"} 
+                                        className="w-full h-full object-contain bg-slate-50" 
+                                        alt={selectedAd.title}
+                                    />
+                                    
+                                    {/* DESKTOP: Arrow Buttons */}
+                                    {selectedAd.images?.length > 1 && (
+                                        <>
+                                            <button 
+                                                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
+                                                className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
+                                            >
+                                                <FaArrowLeft />
+                                            </button>
+                                            <button 
+                                                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
+                                                className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur rounded-full items-center justify-center text-slate-700 shadow-lg hover:bg-emerald-500 hover:text-white transition-colors"
+                                            >
+                                                <FaArrowRight />
+                                            </button>
+                                        </>
+                                    )}
+                                    
+                                    {/* Image Counter */}
+                                    {selectedAd.images?.length > 1 && (
+                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
+                                            {currentImageIndex + 1} / {selectedAd.images.length}
+                                        </div>
+                                    )}
 
-    {/* 🔥 MOBILE: Prev/Next Arrow Buttons (Visible only on mobile < 640px) */}
-    {selectedAd.images?.length > 1 && (
-        <>
-            <button 
-                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
-                className="sm:hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
-            >
-                <FaArrowLeft size={16} />
-            </button>
-            <button 
-                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
-                className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
-            >
-                <FaArrowRight size={16} />
-            </button>
-        </>
-    )}
+                                    {/* MOBILE: Arrow Buttons */}
+                                    {selectedAd.images?.length > 1 && (
+                                        <>
+                                            <button 
+                                                onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
+                                                className="sm:hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
+                                            >
+                                                <FaArrowLeft size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => setCurrentImageIndex(p => (p + 1) % selectedAd.images.length)} 
+                                                className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
+                                            >
+                                                <FaArrowRight size={16} />
+                                            </button>
+                                        </>
+                                    )}
 
-    {/* 🔥 DESKTOP ONLY: Thumbnail Strip (Hidden on mobile) */}
-    {selectedAd.images?.length > 1 && (
-        <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 gap-2">
-            {selectedAd.images.map((img, idx) => (
-                <button
-                    key={idx}
-                    onClick={() => setCurrentImageIndex(idx)}
-                    className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} w-12 h-12`}
-                >
-                    <img src={img} className="w-full h-full object-cover" alt="" />
-                </button>
-            ))}
-        </div>
-    )}
-</div>
+                                    {/* DESKTOP ONLY: Thumbnail Strip */}
+                                    {selectedAd.images?.length > 1 && (
+                                        <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 gap-2">
+                                            {selectedAd.images.map((img, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setCurrentImageIndex(idx)}
+                                                    className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} w-12 h-12`}
+                                                >
+                                                    <img src={img} className="w-full h-full object-cover" alt="" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Details Panel */}
                                 <div className="p-4 sm:p-6 lg:p-8 bg-white">
@@ -696,7 +801,7 @@ const renderDetails = (details) => {
                                         </div>
                                     </div>
 
-                                    {/* 🔥 FIXED: Quick Details - Proper Rendering */}
+                                    {/* Quick Details */}
                                     {selectedAd.details && (
                                         <div className="mb-4 sm:mb-6">
                                             <h4 className="font-bold text-slate-800 mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base">
@@ -727,7 +832,7 @@ const renderDetails = (details) => {
                                         </div>
                                     </div>
 
-                                    {/* 🔥 FIXED: Action Buttons - Sticky Bottom */}
+                                    {/* Action Buttons - Sticky Bottom */}
                                     <div className="sticky bottom-0 bg-white pt-3 sm:pt-4 border-t border-slate-100 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-6"
                                         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
                                     >
@@ -752,7 +857,6 @@ const renderDetails = (details) => {
                                             </a>
                                         )}
                                         
-                                        {/* 🔥 FIXED: Report Button - Opens Modal */}
                                         <button onClick={handleReportClick} 
                                             className="w-full text-rose-500 text-sm font-medium flex items-center justify-center gap-2 py-2.5 sm:py-3 hover:bg-rose-50 rounded-xl transition-colors mt-2">
                                             <FaFlag /> Report this listing
@@ -765,7 +869,7 @@ const renderDetails = (details) => {
                 </div>
             )}
 
-            {/* 🔥 NEW: Report Modal */}
+            {/* Report Modal */}
             {showReportModal && selectedAd && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={(e) => e.target === e.currentTarget && setShowReportModal(false)}>

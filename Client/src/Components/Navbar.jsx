@@ -3,7 +3,6 @@ import React, {
     useEffect,
     useCallback,
     useRef,
-    useMemo
 } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -65,12 +64,20 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const [showMobileSearch, setShowMobileSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [scrolled, setScrolled] = useState(false);
-    const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [showMyAds, setShowMyAds] = useState(false);
 
     const API_URL = "https://rezon.up.railway.app/api";
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
+
+    // 🔥 SYNC SEARCH WITH URL — agar user refresh kare ya direct link se aye
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const urlSearch = params.get("search");
+        if (urlSearch) {
+            setSearchQuery(urlSearch);
+        }
+    }, [location.search]);
 
     // Scroll effect
     useEffect(() => {
@@ -164,16 +171,29 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         navigate('/');
     };
 
+    // 🔥 FIXED: Search handler — proper URL sync + parent callback
     const handleSearchSubmit = (e) => {
         e.preventDefault();
-        if (searchQuery.trim()) {
-            onSearch?.(searchQuery);
-            navigate(`/?search=${encodeURIComponent(searchQuery)}`);
-            setShowMobileSearch(false);
-        }
+        if (!searchQuery.trim()) return;
+        
+        // Parent ko batao (agar AllAds directly render ho raha ho as child)
+        onSearch?.(searchQuery.trim());
+        
+        // Navigate to home with search query
+        navigate(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+        setShowMobileSearch(false);
+        
+        // Mobile menu bhi band karo agar khula ho
+        setShowMobileMenu(false);
     };
 
-    // 🔥 FIXED: Consistent chat navigation - uses /chat/list for inbox
+    // 🔥 FIXED: Clear search
+    const clearSearch = () => {
+        setSearchQuery("");
+        onSearch?.("");
+        navigate(location.pathname); // remove ?search= from URL
+    };
+
     const handleChatClick = useCallback(() => {
         if (!user) {
             setShowLogin(true);
@@ -301,7 +321,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
                                 <FaHistory className="text-slate-500" /> My Active Ads
                             </Link>
-                            {/* 🔥 FIXED: Consistent chat link */}
                             <button onClick={handleChatClick} className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl text-left">
                                 <FaComments className="text-slate-500" /> Inbox Messages
                             </button>
@@ -355,6 +374,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             key={term}
                             onClick={() => {
                                 setSearchQuery(term);
+                                onSearch?.(term);
                                 navigate(`/?search=${encodeURIComponent(term)}`);
                                 setShowMobileSearch(false);
                             }}
@@ -368,7 +388,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
 
-    // 🔥 BOTTOM MOBILE NAV - FIXED LINKS
+    // 🔥 BOTTOM MOBILE NAV
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
             <div className="flex items-center justify-around py-2">
@@ -389,7 +409,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                     </div>
                     <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
                 </button>
-                {/* 🔥 FIXED: Consistent chat navigation */}
                 <button 
                     onClick={handleChatClick}
                     className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('chat') ? 'text-emerald-400' : 'text-slate-400'}`}
@@ -412,7 +431,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
     
-    // 🔥 FIXED: Hide navbar on ALL chat pages (both /chat/list and /chat/:id)
     if (location.pathname.startsWith('/chat')) {
         return null;
     }
@@ -433,7 +451,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 <FaBars size={20} />
                             </button>
 
-                            <Link to="/" className="flex items-center gap-3 group">
+                            <Link to="/" className="flex items-center gap-3 group" onClick={clearSearch}>
                                 <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-all">
                                     <span className="text-white font-black text-xl md:text-2xl">R</span>
                                 </div>
@@ -446,6 +464,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             </Link>
                         </div>
 
+                        {/* 🔥 DESKTOP SEARCH */}
                         <div className="hidden lg:flex flex-1 max-w-2xl xl:max-w-3xl">
                             <form onSubmit={handleSearchSubmit} className="w-full relative">
                                 <input
@@ -453,18 +472,30 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                     placeholder="Search for Mobiles, Cars, Electronics..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-10 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
                                 />
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                
+                                {/* 🔥 Clear search button */}
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={clearSearch}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                                    >
+                                        <FaTimes size={14} />
+                                    </button>
+                                )}
                             </form>
                         </div>
 
+                        {/* Mobile search trigger */}
                         <button
                             className="lg:hidden flex-1 max-w-[200px] bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-4 text-left text-slate-400 flex items-center gap-3"
                             onClick={() => setShowMobileSearch(true)}
                         >
                             <FaSearch size={18} />
-                            <span className="text-sm truncate">Search...</span>
+                            <span className="text-sm truncate">{searchQuery || "Search..."}</span>
                         </button>
 
                         <div className="flex items-center gap-2 md:gap-4">
@@ -496,7 +527,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 )}
                             </div>
 
-                            {/* 🔥 FIXED: Desktop chat link - consistent with /chat/list */}
                             {user && (
                                 <button
                                     onClick={handleChatClick}
@@ -521,11 +551,9 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                 </button>
                             </div>
 
-                            {/* Desktop Profile Icon and Sell Button Section */}
                             <div className="hidden md:flex items-center gap-3" ref={dropdownRef}>
                                 {user ? (
                                     <div className="relative flex items-center gap-3">
-                                        {/* Profile Dropdown Trigger */}
                                         <button 
                                             onClick={() => setShowDropdown(!showDropdown)}
                                             className="flex items-center gap-2 p-1.5 bg-slate-800/40 hover:bg-slate-800 rounded-full border border-slate-700/50 transition-all"
@@ -534,7 +562,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                             <FaChevronDown size={10} className={`text-slate-400 mr-1 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
                                         </button>
 
-                                        {/* Dropdown Menu */}
                                         {showDropdown && (
                                             <div className="absolute top-full right-0 mt-3 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
                                                 <div className="px-4 py-3 border-b border-slate-800">
@@ -543,7 +570,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                                 </div>
                                                 <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaUserCircle /> My Profile</Link>
                                                 <Link to="/my-ads" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaHistory /> My Ads</Link>
-                                                {/* 🔥 FIXED: Chat link in dropdown */}
                                                 <button onClick={() => { setShowDropdown(false); handleChatClick(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors text-left"><FaComments /> Messages</button>
                                                 {isAdmin(user.uid) && <Link to="/admin/dashboard" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 transition-colors"><FaUserShield /> Admin Panel</Link>}
                                                 <div className="border-t border-slate-800 mt-2">

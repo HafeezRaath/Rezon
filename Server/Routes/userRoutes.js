@@ -96,7 +96,26 @@ route.put("/users/me", authenticate, async (req, res) => {
         });
     }
 });
-
+router.get('/ads', async (req, res) => {
+    const { search, category, location } = req.query;
+    let query = {};
+    
+    // 🔥 LIKE command on title
+    if (search) {
+        query.title = { $regex: search, $options: 'i' };
+    }
+    
+    if (category && category !== 'All') {
+        query.category = category;
+    }
+    
+    if (location) {
+        query.location = { $regex: location, $options: 'i' };
+    }
+    
+    const ads = await Ad.find(query).sort({ createdAt: -1 });
+    res.json(ads);
+});
 // ✅ PATCH: Extra Safety (Agar Railway PUT block kare to ye chale ga)
 route.patch("/users/me", authenticate, async (req, res) => {
     try {
