@@ -973,10 +973,8 @@ export const updateAdStatus = async (req, res) => {
 // ==========================================
 export const getChatList = async (req, res) => {
     try {
-        const { userId } = req.params;
-        if (req.user.uid !== userId) {
-            return res.status(403).json({ message: "Access denied. Apni hi chats dekh sakte hain." });
-        }
+        // 🔥 FIXED: req.user.uid se lo, req.params.userId nahi hai is route pe
+        const userId = req.user.uid;
 
         const chats = await Chat.find({
             participants: { $in: [userId] },
@@ -1004,10 +1002,19 @@ export const getChatList = async (req, res) => {
             })
         );
 
-        res.status(200).json(formattedChats);
+        // 🔥 FIXED: Frontend expects { conversations: [...] }
+        res.status(200).json({ 
+            success: true,
+            conversations: formattedChats 
+        });
+
     } catch (error) {
         console.error("🔥 Get Chat List Error:", error);
-        res.status(500).json({ message: "Conversations load nahi ho sakin", error: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: "Conversations load nahi ho sakin", 
+            error: error.message 
+        });
     }
 };
 
