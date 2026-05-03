@@ -522,13 +522,13 @@ const AllAds = ({ user }) => {
                     {(selectedLocation || debouncedSearch) && (
                         <div className="mt-4 flex items-center gap-2 flex-wrap">
                             {debouncedSearch && (
-                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                <span className="bg-white/20 backdrop-blur text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
                                     <FaSearch size={10} />
                                     "{debouncedSearch}"
                                 </span>
                             )}
                             {selectedLocation && (
-                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                <span className="bg-white/20 backdrop-blur text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
                                     <FaMapMarkerAlt size={10} />
                                     {selectedLocation}
                                 </span>
