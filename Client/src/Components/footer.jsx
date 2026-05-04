@@ -9,23 +9,24 @@ import {
     FaMapMarkerAlt
 } from 'react-icons/fa';
 
-// 🔧 ADDED: Config for easy updates
 const CONTACT_INFO = {
     phone: "0307 7850656",
     email: "raathdeveloper@gmail.com",
     address: "Pakistan"
 };
 
+// 🔥 UPDATED: Real social links
 const SOCIAL_LINKS = [
-    { icon: FaFacebookF, href: "#", label: "Facebook" },
+    { icon: FaFacebookF, href: "https://www.facebook.com/profile.php?id=61567550253453", label: "Facebook", target: "_blank" },
     { icon: FaTwitter, href: "#", label: "Twitter" },
-    { icon: FaInstagram, href: "#", label: "Instagram" },
-    { icon: FaLinkedinIn, href: "#", label: "LinkedIn" },
+    { icon: FaInstagram, href: "https://www.instagram.com/raathdeveloper/", label: "Instagram", target: "_blank" },
+    { icon: FaLinkedinIn, href: "https://www.linkedin.com/in/hafeez-fullstack-dev/", label: "LinkedIn", target: "_blank" },
 ];
 
+// 🔥 UPDATED: All routes working
 const QUICK_LINKS = [
     { label: "Home", href: "/" },
-    { label: "All Ads", href: "/categories/mobiles" },
+    { label: "All Ads", href: "/all-ads" },  // 🔥 Fixed: /categories/mobiles → /all-ads
     { label: "About Us", href: "/about" },
     { label: "Blog", href: "/blog" },
 ];
@@ -37,21 +38,17 @@ const SUPPORT_LINKS = [
     { label: "Terms of Use", href: "/terms" },
 ];
 
-// 🔧 FIXED: PascalCase component name
 const Footer = () => {
     const currentYear = new Date().getFullYear();
 
     return (
-        // 🔧 FIXED: Emerald theme - removed red/pink chaos
         <footer className="bg-slate-900 text-white mt-10 border-t-4 border-emerald-500"> 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
                 
-                {/* Main Content Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-8 md:gap-10 border-b border-slate-700 pb-10 mb-8">
                     
-                    {/* Column 1: Logo & Mission */}
+                    {/* Column 1: Logo */}
                     <div className="col-span-2 md:col-span-2">
-                        {/* 🔧 FIXED: Emerald gradient */}
                         <h3 className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400 tracking-tight mb-3">
                             REZON
                         </h3>
@@ -59,13 +56,14 @@ const Footer = () => {
                             Pakistan's trusted AI-powered marketplace for buying and selling. Verified listings, local trust, seamless experience.
                         </p>
                         
-                        {/* Social Icons - 🔧 FIXED: Emerald hover */}
                         <div className="flex space-x-4 mt-6">
                             {SOCIAL_LINKS.map((social) => (
                                 <a 
                                     key={social.label}
                                     href={social.href} 
                                     aria-label={social.label}
+                                    target={social.target || "_self"}
+                                    rel={social.target ? "noopener noreferrer" : ""}
                                     className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                                 >
                                     <social.icon size={18} />
@@ -110,7 +108,7 @@ const Footer = () => {
                         </ul>
                     </div>
 
-                    {/* Column 4: Contact Info */}
+                    {/* Column 4: Contact */}
                     <div className="col-span-2 md:col-span-1">
                         <h4 className="text-lg font-bold mb-4 text-emerald-400">Get In Touch</h4>
                         <ul className="space-y-4 text-sm">
@@ -156,7 +154,7 @@ const Footer = () => {
 
                 </div>
 
-                {/* Copyright Bar */}
+                {/* Copyright */}
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
                     <p>&copy; {currentYear} REZON. All rights reserved.</p>
                     <p className="font-medium">

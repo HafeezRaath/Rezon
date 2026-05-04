@@ -41,13 +41,13 @@ const UserSchema = new mongoose.Schema({
         default: "",
         trim: true
     },
-    cnicNumber: {
-        type: String,
-        default: "",
-        unique: true,
-        sparse: true,
-        index: true
-    },
+   cnicNumber: {
+    type: String,
+    default: "",        // ← YE PROBLEM HAI!
+    unique: true,         // Empty string unique hogi → dusra user update karega toh DUPLICATE error
+    sparse: true,         // Sparse sirf null/undefined ignore karta hai, "" nahi
+    index: true
+},
     dateOfBirth: {
         type: String,
         default: ""

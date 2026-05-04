@@ -134,55 +134,73 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         setSelfie(null);
     }, []);
 
-   const handleFinalSubmit = useCallback(async () => {
-    if (!selfie || !idFront || !idBack) {
-        toast.error("Please complete all steps (Front, Back & Selfie) 📸");
-        return;
-    }
+    // 🔥 FIXED: Close button handler with proper cleanup
+    const handleClose = useCallback(() => {
+        if (loading) return; // Don't close if loading
+        onClose?.();
+    }, [loading, onClose]);
 
-    setLoading(true);
-    const toastId = toast.loading("AI is analyzing your ID and Face... 🤖");
-
-    try {
-        const token = await auth.currentUser?.getIdToken(true);
-        if (!token) throw new Error("Session expired.");
-
-        // ❌ YEH PUT CALL YAHAN SE DELETE KAR DEIN (jo purana profile update kar raha tha)
-        // Aise hi rehne dein, hum backend (controller) mein verification ke sath hi save karenge.
-
-        // 2. KYC Documents upload for AI check
-        const formData = new FormData();
-        formData.append('idFront', idFront); 
-        formData.append('idBack', idBack);
-        formData.append('phoneNumber', phone); // ✅ Phone number yahan bhejein
-        
-        const selfieBlob = await fetch(selfie).then(r => r.blob());
-        formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
-
-        const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
-            headers: { 
-                'Content-Type': 'multipart/form-data',
-                'Authorization': `Bearer ${token}`
-            },
-            timeout: 90000 
-        });
-
-        if (verifyRes.data?.success) {
-            toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 5000 });
-            onComplete?.(); 
-            setTimeout(() => onClose?.(), 2000);
+    // 🔥 FIXED: Auto close after successful verification
+    const handleFinalSubmit = useCallback(async () => {
+        if (!selfie || !idFront || !idBack) {
+            toast.error("Please complete all steps (Front, Back & Selfie) 📸");
+            return;
         }
-    } catch (err) {
-        const errorMsg = err.response?.data?.message || "Verification failed.";
-        toast.error(errorMsg, { id: toastId, duration: 6000 });
-    } finally {
-        setLoading(false);
-    }
-}, [selfie, idFront, idBack, phone, password, onComplete, onClose]);
 
+        setLoading(true);
+        const toastId = toast.loading("AI is analyzing your ID and Face... 🤖");
+
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) throw new Error("Session expired.");
+
+            const formData = new FormData();
+            formData.append('idFront', idFront); 
+            formData.append('idBack', idBack);
+            formData.append('phoneNumber', phone);
+            
+            const selfieBlob = await fetch(selfie).then(r => r.blob());
+            formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
+
+            const verifyRes = await axios.post(`${API_BASE_URL}/verify-identity`, formData, {
+                headers: { 
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${token}`
+                },
+                timeout: 90000 
+            });
+
+            if (verifyRes.data?.success) {
+                toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 3000 });
+                
+                // 🔥 FIXED: Call onComplete first, then auto close after delay
+                onComplete?.(verifyRes.data?.data);
+                
+                // Auto close modal after 2 seconds
+                setTimeout(() => {
+                    onClose?.();
+                }, 2000);
+            }
+        } catch (err) {
+            const errorMsg = err.response?.data?.message || "Verification failed.";
+            const errorCode = err.response?.data?.error;
+            
+            // Show specific error for debugging
+            if (errorCode) {
+                console.error("Verification Error Code:", errorCode);
+                console.error("Debug Info:", err.response?.data?.debug);
+            }
+            
+            toast.error(errorMsg, { id: toastId, duration: 6000 });
+        } finally {
+            setLoading(false);
+        }
+    }, [selfie, idFront, idBack, phone, onComplete, onClose]);
+
+    // Escape key handler
     useEffect(() => {
         const handleEscape = (e) => {
-            if (e.key === 'Escape' && !loading) onClose();
+            if (e.key === 'Escape' && !loading) onClose?.();
         };
         window.addEventListener('keydown', handleEscape);
         return () => window.removeEventListener('keydown', handleEscape);
@@ -216,7 +234,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
     const modalContent = (
         <div 
             className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[100] p-0 md:p-4"
-            onClick={(e) => e.target === e.currentTarget && !loading && onClose()}
+            onClick={(e) => e.target === e.currentTarget && !loading && handleClose()}
         >
             <div className="bg-white w-full max-w-5xl h-full md:h-auto md:max-h-[95vh] md:rounded-3xl shadow-2xl relative overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
                 
@@ -230,10 +248,12 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                             <p className="text-xs md:text-sm text-slate-300">Secure AI-powered process</p>
                         </div>
                     </div>
+                    {/* 🔥 FIXED: Close button with proper handler */}
                     <button 
-                        onClick={() => !loading && onClose()} 
+                        onClick={handleClose} 
                         disabled={loading}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50"
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50 cursor-pointer"
+                        type="button"
                     >
                         <FaTimes className="text-xl" />
                     </button>
@@ -392,10 +412,13 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                                 <Webcam 
                                                     ref={webcamRef} 
                                                     audio={false}
-                                            screenshotFormat="image/jpeg" 
+                                                    screenshotFormat="image/jpeg" 
                                                     className="w-full h-full object-cover"
                                                     mirrored={true}
-                                                    onUserMediaError={(err) => { console.error("Camera error:", err); toast.error("Camera access denied. Please allow camera permission in browser settings."); }}
+                                                    onUserMediaError={(err) => { 
+                                                        console.error("Camera error:", err); 
+                                                        toast.error("Camera access denied. Please allow camera permission in browser settings."); 
+                                                    }}
                                                     videoConstraints={{ facingMode: "user" }}
                                                 />
                                             </div>

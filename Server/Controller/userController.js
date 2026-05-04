@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config(); // ← 🔥 SABSE PEHLE!
+dotenv.config();
 
 import { extractCNICData } from "../CNIC_OCR_Integration.js";
 import Ad from "../model/userModel.js";
@@ -16,7 +16,6 @@ import OpenAI from "openai";
 import { v2 as cloudinary } from 'cloudinary';
 import streamifier from 'streamifier';
 
-// ✅ Ab env variables load ho chuke hain
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
@@ -30,7 +29,6 @@ const getOpenAI = () => {
     if (!openaiInstance) {
         const apiKey = process.env.OPENAI_API_KEY;
         console.log("🔍 OPENAI_API_KEY:", apiKey ? "✅ Found" : "❌ Missing");
-        
         if (!apiKey) {
             throw new Error('OPENAI_API_KEY is not configured');
         }
@@ -43,7 +41,6 @@ const BASE_URL = process.env.NODE_ENV === 'production'
     ? 'https://rezon.up.railway.app' 
     : 'http://localhost:8000';
 
-// ✅ Cloudinary Buffer Upload Helper
 const uploadBufferToCloudinary = (buffer, folder, filename) => {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -80,9 +77,6 @@ const CATEGORY_FIELD_MAP = {
 
 const ALLOWED_CATEGORIES = Object.keys(CATEGORY_FIELD_MAP);
 
-// ==========================================
-// ✨ AI SMART ASSIST
-// ==========================================
 export const getAISuggestions = async (req, res) => {
     try {
         const { category } = req.body; 
@@ -186,9 +180,6 @@ Return ONLY a JSON object:
     }
 };
 
-// ==========================================
-// USER REGISTRATION
-// ==========================================
 export const registerUser = async (req, res) => {
     try {
         const { uid, name, email, photoURL, provider } = req.body;
@@ -216,9 +207,6 @@ export const registerUser = async (req, res) => {
     }
 };
 
-// ==========================================
-// 🛡️ CREATE AD (With Duplicate Detection)
-// ==========================================
 export const create = async (req, res) => {
     try {
         console.log("🔍 POST AD REQUEST:", {
@@ -229,7 +217,6 @@ export const create = async (req, res) => {
 
         const posted_by_uid = req.user.uid;
 
-        // 1. Images check
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ 
                 success: false,
@@ -237,7 +224,6 @@ export const create = async (req, res) => {
             });
         }
 
-        // 2. Extract fields
         const { 
             price, 
             title, 
@@ -250,7 +236,6 @@ export const create = async (req, res) => {
             details 
         } = req.body;
 
-        // 3. Required field validation
         if (!title?.trim()) {
             return res.status(400).json({ success: false, message: "📝 Title is required" });
         }
@@ -267,7 +252,6 @@ export const create = async (req, res) => {
             return res.status(400).json({ success: false, message: "🏷️ Valid category is required" });
         }
 
-        // 4. AI Image Quality Check (with default fallback)
         const aiQuality = imageQualityByAI || "Original";
         if (aiQuality === "Stock" || aiQuality === "Screenshot") {
             return res.status(400).json({ 
@@ -276,7 +260,6 @@ export const create = async (req, res) => {
             });
         }
 
-        // 5. 🛡️ DUPLICATE SHIELD (Parallel processing)
         const imageHashes = [];
         const duplicateChecks = req.files.map(async (file) => {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
@@ -303,12 +286,10 @@ export const create = async (req, res) => {
             throw err;
         }
 
-        // 6. Upload images to Cloudinary
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
-        // 7. Parse details
         let parsedDetails = {};
         if (details) {
             try {
@@ -320,19 +301,12 @@ export const create = async (req, res) => {
             }
         }
 
-        // 8. Validate required category fields (optional but recommended)
         const requiredFields = CATEGORY_FIELD_MAP[category] || [];
         const missingFields = requiredFields.filter(field => !parsedDetails[field]);
         if (missingFields.length > 0 && category === "Mobile") {
             console.log("⚠️ Missing fields for", category, ":", missingFields);
-            // Don't block, just log - or uncomment to enforce:
-            // return res.status(400).json({
-            //     success: false,
-            //     message: `Missing required fields: ${missingFields.join(', ')}`
-            // });
         }
 
-        // 9. Create Ad
         const newAd = new Ad({
             images: imageUrls,
             imageHashes: imageHashes,
@@ -345,7 +319,7 @@ export const create = async (req, res) => {
             posted_by_uid,
             status: 'Active',
             aiAuditStatus: aiQuality,
-            contactNumber: contactNumber || null, // ← Save contact number
+            contactNumber: contactNumber || null,
             details: parsedDetails
         });
 
@@ -368,9 +342,6 @@ export const create = async (req, res) => {
     }
 };
 
-// ==========================================
-// GET ALL ADS
-// ==========================================
 export const getAllAds = async (req, res) => {
     try {
         const { city } = req.query;
@@ -390,9 +361,6 @@ export const getAllAds = async (req, res) => {
     }
 };
 
-// ==========================================
-// GET AD BY ID
-// ==========================================
 export const getAdById = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
@@ -403,9 +371,6 @@ export const getAdById = async (req, res) => {
     }
 };
 
-// ==========================================
-// GET MY ADS
-// ==========================================
 export const getMyAds = async (req, res) => {
     try {
         const userUid = req.user.uid;
@@ -419,9 +384,6 @@ export const getMyAds = async (req, res) => {
     }
 };
 
-// ==========================================
-// UPDATE AD (FIXED)
-// ==========================================
 export const updateAd = async (req, res) => {
     try {
         const adId = req.params.id;
@@ -480,9 +442,6 @@ export const updateAd = async (req, res) => {
     }
 };
 
-// ==========================================
-// DELETE AD
-// ==========================================
 export const deleteAd = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
@@ -507,9 +466,6 @@ export const deleteAd = async (req, res) => {
     }
 };
 
-// ==========================================
-// MARK AS SOLD CONTROLLERS
-// ==========================================
 export const getChatUsersForAd = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -647,9 +603,6 @@ export const canReview = async (req, res) => {
     }
 };
 
-// ==========================================
-// REVIEWS & RATINGS
-// ==========================================
 export const createReview = async (req, res) => {
     try {
         const { sellerId, adId, rating, comment } = req.body;
@@ -708,9 +661,6 @@ export const getSellerReviews = async (req, res) => {
     }
 };
 
-// ==========================================
-// REPORT CONTROLLERS
-// ==========================================
 export const createReport = async (req, res) => {
     try {
         const { reportedUserId, adId, reason, description } = req.body;
@@ -741,7 +691,7 @@ export const createReport = async (req, res) => {
 };
 
 // ==========================================
-// 🛡️ KYC VERIFICATION (FIXED SYNTAX)
+// 🛡️ KYC VERIFICATION (FIXED - OCR + Server Error)
 // ==========================================
 export const verifyIdentity = async (req, res) => {
     try {
@@ -763,30 +713,53 @@ export const verifyIdentity = async (req, res) => {
         }
 
         const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 8);
 
         console.log("🔍 Starting OCR on CNIC...");
-        const ocrResult = await extractCNICData(req.files.idFront[0].buffer);
-
-        if (ocrResult.success) {
-            console.log("✅ OCR Extracted:", {
-                name: ocrResult.name,
-                fatherName: ocrResult.fatherName,
-                cnicNumber: ocrResult.cnicNumber
+        let ocrResult;
+        try {
+            ocrResult = await extractCNICData(req.files.idFront[0].buffer);
+        } catch (ocrError) {
+            console.error("❌ OCR Function Error:", ocrError);
+            return res.status(500).json({
+                success: false,
+                message: "CNIC read karne mein technical error aaya.",
+                error: "OCR_FUNCTION_ERROR"
             });
         }
 
-        if (ocrResult.success && ocrResult.cnicNumber) {
-            const existingCNIC = await User.findOne({ 
-                cnicNumber: ocrResult.cnicNumber,
-                uid: { $ne: userUid }
+        console.log("✅ OCR Raw Text:", ocrResult?.rawText || "N/A");
+        console.log("✅ OCR Extracted:", {
+            name: ocrResult?.name,
+            fatherName: ocrResult?.fatherName,
+            cnicNumber: ocrResult?.cnicNumber
+        });
+
+        // 🔥 MANDATORY: CNIC number must be extracted
+        if (!ocrResult || !ocrResult.success || !ocrResult.cnicNumber || ocrResult.cnicNumber.length < 13) {
+            return res.status(422).json({
+                success: false,
+                message: "CNIC number sahi tarah se read nahi ho saka. Please clear photo upload karo.",
+                error: "INVALID_CNIC_OCR",
+                debug: {
+                    rawText: ocrResult?.rawText || null,
+                    extractedName: ocrResult?.name || null,
+                    extractedCNIC: ocrResult?.cnicNumber || null
+                }
             });
-            if (existingCNIC) {
-                return res.status(409).json({
-                    success: false,
-                    message: "Ye CNIC number already registered hai! ❌",
-                    error: "DUPLICATE_CNIC"
-                });
-            }
+        }
+
+        // 🔥 CNIC Duplicate Check (safe now - guaranteed valid cnicNumber)
+        const existingCNIC = await User.findOne({ 
+            cnicNumber: ocrResult.cnicNumber,
+            uid: { $ne: userUid }
+        });
+        if (existingCNIC) {
+            return res.status(409).json({
+                success: false,
+                message: "Ye CNIC number already registered hai! ❌",
+                error: "DUPLICATE_CNIC"
+            });
         }
 
         if (req.body.phoneNumber) {
@@ -803,13 +776,24 @@ export const verifyIdentity = async (req, res) => {
             }
         }
 
-        const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
-            uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}`),
-            uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}`),
-            uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}`)
-        ]);
+        // 🔥 Upload to Cloudinary with UNIQUE filenames
+        let idFrontUrl, idBackUrl, selfieUrl;
+        try {
+            [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+                uploadBufferToCloudinary(req.files.idFront[0].buffer, 'rezon_kyc', `idFront-${userUid}-${timestamp}-${randomStr}`),
+                uploadBufferToCloudinary(req.files.idBack[0].buffer, 'rezon_kyc', `idBack-${userUid}-${timestamp}-${randomStr}`),
+                uploadBufferToCloudinary(req.files.liveSelfie[0].buffer, 'rezon_kyc', `selfie-${userUid}-${timestamp}-${randomStr}`)
+            ]);
+        } catch (uploadError) {
+            console.error("❌ Cloudinary Upload Error:", uploadError);
+            return res.status(500).json({
+                success: false,
+                message: "Image upload failed. Dobara try karo.",
+                error: "CLOUDINARY_ERROR"
+            });
+        }
 
-        // 🔥 NEW: Retry logic + temperature 0
+        // 🔥 Face Match with SAFE JSON parsing
         let bestResult = null;
         let maxConfidence = 0;
         const maxRetries = 3;
@@ -817,16 +801,18 @@ export const verifyIdentity = async (req, res) => {
         for (let i = 0; i < maxRetries; i++) {
             console.log(`🔄 Face Match Attempt ${i + 1}/${maxRetries}...`);
             
-            const aiResponse = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                temperature: 0, // ← 🔥 Same result har baar
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { 
-                                type: "text", 
-                                text: `You are a biometric face comparison system. Compare the face in Image 1 (ID card) with the face in Image 2 (live selfie).
+            let aiResponse;
+            try {
+                aiResponse = await openai.chat.completions.create({
+                    model: "gpt-4o-mini",
+                    temperature: 0,
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                { 
+                                    type: "text", 
+                                    text: `You are a biometric face comparison system. Compare the face in Image 1 (ID card) with the face in Image 2 (live selfie).
 
 Rules:
 1. Look at facial structure: eyes, nose, jawline, eyebrows, face shape
@@ -839,16 +825,27 @@ Rules:
 }
 
 Be strict but fair. If same person with minor differences, confidence should be 70+.`
-                            },
-                            { type: "image_url", image_url: { url: idFrontUrl } },
-                            { type: "image_url", image_url: { url: selfieUrl } }
-                        ],
-                    },
-                ],
-                response_format: { type: "json_object" },
-            });
+                                },
+                                { type: "image_url", image_url: { url: idFrontUrl } },
+                                { type: "image_url", image_url: { url: selfieUrl } }
+                            ],
+                        },
+                    ],
+                    response_format: { type: "json_object" },
+                });
+            } catch (aiCallError) {
+                console.error(`❌ Attempt ${i+1} OpenAI API Error:`, aiCallError);
+                continue;
+            }
 
-            const result = JSON.parse(aiResponse.choices[0].message.content);
+            let result;
+            try {
+                result = JSON.parse(aiResponse.choices[0].message.content);
+            } catch (parseErr) {
+                console.error(`❌ Attempt ${i+1} JSON Parse Failed:`, aiResponse.choices[0]?.message?.content);
+                continue;
+            }
+
             console.log(`📊 Attempt ${i + 1} Result:`, result);
 
             if (result.confidence > maxConfidence) {
@@ -856,16 +853,22 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 bestResult = result;
             }
 
-            // Agar ek baar mein 70+ mil jaye, break kar do
             if (result.confidence >= 70 && result.isMatched) {
                 console.log("✅ High confidence match found, stopping retries.");
                 break;
             }
         }
 
+        if (!bestResult) {
+            return res.status(500).json({
+                success: false,
+                message: "Face comparison system fail ho gaya. Dobara try karo.",
+                error: "FACE_MATCH_FAILED"
+            });
+        }
+
         console.log("🏆 Best Result:", bestResult);
 
-        // 🔥 Threshold logic improved
         const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 50;
 
         if (!isActuallyMatched) {
@@ -877,6 +880,7 @@ Be strict but fair. If same person with minor differences, confidence should be 
             });
         }
 
+        // 🔥 Build updateData with GUARANTEED valid data
         const updateData = {
             profilePic: selfieUrl,
             isVerified: true,
@@ -888,28 +892,47 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 aiCheck: true,
                 faceMatchScore: bestResult.confidence,
                 reason: bestResult.reason,
-                ocrData: { extracted: ocrResult.success, rawText: ocrResult.rawText || null }
-            }
+                ocrData: { extracted: true, rawText: ocrResult.rawText || null }
+            },
+            // ✅ GUARANTEED: These values exist (validated above)
+            name: ocrResult.name || existingUser?.name || "Verified User",
+            fatherName: ocrResult.fatherName || null,
+            cnicNumber: ocrResult.cnicNumber, // ✅ MANDATORY - guaranteed not empty
         };
 
-        if (ocrResult.success) {
-            if (ocrResult.name) updateData.name = ocrResult.name;
-            if (ocrResult.fatherName) updateData.fatherName = ocrResult.fatherName;
-            if (ocrResult.cnicNumber) updateData.cnicNumber = ocrResult.cnicNumber;
-            if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
-            if (ocrResult.gender) updateData.gender = ocrResult.gender;
-        }
+        if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
+        if (ocrResult.gender) updateData.gender = ocrResult.gender;
 
         if (req.body.phoneNumber) {
             updateData.phoneNumber = req.body.phoneNumber;
             updateData.isPhoneVerified = true;
         }
 
-        const updatedUser = await User.findOneAndUpdate(
-            { uid: userUid },
-            updateData,
-            { new: true }
-        );
+        // 🔥 Safe MongoDB Update
+        let updatedUser;
+        try {
+            updatedUser = await User.findOneAndUpdate(
+                { uid: userUid },
+                updateData,
+                { new: true, runValidators: false }
+            );
+        } catch (dbError) {
+            console.error("❌ MongoDB Update Error:", dbError);
+            return res.status(500).json({
+                success: false,
+                message: "Database update failed. Contact support.",
+                error: "DB_UPDATE_ERROR",
+                details: dbError.message
+            });
+        }
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found for update.",
+                error: "USER_NOT_FOUND"
+            });
+        }
 
         return res.status(200).json({ 
             success: true, 
@@ -926,17 +949,19 @@ Be strict but fair. If same person with minor differences, confidence should be 
 
     } catch (error) {
         console.error("🔥 Rezon KYC Error:", error);
+        console.error("🔥 Error Name:", error.name);
+        console.error("🔥 Error Message:", error.message);
+        console.error("🔥 Stack:", error.stack);
+        
         res.status(500).json({ 
             success: false,
             message: "Server error during verification", 
-            error: error.message 
+            error: error.message,
+            errorName: error.name
         });
     }
 };
 
-// ==========================================
-// 👤 GET CURRENT USER
-// ==========================================
 export const me = async (req, res) => {
     try {
         const userUid = req.user.uid;
@@ -949,9 +974,6 @@ export const me = async (req, res) => {
     }
 };
 
-// ==========================================
-// UPDATE AD STATUS (ADMIN)
-// ==========================================
 export const updateAdStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -968,12 +990,8 @@ export const updateAdStatus = async (req, res) => {
     }
 };
 
-// ==========================================
-// 💬 CHAT SYSTEM
-// ==========================================
 export const getChatList = async (req, res) => {
     try {
-        // 🔥 FIXED: req.user.uid se lo, req.params.userId nahi hai is route pe
         const userId = req.user.uid;
 
         const chats = await Chat.find({
@@ -1002,7 +1020,6 @@ export const getChatList = async (req, res) => {
             })
         );
 
-        // 🔥 FIXED: Frontend expects { conversations: [...] }
         res.status(200).json({ 
             success: true,
             conversations: formattedChats 
