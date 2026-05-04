@@ -13,8 +13,8 @@ const getApiUrl = () => {
         : "https://rezon.up.railway.app/api";
 };
 
-// 🔥 Props sirf setShowLogin chahiye ab
-const HeroSection = ({ setShowLogin }) => {
+// 🔥 Props: setShowLogin + setShowVerification (NEW)
+const HeroSection = ({ setShowLogin, setShowVerification }) => {
     const navigate = useNavigate();
 
     const handleStartSelling = useCallback(async () => {
@@ -40,9 +40,10 @@ const HeroSection = ({ setShowLogin }) => {
 
             if (!res.data?.isVerified) {
                 toast("Please verify your identity first 🛡️", { icon: '⚠️' });
-                navigate('/verify');  // 🔥 Verify page par bhejo
+                // 🔥 FIXED: Modal open karo, navigate mat karo
+                setShowVerification?.(true);
             } else {
-                navigate('/post-ad');  // 🔥 PostAd.jsx khulega
+                navigate('/post-ad');
             }
         } catch (err) {
             toast.dismiss(toastId);
@@ -57,7 +58,7 @@ const HeroSection = ({ setShowLogin }) => {
                 toast.error("Unable to verify status. Please try again.");
             }
         }
-    }, [setShowLogin, navigate]);
+    }, [setShowLogin, setShowVerification, navigate]);
 
     const theme = {
         primary: "emerald",
@@ -103,7 +104,7 @@ const HeroSection = ({ setShowLogin }) => {
                     </p>
 
                     <div className="flex flex-wrap gap-4 justify-center md:justify-start w-full">
-                        {/* 🔥 Start Selling → PostAd.jsx */}
+                        {/* 🔥 Start Selling → Verification check */}
                         <button 
                             onClick={handleStartSelling}
                             className={`${theme.buttonPrimary} text-white px-10 py-4 rounded-2xl text-lg font-bold shadow-xl transition-all active:scale-95 flex items-center gap-2`}
