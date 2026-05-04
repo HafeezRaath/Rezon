@@ -22,7 +22,7 @@ import AdminPanel from "./Admin";
 import Footer from "./Components/Footer"; // 🔥 ADDED: Footer import
 
 // 🔥 NEW: AllAds and Placeholder pages
-import AllAds from "./Pages/AllAds"; // 🔥 ADDED: AllAds import
+import AllAds from "./Components/allads"; // 🔥 ADDED: AllAds import
 import PlaceholderPage from "./Pages/PlaceholderPage"; // 🔥 ADDED: Placeholder page
 
 function App() {
