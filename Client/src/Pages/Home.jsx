@@ -2,7 +2,7 @@ import React from 'react'
 import HeroSection from '../Components/HeroSection';
 import CategoriesSection from '../Components/CategoriesSection';
 import AllAds from '../Components/allads';
-import Footer from '../Components/footer';
+
 
 const Home = ({ user, setShowLogin, setShowAds, setShowVerification }) => {
   return (
@@ -14,7 +14,7 @@ const Home = ({ user, setShowLogin, setShowAds, setShowVerification }) => {
       />
       <CategoriesSection/>
       <AllAds user={user} />  
-      <Footer/>
+    
     </>
   )
 }
