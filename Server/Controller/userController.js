@@ -182,28 +182,89 @@ Return ONLY a JSON object:
 
 export const registerUser = async (req, res) => {
     try {
-        const { uid, name, email, profilePic, provider } = req.body;  // ✅ profilePic
-        let user = await User.findOne({ uid });
-
-        if (user) {
-            user.name = name;
-            user.email = email;
-            if (profilePic) user.profilePic = profilePic;  // ✅ profilePic
-            await user.save();
-            return res.status(200).json({ message: "User profile updated", user });
+        console.log("🔍 REGISTER REQUEST BODY:", req.body);
+        console.log("🔍 REQUEST PATH:", req.path);
+        
+        const { uid, name, email, profilePic, provider } = req.body;
+        
+        if (!uid || !email) {
+            console.error("❌ Missing required fields:", { uid, email });
+            return res.status(400).json({ 
+                success: false,
+                message: "UID and Email are required",
+                received: req.body 
+            });
         }
 
+        let user = await User.findOne({ uid });
+        console.log("🔍 Existing user:", user ? "Found" : "Not found");
+
+        if (user) {
+            user.name = name || user.name;
+            user.email = email;
+            if (profilePic) user.profilePic = profilePic;
+            await user.save();
+            console.log("✅ User updated:", user._id);
+            return res.status(200).json({ 
+                success: true,
+                message: "User profile updated", 
+                user 
+            });
+        }
+
+        console.log("🆕 Creating new user...");
         user = new User({ 
             uid, 
-            name, 
+            name: name || "Rezon User", 
             email,
-            profilePic: profilePic || null,  // ✅ profilePic
-            provider: provider || "password"
+            profilePic: profilePic || null,
+            provider: provider || "password",
+            isActive: true,
+            status: "Active"
         });
+        
         await user.save();
-        res.status(201).json({ message: "User registered successfully", user });
+        console.log("✅ New user created:", user._id);
+        
+        res.status(201).json({ 
+            success: true,
+            message: "User registered successfully", 
+            user 
+        });
+        
     } catch (error) {
-        res.status(500).json({ message: "Registration failed", error: error.message });
+        console.error("🔥 REGISTER ERROR:", error);
+        console.error("🔥 Error Name:", error.name);
+        console.error("🔥 Error Message:", error.message);
+        console.error("🔥 Error Code:", error.code);
+        console.error("🔥 Stack:", error.stack);
+        
+        // MongoDB duplicate key error
+        if (error.code === 11000) {
+            return res.status(409).json({ 
+                success: false,
+                message: "User already exists with this email/UID",
+                error: error.message,
+                keyValue: error.keyValue
+            });
+        }
+        
+        // Validation error
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ 
+                success: false,
+                message: "Validation failed", 
+                errors: Object.values(error.errors).map(e => e.message)
+            });
+        }
+        
+        res.status(500).json({ 
+            success: false,
+            message: "Registration failed", 
+            error: error.message,
+            errorName: error.name,
+            errorCode: error.code
+        });
     }
 };
 
