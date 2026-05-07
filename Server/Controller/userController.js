@@ -705,7 +705,8 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        if (!req.files || !req.files.idFront || !req.files.idBack || !req.files.liveSelfie) {
+        // 🔥 Safer file check
+        if (!req.files?.idFront?.[0] || !req.files?.idBack?.[0] || !req.files?.liveSelfie?.[0]) {
             return res.status(400).json({ 
                 success: false,
                 message: "ID Front, ID Back aur Live Selfie lazmi hain. 📸" 
@@ -749,7 +750,7 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 CNIC Duplicate Check (safe now - guaranteed valid cnicNumber)
+        // 🔥 CNIC Duplicate Check
         const existingCNIC = await User.findOne({ 
             cnicNumber: ocrResult.cnicNumber,
             uid: { $ne: userUid }
@@ -804,7 +805,7 @@ export const verifyIdentity = async (req, res) => {
             let aiResponse;
             try {
                 aiResponse = await openai.chat.completions.create({
-                    model: "gpt-4o-mini",
+                    model: "gpt-4o",
                     temperature: 0,
                     messages: [
                         {
@@ -824,7 +825,11 @@ Rules:
   "reason": "brief explanation in English"
 }
 
-Be strict but fair. If same person with minor differences, confidence should be 70+.`
+IMPORTANT: 
+- isMatched = true if you believe they are the same person, even with low confidence (40+).
+- isMatched = false ONLY if you are certain they are different people.
+- Confidence 50-70 means "probably same person but poor image quality/lighting".
+- Confidence 70+ means "clearly same person".`
                                 },
                                 { type: "image_url", image_url: { url: idFrontUrl } },
                                 { type: "image_url", image_url: { url: selfieUrl } }
@@ -846,6 +851,14 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 continue;
             }
 
+            // 🔥 Safety: ensure confidence is a number
+            if (typeof result.confidence === 'string') {
+                result.confidence = Number(result.confidence);
+            }
+            if (typeof result.confidence !== 'number' || isNaN(result.confidence)) {
+                result.confidence = 0;
+            }
+
             console.log(`📊 Attempt ${i + 1} Result:`, result);
 
             if (result.confidence > maxConfidence) {
@@ -853,8 +866,8 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 bestResult = result;
             }
 
-            if (result.confidence >= 50 && result.isMatched) {
-                console.log("✅ High confidence match found, stopping retries.");
+            if (result.confidence >= 50 && result.isMatched === true) {
+                console.log("✅ Match found, stopping retries.");
                 break;
             }
         }
@@ -894,10 +907,9 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 reason: bestResult.reason,
                 ocrData: { extracted: true, rawText: ocrResult.rawText || null }
             },
-            // ✅ GUARANTEED: These values exist (validated above)
             name: ocrResult.name || existingUser?.name || "Verified User",
             fatherName: ocrResult.fatherName || null,
-            cnicNumber: ocrResult.cnicNumber, // ✅ MANDATORY - guaranteed not empty
+            cnicNumber: ocrResult.cnicNumber,
         };
 
         if (ocrResult.dateOfBirth) updateData.dateOfBirth = ocrResult.dateOfBirth;
@@ -905,6 +917,7 @@ Be strict but fair. If same person with minor differences, confidence should be 
 
         if (req.body.phoneNumber) {
             updateData.phoneNumber = req.body.phoneNumber;
+            // ⚠️ Note: ideally OTP verify karne ke baad true karna chahiye
             updateData.isPhoneVerified = true;
         }
 
