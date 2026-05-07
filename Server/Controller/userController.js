@@ -183,7 +183,6 @@ Return ONLY a JSON object:
 export const registerUser = async (req, res) => {
     try {
         console.log("🔍 REGISTER REQUEST BODY:", req.body);
-        console.log("🔍 REQUEST PATH:", req.path);
         
         const { uid, name, email, profilePic, provider } = req.body;
         
@@ -237,24 +236,13 @@ export const registerUser = async (req, res) => {
         console.error("🔥 Error Name:", error.name);
         console.error("🔥 Error Message:", error.message);
         console.error("🔥 Error Code:", error.code);
-        console.error("🔥 Stack:", error.stack);
         
         // MongoDB duplicate key error
         if (error.code === 11000) {
             return res.status(409).json({ 
                 success: false,
                 message: "User already exists with this email/UID",
-                error: error.message,
-                keyValue: error.keyValue
-            });
-        }
-        
-        // Validation error
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ 
-                success: false,
-                message: "Validation failed", 
-                errors: Object.values(error.errors).map(e => e.message)
+                error: error.message 
             });
         }
         
