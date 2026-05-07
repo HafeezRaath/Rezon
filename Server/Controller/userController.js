@@ -853,7 +853,7 @@ Be strict but fair. If same person with minor differences, confidence should be 
                 bestResult = result;
             }
 
-            if (result.confidence >= 70 && result.isMatched) {
+            if (result.confidence >= 50 && result.isMatched) {
                 console.log("✅ High confidence match found, stopping retries.");
                 break;
             }
