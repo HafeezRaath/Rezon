@@ -182,13 +182,13 @@ Return ONLY a JSON object:
 
 export const registerUser = async (req, res) => {
     try {
-        const { uid, name, email, photoURL, provider } = req.body;
+        const { uid, name, email, profilePic, provider } = req.body;  // ✅ profilePic
         let user = await User.findOne({ uid });
 
         if (user) {
             user.name = name;
             user.email = email;
-            if (photoURL) user.profilePic = photoURL;
+            if (profilePic) user.profilePic = profilePic;  // ✅ profilePic
             await user.save();
             return res.status(200).json({ message: "User profile updated", user });
         }
@@ -197,7 +197,7 @@ export const registerUser = async (req, res) => {
             uid, 
             name, 
             email,
-            profilePic: photoURL || null,
+            profilePic: profilePic || null,  // ✅ profilePic
             provider: provider || "password"
         });
         await user.save();
@@ -705,7 +705,6 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 Safer file check
         if (!req.files?.idFront?.[0] || !req.files?.idBack?.[0] || !req.files?.liveSelfie?.[0]) {
             return res.status(400).json({ 
                 success: false,
@@ -736,7 +735,6 @@ export const verifyIdentity = async (req, res) => {
             cnicNumber: ocrResult?.cnicNumber
         });
 
-        // 🔥 MANDATORY: CNIC number must be extracted
         if (!ocrResult || !ocrResult.success || !ocrResult.cnicNumber || ocrResult.cnicNumber.length < 13) {
             return res.status(422).json({
                 success: false,
@@ -750,7 +748,6 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 CNIC Duplicate Check
         const existingCNIC = await User.findOne({ 
             cnicNumber: ocrResult.cnicNumber,
             uid: { $ne: userUid }
@@ -777,7 +774,6 @@ export const verifyIdentity = async (req, res) => {
             }
         }
 
-        // 🔥 Upload to Cloudinary with UNIQUE filenames
         let idFrontUrl, idBackUrl, selfieUrl;
         try {
             [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
@@ -794,7 +790,6 @@ export const verifyIdentity = async (req, res) => {
             });
         }
 
-        // 🔥 Face Match with SAFE JSON parsing
         let bestResult = null;
         let maxConfidence = 0;
         const maxRetries = 3;
@@ -806,30 +801,61 @@ export const verifyIdentity = async (req, res) => {
             try {
                 aiResponse = await openai.chat.completions.create({
                     model: "gpt-4o",
-                    temperature: 0,
+                    temperature: 0.2,
                     messages: [
                         {
                             role: "user",
                             content: [
                                 { 
                                     type: "text", 
-                                    text: `You are a biometric face comparison system. Compare the face in Image 1 (ID card) with the face in Image 2 (live selfie).
+                                    text: `You are a lenient identity verification assistant for a Pakistani marketplace app called REZON.
 
-Rules:
-1. Look at facial structure: eyes, nose, jawline, eyebrows, face shape
-2. Ignore: hairstyle changes, lighting differences, facial expression, aging, glasses, beard/mustache growth
-3. Return ONLY this JSON format:
+Task: Compare the person in Image 1 (CNIC/ID card photo) with the person in Image 2 (live selfie).
+
+REALITY CHECK - CNIC photos are typically 5-10 YEARS OLD. People change significantly:
+- Gain or lose weight (face becomes fuller or thinner)
+- Grow beard, shave beard, trim mustache differently
+- Hairline changes, different hairstyle
+- Aging, wrinkles, skin texture changes
+- Studio lighting vs phone camera lighting
+- Straight-on ID photo vs angled selfie
+
+WHAT TO COMPARE (be forgiving):
+- Eye shape and distance between eyes
+- Nose structure and width
+- General face outline (allow for weight changes)
+- Eyebrow shape and position
+- Overall proportions
+
+WHAT TO IGNORE (completely):
+- Facial hair (beard, mustache, clean shave)
+- Hair style, hair length, baldness
+- Glasses vs no glasses
+- Lighting and shadows
+- Facial expression (smiling vs neutral)
+- Skin blemishes or aging
+- Weight-related face fullness
+
+DECISION FRAMEWORK:
+- If core features (eyes, nose, face shape) align → SAME PERSON
+- Only reject if eye shape is completely different, nose is completely different, or face structure is clearly a different person
+- Most uploads should pass unless obviously fraudulent
+
+RESPONSE FORMAT (strict JSON only):
 {
   "isMatched": boolean,
   "confidence": number (0-100),
-  "reason": "brief explanation in English"
+  "reason": "brief explanation"
 }
 
-IMPORTANT: 
-- isMatched = true if you believe they are the same person, even with low confidence (40+).
-- isMatched = false ONLY if you are certain they are different people.
-- Confidence 50-70 means "probably same person but poor image quality/lighting".
-- Confidence 70+ means "clearly same person".`
+CONFIDENCE GUIDE:
+- 75-100: Clear match, same person
+- 50-74: Same person but appearance changed due to age/weight/lighting (MOST COMMON)
+- 30-49: Probably same person but poor image quality
+- 0-29: Likely different person
+
+CRITICAL RULE:
+If you think it MIGHT be the same person (even with doubts), set isMatched to TRUE and confidence 50+. Only set isMatched to FALSE if you are absolutely certain it's a different individual.`
                                 },
                                 { type: "image_url", image_url: { url: idFrontUrl } },
                                 { type: "image_url", image_url: { url: selfieUrl } }
@@ -851,7 +877,6 @@ IMPORTANT:
                 continue;
             }
 
-            // 🔥 Safety: ensure confidence is a number
             if (typeof result.confidence === 'string') {
                 result.confidence = Number(result.confidence);
             }
@@ -866,7 +891,7 @@ IMPORTANT:
                 bestResult = result;
             }
 
-            if (result.confidence >= 50 && result.isMatched === true) {
+            if (result.confidence >= 40 && result.isMatched === true) {
                 console.log("✅ Match found, stopping retries.");
                 break;
             }
@@ -882,7 +907,7 @@ IMPORTANT:
 
         console.log("🏆 Best Result:", bestResult);
 
-        const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 50;
+        const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 40;
 
         if (!isActuallyMatched) {
             return res.status(400).json({ 
@@ -893,7 +918,6 @@ IMPORTANT:
             });
         }
 
-        // 🔥 Build updateData with GUARANTEED valid data
         const updateData = {
             profilePic: selfieUrl,
             isVerified: true,
@@ -917,11 +941,9 @@ IMPORTANT:
 
         if (req.body.phoneNumber) {
             updateData.phoneNumber = req.body.phoneNumber;
-            // ⚠️ Note: ideally OTP verify karne ke baad true karna chahiye
             updateData.isPhoneVerified = true;
         }
 
-        // 🔥 Safe MongoDB Update
         let updatedUser;
         try {
             updatedUser = await User.findOneAndUpdate(
