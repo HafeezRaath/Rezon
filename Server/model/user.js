@@ -21,10 +21,8 @@ const UserSchema = new mongoose.Schema({
     },
     phoneNumber: { 
         type: String, 
-        default: null,           // ✅ FIXED: null instead of ""
-        unique: true,
-        sparse: true,
-        index: true 
+        default: null,
+        // 🔥 REMOVED: unique, sparse, index from here
     },
     isPhoneVerified: {
         type: Boolean,
@@ -34,7 +32,7 @@ const UserSchema = new mongoose.Schema({
         type: String, 
         default: "" 
     },
-    
+
     fatherName: {
         type: String,
         default: "",
@@ -42,10 +40,8 @@ const UserSchema = new mongoose.Schema({
     },
     cnicNumber: {
         type: String,
-        default: null,           // ✅ FIXED: null instead of ""
-        unique: true,
-        sparse: true,
-        index: true
+        default: null,
+        // 🔥 REMOVED: unique, sparse, index from here
     },
     dateOfBirth: {
         type: String,
@@ -56,7 +52,7 @@ const UserSchema = new mongoose.Schema({
         enum: ['Male', 'Female', 'Other', ''],
         default: ''
     },
-    
+
     isVerified: {
         type: Boolean,
         default: false,
@@ -70,7 +66,7 @@ const UserSchema = new mongoose.Schema({
         default: 'Unverified',
         index: true
     },
-    
+
     kycDocuments: {
         idFront: { type: String, default: "" },
         idBack: { type: String, default: "" },
@@ -94,7 +90,7 @@ const UserSchema = new mongoose.Schema({
 
     rating: { type: Number, default: 0, min: 0, max: 5 },
     totalReviews: { type: Number, default: 0 },
-    
+
     warningCount: { type: Number, default: 0 },
     isFlagged: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
@@ -104,7 +100,7 @@ const UserSchema = new mongoose.Schema({
         enum: ['Active', 'Suspended', 'Banned'], 
         default: 'Active' 
     },
-    
+
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: null },
 
@@ -123,10 +119,12 @@ const UserSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// ✅ Indexes sirf yahan define karo — duplicate mat karo
 UserSchema.index({ isVerified: 1, verificationStatus: 1 });
 UserSchema.index({ isActive: 1, isFlagged: 1 });
 UserSchema.index({ isBanned: 1, status: 1 });
 UserSchema.index({ cnicNumber: 1 }, { sparse: true, unique: true });
+UserSchema.index({ phoneNumber: 1 }, { sparse: true, unique: true });
 UserSchema.index({ "notifications.read": 1, "notifications.createdAt": -1 });
 
 export default mongoose.model("User", UserSchema);

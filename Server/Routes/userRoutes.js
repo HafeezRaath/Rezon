@@ -1,4 +1,3 @@
-
 import express from "express";
 import multer from "multer";
 import bcrypt from "bcrypt";
@@ -30,32 +29,35 @@ import {
 
 import authenticate from "../authMiddleware.js";
 import User from "../model/user.js";
-import Ad from "../model/userModel.js";  // 🔥 FIXED: Ad model import missing tha
+import Ad from "../model/userModel.js";
 
 const route = express.Router();
 
-
-// ================= MULTER CONFIG =================
-
-// 📂 Memory storage (AI + KYC + Ads ke liye)
 const memoryStorage = multer.memoryStorage();
 
 const uploadMemory = multer({
     storage: memoryStorage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+// ================= USER AUTH & PROFILE =================
 
-// ================= USER AUTH & PROFILE (TOP PRIORITY) =================
-
-// 🔥 FIXED: Both /register and /auth/register for frontend compatibility
 route.post("/register", registerUser);
 route.post("/auth/register", registerUser);
 
-// ✅ GET: Profile data lene ke liye
 route.get("/users/me", authenticate, me);
 
-// ✅ PUT: Profile update karne ke liye
+// 🔥 NEW: Public user profile by UID
+route.get("/users/:id", async (req, res) => {
+    try {
+        const user = await User.findOne({ uid: req.params.id }).select("-password -notifications -kycDocuments -kycDetails");
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching user", error: error.message });
+    }
+});
+
 route.put("/users/me", authenticate, async (req, res) => {
     try {
         const { phoneNumber, password, isPhoneVerified } = req.body;
@@ -99,29 +101,31 @@ route.put("/users/me", authenticate, async (req, res) => {
     }
 });
 
-// 🔥 FIXED: router → route (yahi error tha)
+// 🔥 FIXED: Removed duplicate /ads route, added try-catch
 route.get('/ads', async (req, res) => {
-    const { search, category, location } = req.query;
-    let query = {};
-    
-    // 🔥 LIKE command on title
-    if (search) {
-        query.title = { $regex: search, $options: 'i' };
+    try {
+        const { search, category, location } = req.query;
+        let query = {};
+
+        if (search) {
+            query.title = { $regex: search, $options: 'i' };
+        }
+
+        if (category && category !== 'All') {
+            query.category = category;
+        }
+
+        if (location) {
+            query.location = { $regex: location, $options: 'i' };
+        }
+
+        const ads = await Ad.find(query).sort({ createdAt: -1 });
+        res.json(ads);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch ads", error: error.message });
     }
-    
-    if (category && category !== 'All') {
-        query.category = category;
-    }
-    
-    if (location) {
-        query.location = { $regex: location, $options: 'i' };
-    }
-    
-    const ads = await Ad.find(query).sort({ createdAt: -1 });
-    res.json(ads);
 });
 
-// ✅ PATCH: Extra Safety (Agar Railway PUT block kare to ye chale ga)
 route.patch("/users/me", authenticate, async (req, res) => {
     try {
         const { phoneNumber, isPhoneVerified } = req.body;
@@ -148,7 +152,6 @@ route.get("/check-phone", authenticate, async (req, res) => {
     }
 });
 
-
 // ================= IDENTITY VERIFICATION =================
 
 route.post(
@@ -161,7 +164,6 @@ route.post(
     ]),
     verifyIdentity
 );
-
 
 // ================= NOTIFICATIONS =================
 
@@ -210,28 +212,21 @@ route.delete("/notifications/:id", authenticate, async (req, res) => {
     }
 });
 
-
 // ================= AI & ADS =================
 
-// 🤖 AI suggestions
 route.post("/ad/ai-assist", authenticate, uploadMemory.array("images", 10), getAISuggestions);
 
-// ☁️ Create Ad
 route.post("/ad", authenticate, uploadMemory.array("images", 10), create);
 
-// 📄 Public ads
-route.get("/ads", getAllAds);
+// 🔥 REMOVED: Duplicate route.get("/ads", getAllAds) — pehla /ads hi handle karega
+
 route.get("/ads/:id", getAdById);
 
-// 👤 User ads
 route.get("/myads", authenticate, getMyAds);
 
-// ✏️ Update Ad
 route.put("/ads/:id", authenticate, uploadMemory.array("images", 5), updateAd);
 
-// ❌ Delete Ad
 route.delete("/ads/:id", authenticate, deleteAd);
-
 
 // ================= SALES & REVIEWS =================
 
@@ -241,33 +236,26 @@ route.post("/ad/:adId/mark-sold", authenticate, markAsSold);
 
 route.get("/can-review/:adId", authenticate, canReview);
 
-// 🔥 FIXED: Reviews route - proper endpoint
 route.post("/reviews", authenticate, createReview);
 
 route.get("/reviews/seller/:sellerId", getSellerReviews);
 
-
 // ================= REPORT SYSTEM =================
 
-// 🔥 FIXED: Reports route - proper endpoint
 route.post("/reports", authenticate, createReport);
-
 
 // ================= CHAT SYSTEM =================
 
-// 🔥 FIXED: Chat list route - no userId in URL, uses auth token
 route.get("/chat/list", authenticate, getChatList);
 
 route.get("/chat/:chatId", authenticate, getChatMessages);
 
-// 🔥 FIXED: Start chat - proper endpoint for initiating chat
 route.post("/chat/start", authenticate, startChat);
 
 route.post("/chat/:chatId/message", authenticate, sendMessage);
 
 route.delete("/chat/:chatId", authenticate, deleteChat);
-// Admin Route (Add this to your routes.js)
-route.put("/admin/ads/:id/status", authenticate, updateAdStatus);
 
+route.put("/admin/ads/:id/status", authenticate, updateAdStatus);
 
 export default route;
