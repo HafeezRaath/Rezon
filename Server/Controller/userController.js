@@ -182,28 +182,49 @@ Return ONLY a JSON object:
 
 export const registerUser = async (req, res) => {
     try {
-        const { uid, name, email, profilePic, provider } = req.body;  // ✅ profilePic
+        console.log("📥 REGISTER BODY:", req.body);
+        console.log("📥 REGISTER HEADERS:", req.headers.authorization ? "Bearer token present" : "NO TOKEN");
+
+        const { uid, name, email, profilePic, provider } = req.body;
+
+        if (!uid || !email) {
+            console.log("❌ MISSING FIELDS:", { uid, email });
+            return res.status(400).json({ message: "UID and Email are required" });
+        }
+
         let user = await User.findOne({ uid });
+        console.log("🔍 EXISTING USER:", user ? "Found" : "Not found");
 
         if (user) {
-            user.name = name;
+            console.log("🔄 Updating existing user...");
+            user.name = name || user.name;
             user.email = email;
-            if (profilePic) user.profilePic = profilePic;  // ✅ profilePic
+            if (profilePic) user.profilePic = profilePic;
             await user.save();
+            console.log("✅ User updated");
             return res.status(200).json({ message: "User profile updated", user });
         }
 
+        console.log("🆕 Creating new user...");
         user = new User({ 
             uid, 
-            name, 
+            name: name || email?.split("@")[0] || "Rezon User", 
             email,
-            profilePic: profilePic || null,  // ✅ profilePic
+            profilePic: profilePic || null,
             provider: provider || "password"
         });
+        
         await user.save();
+        console.log("✅ New user saved to MongoDB:", user._id);
         res.status(201).json({ message: "User registered successfully", user });
+        
     } catch (error) {
-        res.status(500).json({ message: "Registration failed", error: error.message });
+        console.error("🔥 REGISTER CONTROLLER ERROR:", error);
+        res.status(500).json({ 
+            message: "Registration failed", 
+            error: error.message,
+            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+        });
     }
 };
 
