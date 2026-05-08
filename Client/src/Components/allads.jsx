@@ -12,11 +12,8 @@ import {
 import toast from "react-hot-toast";
 import LocationDropdown from "./LocationDropdown";
 
-
-// 🔧 FIXED: API URL without space
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 
-// 🔥 NEW: Modern category data with gradients
 const CATEGORIES = [
     { code: "All", name: "All Items", icon: "🏠", gradient: "from-slate-500 to-slate-600" },
     { code: "Mobile", name: "Mobiles", icon: "📱", gradient: "from-blue-500 to-cyan-500" },
@@ -35,7 +32,6 @@ const CATEGORIES = [
     { code: "Kids", name: "Kids", icon: "👶", gradient: "from-green-500 to-emerald-500" },
 ];
 
-// 🔥 NEW: Click-to-Call Handler
 const handleCallSeller = (phoneNumber) => {
     if (!phoneNumber) {
         toast.error("Seller phone number not available");
@@ -46,7 +42,6 @@ const handleCallSeller = (phoneNumber) => {
     toast.success(`Dialing ${phoneNumber}...`, { icon: '📞' });
 };
 
-// 🔥 NEW: Modern Ad Card Component
 const AdCard = ({ ad, onClick, isListView }) => {
     return (
         <div 
@@ -58,7 +53,6 @@ const AdCard = ({ ad, onClick, isListView }) => {
                 ${isListView ? 'flex flex-row' : 'flex flex-col'}
             `}
         >
-            {/* Image Section */}
             <div className={`
                 relative overflow-hidden bg-slate-100
                 ${isListView ? 'w-48 h-40 shrink-0' : 'w-full h-48'}
@@ -69,8 +63,6 @@ const AdCard = ({ ad, onClick, isListView }) => {
                     alt={ad.title}
                     loading="lazy"
                 />
-                
-                {/* Badges */}
                 <div className="absolute top-3 left-3 flex flex-col gap-2">
                     {ad.condition === 'New' && (
                         <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
@@ -81,8 +73,6 @@ const AdCard = ({ ad, onClick, isListView }) => {
                         {ad.category}
                     </span>
                 </div>
-                
-                {/* Favorite Button */}
                 <button 
                     onClick={(e) => {
                         e.stopPropagation();
@@ -92,26 +82,20 @@ const AdCard = ({ ad, onClick, isListView }) => {
                 >
                     <FaHeart size={14} />
                 </button>
-
-                {/* Price Tag */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                     <p className="text-white font-black text-lg">
                         Rs {ad.price?.toLocaleString()}
                     </p>
                 </div>
             </div>
-
-            {/* Content Section */}
             <div className="p-4 flex-1 flex flex-col">
                 <h3 className="font-bold text-slate-800 text-sm mb-2 line-clamp-2 group-hover:text-emerald-600 transition-colors">
                     {ad.title}
                 </h3>
-                
                 <div className="flex items-center text-xs text-slate-500 mb-3">
                     <FaMapMarkerAlt className="mr-1 text-emerald-500" /> 
                     <span className="truncate">{ad.location}</span>
                 </div>
-
                 <div className="mt-auto flex items-center justify-between">
                     <div className="flex items-center gap-1">
                         <FaStar className="text-yellow-400 text-xs" />
@@ -127,18 +111,16 @@ const AdCard = ({ ad, onClick, isListView }) => {
     );
 };
 
-// 🔥 MAIN COMPONENT
 const AllAds = ({ user }) => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    
-    // 🔥 READ SEARCH + LOCATION FROM URL (Navbar se ya refresh pe)
+
     const urlSearch = searchParams.get('search') || '';
     const urlLocation = searchParams.get('location') || '';
     const [searchTerm, setSearchTerm] = useState(urlSearch);
     const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
     const [selectedLocation, setSelectedLocation] = useState(urlLocation);
-    
+
     const [ads, setAds] = useState([]);
     const [filteredAds, setFilteredAds] = useState([]);
     const [activeCategory, setActiveCategory] = useState("All");
@@ -147,27 +129,24 @@ const AllAds = ({ user }) => {
     const [sortBy, setSortBy] = useState('newest');
     const [showFilters, setShowFilters] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    
+
     const [selectedAd, setSelectedAd] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [sellerTrust, setSellerTrust] = useState({ avg: 0, total: 0 });
     const [sellerPhone, setSellerPhone] = useState(null);
-    
+
     const [profileModalUid, setProfileModalUid] = useState(null);
     const [sellerInfo, setSellerInfo] = useState(null);
     const [sellerReviews, setSellerReviews] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
-    
-    
-    // 🔥 REPORT MODAL STATES
+
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportReason, setReportReason] = useState('');
     const [reportSubmitting, setReportSubmitting] = useState(false);
-    
+
     const abortControllerRef = useRef(null);
     const touchStartX = useRef(null);
 
-    // 🔥 DETECT MOBILE
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
         checkMobile();
@@ -175,28 +154,21 @@ const AllAds = ({ user }) => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // 🔥 SYNC: URL → State (jab Navbar se search/location change ho ya page refresh ho)
     useEffect(() => {
-    const currentSearch = searchParams.get('search') || '';
-    const currentLocation = searchParams.get('location') || '';
+        const currentSearch = searchParams.get('search') || '';
+        const currentLocation = searchParams.get('location') || '';
+        if (currentSearch !== searchTerm) setSearchTerm(currentSearch);
+        if (currentLocation !== selectedLocation) setSelectedLocation(currentLocation);
+        if (!currentSearch && !currentLocation) {
+            setActiveCategory("All");
+        }
+    }, [searchParams]);
 
-    // Sirf tab update karein agar value waqai change hui ho
-    if (currentSearch !== searchTerm) setSearchTerm(currentSearch);
-    if (currentLocation !== selectedLocation) setSelectedLocation(currentLocation);
-    
-    // Agar params khali hain to filters ko bhi reset kar dein
-    if (!currentSearch && !currentLocation) {
-        setActiveCategory("All");
-    }
-}, [searchParams]);
-
-    // 🔥 DEBOUNCE: Type karne pe 500ms wait karo phir API call karo
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // 🔥 SYNC: Debounced → URL (address bar update karo, location preserve)
     useEffect(() => {
         const current = searchParams.get('search') || '';
         if (debouncedSearch !== current) {
@@ -205,9 +177,8 @@ const AllAds = ({ user }) => {
             if (selectedLocation) params.set('location', selectedLocation);
             setSearchParams(params);
         }
-    }, [debouncedSearch]);
+    }, [debouncedSearch, selectedLocation, setSearchParams, searchParams]);
 
-    // 🔥 FETCH ADS (backend search ke saath)
     useEffect(() => {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
@@ -215,13 +186,10 @@ const AllAds = ({ user }) => {
         const fetchAds = async () => {
             setLoading(true);
             try {
-                // 🔥 BACKEND KO SEARCH PARAM BHEJO
                 const params = new URLSearchParams();
                 if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim());
-                
                 const queryString = params.toString();
                 const url = `${API_BASE_URL}/ads${queryString ? `?${queryString}` : ''}`;
-                
                 const res = await axios.get(url, {
                     signal: abortControllerRef.current.signal,
                     timeout: 15000
@@ -236,21 +204,15 @@ const AllAds = ({ user }) => {
                 setLoading(false);
             }
         };
-        
         fetchAds();
         return () => abortControllerRef.current?.abort();
     }, [debouncedSearch]);
 
-    // Filter & Sort Logic (client-side)
     useEffect(() => {
         let result = [...ads];
-        
-        // Category filter
         if (activeCategory !== "All") {
             result = result.filter(ad => ad.category === activeCategory);
         }
-        
-        // 🔥 LOCATION FILTER
         if (selectedLocation) {
             const loc = selectedLocation.toLowerCase();
             result = result.filter(ad => {
@@ -258,8 +220,6 @@ const AllAds = ({ user }) => {
                 return adLoc.includes(loc);
             });
         }
-        
-        // 🔥 CLIENT-SIDE SEARCH FALLBACK (title, description, location)
         if (debouncedSearch) {
             const term = debouncedSearch.toLowerCase();
             result = result.filter(ad => 
@@ -268,8 +228,6 @@ const AllAds = ({ user }) => {
                 ad.location?.toLowerCase().includes(term)
             );
         }
-        
-        // Sorting
         switch(sortBy) {
             case 'price-low':
                 result.sort((a, b) => (a.price || 0) - (b.price || 0));
@@ -281,46 +239,37 @@ const AllAds = ({ user }) => {
             default:
                 result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         }
-        
         setFilteredAds(result);
     }, [debouncedSearch, activeCategory, ads, sortBy, selectedLocation]);
 
-    // 🔥 FIXED: Fetch Seller Details
     useEffect(() => {
         const fetchSeller = async () => {
             const uid = profileModalUid || selectedAd?.posted_by_uid;
             if (!uid) return;
-
             try {
                 if (profileModalUid) setLoadingReviews(true);
-                
                 const userRes = await axios.get(`${API_BASE_URL}/users/${uid}`, {
                     timeout: 10000
                 }).catch(() => ({ data: null }));
-                
                 const reviewsRes = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, {
                     timeout: 10000
                 });
-                
                 const reviews = reviewsRes.data?.reviews || [];
                 const seller = userRes.data || reviewsRes.data?.seller || null;
                 const avg = reviews.length > 0 
                     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
                     : "0.0";
-
                 if (profileModalUid) {
                     setSellerReviews(reviews);
                     setSellerInfo(seller);
                 } else {
                     setSellerTrust({ avg, total: reviews.length });
-                    
                     const phone = selectedAd?.phoneNumber || 
                                   selectedAd?.sellerPhone || 
                                   seller?.phoneNumber || 
                                   seller?.phone || 
                                   seller?.mobile || 
                                   null;
-                    
                     setSellerPhone(phone);
                 }
                 setLoadingReviews(false);
@@ -332,14 +281,12 @@ const AllAds = ({ user }) => {
         fetchSeller();
     }, [selectedAd, profileModalUid]);
 
-    // 🔥 CHAT START
     const startChat = useCallback(async () => {
         if (!user) {
             toast.error("Please login first!");
             return;
         }
         if (!selectedAd) return;
-
         try {
             const token = await user.getIdToken();
             const res = await axios.post(
@@ -351,7 +298,6 @@ const AllAds = ({ user }) => {
                 },
                 { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
             );
-            
             if (res.data?.chatId) {
                 navigate(`/chat/${res.data.chatId}`);
             }
@@ -360,7 +306,6 @@ const AllAds = ({ user }) => {
         }
     }, [user, selectedAd, navigate]);
 
-    // 🔥 REPORT AD
     const handleReportClick = useCallback(() => {
         if (!user) {
             toast.error("Please login first!");
@@ -369,13 +314,11 @@ const AllAds = ({ user }) => {
         setShowReportModal(true);
     }, [user]);
 
-    // 🔥 SUBMIT REPORT
     const submitReport = useCallback(async () => {
         if (!reportReason.trim()) {
             toast.error("Please enter a reason for reporting");
             return;
         }
-        
         setReportSubmitting(true);
         try {
             const token = await user.getIdToken();
@@ -387,7 +330,6 @@ const AllAds = ({ user }) => {
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
             toast.success("Report submitted successfully");
             setShowReportModal(false);
             setReportReason('');
@@ -410,7 +352,6 @@ const AllAds = ({ user }) => {
         setShowReportModal(false);
     }, []);
 
-    // 🔥 TOUCH HANDLERS FOR MOBILE IMAGE SWIPE
     const handleTouchStart = (e) => {
         touchStartX.current = e.touches[0].clientX;
     };
@@ -428,10 +369,8 @@ const AllAds = ({ user }) => {
         touchStartX.current = null;
     };
 
-    // 🔥 FIXED: RENDER DETAILS PROPERLY
     const renderDetails = (details) => {
         if (!details) return null;
-        
         let parsedDetails = details;
         if (typeof details === 'string') {
             try {
@@ -445,7 +384,6 @@ const AllAds = ({ user }) => {
                 );
             }
         }
-        
         if (Array.isArray(parsedDetails)) {
             return parsedDetails.map((item, idx) => (
                 <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -454,10 +392,8 @@ const AllAds = ({ user }) => {
                 </div>
             ));
         }
-        
         const entries = Object.entries(parsedDetails);
         if (entries.length === 0) return null;
-        
         return entries.map(([key, val]) => (
             <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
@@ -468,12 +404,10 @@ const AllAds = ({ user }) => {
         ));
     };
 
-    // Get active category gradient
     const activeCategoryData = CATEGORIES.find(c => c.code === activeCategory);
 
     return (
         <div className="w-full min-h-screen bg-slate-50">
-            {/* 🔥 NEW: Hero Header with Dynamic Gradient */}
             <div className={`bg-gradient-to-r ${activeCategoryData?.gradient || 'from-emerald-500 to-teal-600'} text-white`}>
                 <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -485,8 +419,7 @@ const AllAds = ({ user }) => {
                                 {filteredAds.length} {filteredAds.length === 1 ? 'item' : 'items'} found
                             </p>
                         </div>
-                        
-                        {/* 🔥 Search Bar + Location Dropdown */}
+
                         <div className="flex flex-col sm:flex-row gap-3 max-w-2xl w-full">
                             <div className="relative flex-1">
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -497,7 +430,6 @@ const AllAds = ({ user }) => {
                                     value={searchTerm} 
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
-                                {/* 🔥 Clear search button */}
                                 {searchTerm && (
                                     <button 
                                         onClick={() => setSearchTerm('')}
@@ -507,51 +439,47 @@ const AllAds = ({ user }) => {
                                     </button>
                                 )}
                             </div>
-                            
-                            {/* 🔥 LOCATION DROPDOWN */}
+
                             <div className="sm:w-64">
-                                <LocationDropdown 
-                                    selected={selectedLocation} 
-                                    onChange={setSelectedLocation} 
-                                />
+                                <div className="bg-white rounded-xl shadow-sm">
+                                    <LocationDropdown 
+                                        selected={selectedLocation} 
+                                        onChange={setSelectedLocation} 
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    {/* 🔥 Active Filters Tags */}
+
                     {(selectedLocation || debouncedSearch) && (
                         <div className="mt-4 flex items-center gap-2 flex-wrap">
                             {debouncedSearch && (
-                                <span className="bg-white/20 backdrop-blur text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
                                     <FaSearch size={10} />
                                     "{debouncedSearch}"
                                 </span>
                             )}
                             {selectedLocation && (
-                                <span className="bg-white/20 backdrop-blur text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
                                     <FaMapMarkerAlt size={10} />
                                     {selectedLocation}
                                 </span>
                             )}
                             <button 
-    onClick={() => {
-        // 1. State reset
-        setSearchTerm('');
-        setSelectedLocation('');
-        
-        // 2. 🔥 URL Params ko empty karein (Yeh sabse zaroori hai)
-        setSearchParams({}); 
-    }}
-    className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
->
-    <FaTimes size={10} /> Clear All
-</button>
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setSelectedLocation('');
+                                    setSearchParams({}); 
+                                }}
+                                className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 hover:bg-white/30 transition-colors"
+                            >
+                                <FaTimes size={10} /> Clear All
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* 🔥 NEW: Sticky Filter Bar */}
             <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 py-3">
                     <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide pb-2 md:pb-0">
@@ -575,30 +503,25 @@ const AllAds = ({ user }) => {
                 </div>
             </div>
 
-            {/* 🔥 NEW: Control Bar */}
             <div className="max-w-7xl mx-auto px-4 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                     <div className="flex items-center gap-4">
-                        {/* Sort Dropdown */}
                         <div className="relative">
                             <select 
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
                                 className="appearance-none bg-slate-100 text-slate-700 font-semibold text-sm px-4 py-2.5 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
                             >
-                                <option value="newest">📅 Newest First</option>
-                                <option value="price-low">💰 Price: Low to High</option>
-                                <option value="price-high">💰 Price: High to Low</option>
+                                <option value="newest">Newest First</option>
+                                <option value="price-low">Price: Low to High</option>
+                                <option value="price-high">Price: High to Low</option>
                             </select>
                             <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs" />
                         </div>
-                        
-                        {/* Search status */}
                         <span className="text-xs text-slate-500 font-medium">
                             {debouncedSearch ? `Searching: "${debouncedSearch}"` : 'All results'}
                         </span>
                     </div>
-
                     <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
                         <button
                             onClick={() => setViewMode('grid')}
@@ -616,7 +539,6 @@ const AllAds = ({ user }) => {
                 </div>
             </div>
 
-            {/* 🔥 NEW: Content Area */}
             <div className="max-w-7xl mx-auto px-4 pb-12">
                 {loading ? (
                     <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
@@ -668,15 +590,12 @@ const AllAds = ({ user }) => {
                 )}
             </div>
 
-            {/* 🔥 NEW: Redesigned Detail Modal */}
             {selectedAd && (
                 <div 
-                    className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex justify-center items-center z-[100] p-0 md:p-6 animate-in fade-in duration-200"
+                    className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex justify-center items-center z-[100] p-0 md:p-6"
                     onClick={(e) => e.target === e.currentTarget && closeModal()}
                 >
-                    <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:max-w-6xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-                        
-                        {/* Modal Header */}
+                    <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:max-w-6xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
                         <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-white sticky top-0 z-10">
                             <div className="flex items-center gap-3">
                                 <button onClick={closeModal} className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
@@ -696,7 +615,6 @@ const AllAds = ({ user }) => {
 
                         <div className="overflow-y-auto flex-1">
                             <div className="grid grid-cols-1 lg:grid-cols-2">
-                                {/* Image Gallery */}
                                 <div 
                                     className="relative h-64 sm:h-80 md:h-[500px] lg:h-[600px] bg-slate-100 lg:sticky lg:top-0"
                                     onTouchStart={handleTouchStart}
@@ -707,8 +625,6 @@ const AllAds = ({ user }) => {
                                         className="w-full h-full object-contain bg-slate-50" 
                                         alt={selectedAd.title}
                                     />
-                                    
-                                    {/* DESKTOP: Arrow Buttons */}
                                     {selectedAd.images?.length > 1 && (
                                         <>
                                             <button 
@@ -723,19 +639,9 @@ const AllAds = ({ user }) => {
                                             >
                                                 <FaArrowRight />
                                             </button>
-                                        </>
-                                    )}
-                                    
-                                    {/* Image Counter */}
-                                    {selectedAd.images?.length > 1 && (
-                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
-                                            {currentImageIndex + 1} / {selectedAd.images.length}
-                                        </div>
-                                    )}
-
-                                    {/* MOBILE: Arrow Buttons */}
-                                    {selectedAd.images?.length > 1 && (
-                                        <>
+                                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
+                                                {currentImageIndex + 1} / {selectedAd.images.length}
+                                            </div>
                                             <button 
                                                 onClick={() => setCurrentImageIndex(p => (p - 1 + selectedAd.images.length) % selectedAd.images.length)} 
                                                 className="sm:hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center text-slate-700 shadow-lg active:bg-emerald-500 active:text-white transition-colors"
@@ -748,28 +654,22 @@ const AllAds = ({ user }) => {
                                             >
                                                 <FaArrowRight size={16} />
                                             </button>
+                                            <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 gap-2">
+                                                {selectedAd.images.map((img, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setCurrentImageIndex(idx)}
+                                                        className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} w-12 h-12`}
+                                                    >
+                                                        <img src={img} className="w-full h-full object-cover" alt="" />
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </>
-                                    )}
-
-                                    {/* DESKTOP ONLY: Thumbnail Strip */}
-                                    {selectedAd.images?.length > 1 && (
-                                        <div className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 gap-2">
-                                            {selectedAd.images.map((img, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    onClick={() => setCurrentImageIndex(idx)}
-                                                    className={`rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-white opacity-70'} w-12 h-12`}
-                                                >
-                                                    <img src={img} className="w-full h-full object-cover" alt="" />
-                                                </button>
-                                            ))}
-                                        </div>
                                     )}
                                 </div>
 
-                                {/* Details Panel */}
                                 <div className="p-4 sm:p-6 lg:p-8 bg-white">
-                                    {/* Price & Title */}
                                     <div className="mb-4 sm:mb-6">
                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                                             <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -787,7 +687,6 @@ const AllAds = ({ user }) => {
                                         </p>
                                     </div>
 
-                                    {/* Seller Card */}
                                     <div 
                                         onClick={() => setProfileModalUid(selectedAd.posted_by_uid)}
                                         className="bg-slate-50 rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6 cursor-pointer hover:bg-emerald-50 transition-colors border border-slate-200"
@@ -815,7 +714,6 @@ const AllAds = ({ user }) => {
                                         </div>
                                     </div>
 
-                                    {/* Quick Details */}
                                     {selectedAd.details && (
                                         <div className="mb-4 sm:mb-6">
                                             <h4 className="font-bold text-slate-800 mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base">
@@ -827,7 +725,6 @@ const AllAds = ({ user }) => {
                                         </div>
                                     )}
 
-                                    {/* Description */}
                                     <div className="mb-6 sm:mb-8">
                                         <h4 className="font-bold text-slate-800 mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base">
                                             <FaTag className="text-emerald-500" /> Description
@@ -837,7 +734,6 @@ const AllAds = ({ user }) => {
                                         </p>
                                     </div>
 
-                                    {/* Location */}
                                     <div className="flex items-center gap-2 text-slate-500 mb-6 sm:mb-8 p-3 sm:p-4 bg-slate-50 rounded-xl">
                                         <FaMapMarkerAlt className="text-emerald-500 text-xl flex-shrink-0" />
                                         <div className="min-w-0">
@@ -846,7 +742,6 @@ const AllAds = ({ user }) => {
                                         </div>
                                     </div>
 
-                                    {/* Action Buttons - Sticky Bottom */}
                                     <div className="sticky bottom-0 bg-white pt-3 sm:pt-4 border-t border-slate-100 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 sm:pb-6"
                                         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
                                     >
@@ -861,7 +756,6 @@ const AllAds = ({ user }) => {
                                                 <FaPhoneAlt /> {sellerPhone ? sellerPhone : 'No Phone'}
                                             </button>
                                         </div>
-                                        
                                         {sellerPhone && (
                                             <a href={`https://wa.me/${sellerPhone.replace(/[^0-9]/g, '')}?text=Hi, I'm interested in your ${selectedAd.title} on Rezon`}
                                                 target="_blank" rel="noopener noreferrer"
@@ -870,7 +764,6 @@ const AllAds = ({ user }) => {
                                                 <FaWhatsapp size={18} /> WhatsApp Seller
                                             </a>
                                         )}
-                                        
                                         <button onClick={handleReportClick} 
                                             className="w-full text-rose-500 text-sm font-medium flex items-center justify-center gap-2 py-2.5 sm:py-3 hover:bg-rose-50 rounded-xl transition-colors mt-2">
                                             <FaFlag /> Report this listing
@@ -883,11 +776,10 @@ const AllAds = ({ user }) => {
                 </div>
             )}
 
-            {/* Report Modal */}
             {showReportModal && selectedAd && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
                     onClick={(e) => e.target === e.currentTarget && setShowReportModal(false)}>
-                    <div className="bg-white w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="bg-white w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl">
                         <div className="flex items-center gap-2 mb-4 text-rose-600">
                             <FaFlag />
                             <h3 className="font-bold text-lg">Report Ad</h3>
@@ -898,7 +790,7 @@ const AllAds = ({ user }) => {
                         <textarea
                             value={reportReason}
                             onChange={(e) => setReportReason(e.target.value)}
-                            placeholder="Why are you reporting this ad? (e.g. Fake listing, Wrong category, etc.)"
+                            placeholder="Why are you reporting this ad?"
                             className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none"
                             rows={4}
                         />
@@ -922,11 +814,10 @@ const AllAds = ({ user }) => {
                 </div>
             )}
 
-            {/* Profile Modal */}
             {profileModalUid && (
-                <div className="fixed inset-0 bg-slate-900/90 z-[120] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200"
+                <div className="fixed inset-0 bg-slate-900/90 z-[120] flex items-center justify-center p-4 backdrop-blur-md"
                     onClick={(e) => e.target === e.currentTarget && setProfileModalUid(null)}>
-                    <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+                    <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
                         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-white text-center relative">
                             <button onClick={() => setProfileModalUid(null)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30">
                                 <FaTimes />
@@ -941,7 +832,6 @@ const AllAds = ({ user }) => {
                                 </span>
                             </div>
                         </div>
-                        
                         <div className="p-6">
                             <div className="grid grid-cols-3 gap-4 mb-6 text-center">
                                 <div>
@@ -957,7 +847,6 @@ const AllAds = ({ user }) => {
                                     <p className="text-xs text-slate-500 uppercase">Response</p>
                                 </div>
                             </div>
-                            
                             <div className="space-y-3 max-h-64 overflow-y-auto">
                                 {loadingReviews ? (
                                     <div className="text-center py-8"><FaSpinner className="animate-spin text-emerald-600 text-2xl mx-auto" /></div>

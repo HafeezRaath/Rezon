@@ -4,11 +4,10 @@ import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
 import { 
     FaTimes, FaCamera, FaRocket, FaSpinner, FaMagic, 
-    FaMapMarkerAlt, FaPhone, FaCheckCircle,
+    FaMapMarkerAlt, FaPhone, FaCheckCircle, FaCrosshairs,
     FaMobileAlt, FaCar, FaHome, FaLaptop, FaMotorcycle, FaBriefcase,
     FaDog, FaCouch, FaTshirt, FaBook, FaChild, FaTools, FaIndustry, FaBuilding
 } from "react-icons/fa";
-import LocationDropdown from "../Components/LocationDropdown";
 
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 
@@ -41,7 +40,6 @@ const CATEGORY_FIELDS = {
         { name: "warrantyDuration", placeholder: "Warranty Duration (Months)", type: "number", min: 1, max: 60, showWhen: { field: "warranty", value: "Available" } },
         { name: "accessories", placeholder: "Accessories (Box, Charger)", type: "text" },
     ],
-    // ... baaki categories same ...
     Car: [
         { name: "make", placeholder: "Make (e.g., Honda, Toyota)", type: "text", required: true },
         { name: "carModel", placeholder: "Model (e.g., Civic, Corolla)", type: "text", required: true },
@@ -119,7 +117,11 @@ const PostAd = ({ onClose, onAdAdded }) => {
     const [selectedCat, setSelectedCat] = useState(null);
     const [loading, setLoading] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
-    const [userPhone, setUserPhone] = useState(""); // ✅ User ka phone number
+    const [userPhone, setUserPhone] = useState("");
+    
+    // 🔥 Location states
+    const [locationLoading, setLocationLoading] = useState(false);
+    const [locationError, setLocationError] = useState("");
     
     const [formData, setFormData] = useState({
         title: "", 
@@ -157,6 +159,60 @@ const PostAd = ({ onClose, onAdAdded }) => {
             }
         };
         fetchProfile();
+    }, []);
+
+    // 🔥 Fetch current location function
+    const fetchCurrentLocation = useCallback(async () => {
+        if (!navigator.geolocation) {
+            setLocationError("Geolocation not supported by your browser");
+            return;
+        }
+
+        setLocationLoading(true);
+        setLocationError("");
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+
+                try {
+                    const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`
+                    );
+                    
+                    if (!res.ok) throw new Error("Failed to fetch location");
+                    
+                    const data = await res.json();
+                    
+                    // Format address
+                    const addr = data.address;
+                    const area = addr.suburb || addr.city_district || addr.neighbourhood || addr.town || addr.village || addr.hamlet || "";
+                    const city = addr.city || addr.county || addr.state_district || addr.state || "";
+                    
+                    const finalLocation = area && city && area.toLowerCase() !== city.toLowerCase() 
+                        ? `${area}, ${city}` 
+                        : (area || city || addr.state || "Pakistan");
+
+                    setFormData(prev => ({ ...prev, location: finalLocation }));
+                    setLocationLoading(false);
+                    
+                } catch (err) {
+                    console.error("Location error:", err);
+                    setLocationError("Failed to get address. Please try again.");
+                    setLocationLoading(false);
+                }
+            },
+            (error) => {
+                setLocationLoading(false);
+                const errors = {
+                    1: "Location permission denied. Please enable location access in browser settings.",
+                    2: "Location unavailable.",
+                    3: "Location request timed out."
+                };
+                setLocationError(errors[error.code] || "Unable to retrieve location");
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+        );
     }, []);
 
     const inputHandler = (e) => {
@@ -220,71 +276,66 @@ const PostAd = ({ onClose, onAdAdded }) => {
         finally { setAiLoading(false); }
     };
 
-    // ✅ Check if field should be shown (conditional logic)
     const shouldShowField = (field) => {
         if (!field.showWhen) return true;
         const { field: dependField, value: dependValue } = field.showWhen;
         return formData.categoryDetails[dependField] === dependValue;
     };
 
-   const submitAd = async (e) => {
-    if(e) e.preventDefault();
-    
-    if(!formData.title.trim() || !formData.price || !formData.location.trim() || !formData.description.trim()) {
-        return toast.error("Title, Price, Location aur Description lazmi hain!");
-    }
+    const submitAd = async (e) => {
+        if(e) e.preventDefault();
+        
+        if(!formData.title.trim() || !formData.price || !formData.location.trim() || !formData.description.trim()) {
+            return toast.error("Title, Price, Location aur Description lazmi hain!");
+        }
 
-    const token = localStorage.getItem("firebaseIdToken");
-    if (!token) {
-        return toast.error("Please login first!");
-    }
+        const token = localStorage.getItem("firebaseIdToken");
+        if (!token) {
+            return toast.error("Please login first!");
+        }
 
-    setLoading(true);
-    const postData = new FormData();
-    
-    postData.append("title", formData.title);
-    postData.append("price", formData.price);
-    postData.append("description", formData.description);
-    postData.append("location", formData.location);
-    postData.append("condition", formData.condition);
-    postData.append("category", selectedCat.id);
-    postData.append("phoneNumber", formData.phoneNumber || userPhone);
-    postData.append("imageQualityByAI", formData.imageQuality || "Original");
-    postData.append("details", JSON.stringify(formData.categoryDetails));
-    
-    formData.images.forEach(f => postData.append("images", f));
+        setLoading(true);
+        const postData = new FormData();
+        
+        postData.append("title", formData.title);
+        postData.append("price", formData.price);
+        postData.append("description", formData.description);
+        postData.append("location", formData.location);
+        postData.append("condition", formData.condition);
+        postData.append("category", selectedCat.id);
+        postData.append("phoneNumber", formData.phoneNumber || userPhone);
+        postData.append("imageQualityByAI", formData.imageQuality || "Original");
+        postData.append("details", JSON.stringify(formData.categoryDetails));
+        
+        formData.images.forEach(f => postData.append("images", f));
 
-    try {
-        const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
-            headers: { 
-                Authorization: `Bearer ${token}`
-                // 🔥 Content-Type HATA DIYA - Axios khud handle karega
-            }
-        });
-        
-        toast.success("Ad Posted Successfully! 🚀");
-        onClose(); // 🔥 Pehle popup band karo
-        if (onAdAdded) onAdAdded(res.data.data); // Phir parent ko update karo
-        
-    } catch (err) { 
-        // 🔥 Better logging - exact message dikhega
-        const errorData = err.response?.data;
-        const errorMsg = errorData?.message || errorData?.error || "Failed to post ad.";
-        
-        console.error("Post Ad Full Error:", errorData);
-        console.error("Status:", err.response?.status);
-        
-        toast.error(errorMsg);
-    } finally { 
-        setLoading(false); 
-    }
-};
+        try {
+            const res = await axios.post(`${API_BASE_URL}/ad`, postData, {
+                headers: { 
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            
+            toast.success("Ad Posted Successfully! 🚀");
+            onClose();
+            if (onAdAdded) onAdAdded(res.data.data);
+            
+        } catch (err) { 
+            const errorData = err.response?.data;
+            const errorMsg = errorData?.message || errorData?.error || "Failed to post ad.";
+            console.error("Post Ad Full Error:", errorData);
+            console.error("Status:", err.response?.status);
+            toast.error(errorMsg);
+        } finally { 
+            setLoading(false); 
+        }
+    };
 
     const modalContent = (
         <div className="fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-md p-2 sm:p-4 z-[9999]" onClick={onClose}>
             <div className="bg-[#f0f2f5] w-full max-w-lg rounded-[30px] sm:rounded-[45px] shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                 
-                {/* ✅ Header with Cancel Button */}
+                {/* Header */}
                 <div className="p-4 sm:p-6 text-center bg-white border-b border-gray-100 relative flex items-center justify-between">
                     <button 
                         onClick={onClose} 
@@ -298,7 +349,7 @@ const PostAd = ({ onClose, onAdAdded }) => {
                         {step === 1 ? "Select Category" : `Post: ${selectedCat.name}`}
                     </h2>
                     
-                    <div className="w-8"></div> {/* Spacer for balance */}
+                    <div className="w-8"></div>
                 </div>
 
                 {/* Scrollable Body */}
@@ -326,7 +377,6 @@ const PostAd = ({ onClose, onAdAdded }) => {
                                     ← Change Category
                                 </button>
                                 
-                                {/* ✅ Cancel button in step 2 also */}
                                 <button 
                                     onClick={onClose}
                                     className="text-red-500 font-bold text-[10px] tracking-widest uppercase hover:underline"
@@ -398,9 +448,8 @@ const PostAd = ({ onClose, onAdAdded }) => {
                                     </select>
                                 </div>
 
-                                {/* ✅ Dynamic Fields with Conditional Warranty */}
+                                {/* Dynamic Fields */}
                                 {CATEGORY_FIELDS[selectedCat.id]?.map(field => {
-                                    // Check if field should be shown
                                     if (!shouldShowField(field)) return null;
                                     
                                     return (
@@ -440,7 +489,7 @@ const PostAd = ({ onClose, onAdAdded }) => {
                                     className="w-full p-4 sm:p-5 rounded-[25px] bg-white outline-none font-bold shadow-sm border border-transparent focus:border-emerald-500 transition-all resize-none" 
                                 />
                                 
-                                {/* ✅ Contact Number - Auto-filled from user profile */}
+                                {/* Contact Number */}
                                 <div className="relative group">
                                     <label className="block text-[9px] font-black text-emerald-600 mb-1 ml-4 uppercase tracking-tighter">Contact Number *</label>
                                     <div className="flex items-center bg-white rounded-2xl shadow-sm border border-transparent group-focus-within:border-emerald-500 transition-all p-1">
@@ -468,21 +517,63 @@ const PostAd = ({ onClose, onAdAdded }) => {
                                     )}
                                 </div>
 
-                                {/* Location */}
+                                {/* 🔥 CURRENT LOCATION ONLY - No manual search */}
                                 <div className="relative group">
-                                    <label className="block text-[9px] font-black text-emerald-600 mb-1 ml-4 uppercase tracking-tighter">Location / City *</label>
-                                    <div className="flex items-center bg-white rounded-2xl shadow-sm border border-transparent group-focus-within:border-emerald-500 transition-all p-1">
-                                        <div className="pl-4 pr-1 text-emerald-500">
+                                    <label className="block text-[9px] font-black text-emerald-600 mb-1 ml-4 uppercase tracking-tighter">
+                                        Location / City *
+                                    </label>
+                                    
+                                    <div className="flex items-center bg-white rounded-2xl shadow-sm border border-transparent focus-within:border-emerald-500 transition-all p-1 min-h-[56px]">
+                                        <div className="pl-4 pr-2 text-emerald-500">
                                             <FaMapMarkerAlt size={18} />
                                         </div>
-                                        <div className="flex-1">
-                                            <LocationDropdown 
-                                                selected={formData.location} 
-                                                onChange={v => setFormData(p => ({...p, location: v}))} 
-                                                variant="default" 
-                                            />
-                                        </div>
+                                        
+                                        {formData.location ? (
+                                            <div className="flex-1 flex items-center justify-between p-2">
+                                                <span className="font-bold text-sm text-slate-700">{formData.location}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <FaCheckCircle className="text-emerald-500" size={16} />
+                                                    <button 
+                                                        onClick={fetchCurrentLocation}
+                                                        disabled={locationLoading}
+                                                        className="text-[10px] text-emerald-600 font-bold hover:underline disabled:opacity-50"
+                                                    >
+                                                        {locationLoading ? "Updating..." : "Refresh"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={fetchCurrentLocation}
+                                                disabled={locationLoading}
+                                                className="flex-1 flex items-center justify-center gap-2 p-3 font-bold text-sm text-slate-500 hover:text-emerald-600 transition-colors"
+                                            >
+                                                {locationLoading ? (
+                                                    <>
+                                                        <FaSpinner className="animate-spin text-emerald-500" />
+                                                        <span>Getting your location...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <FaCrosshairs className="text-emerald-500" />
+                                                        <span>Tap to get current location</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
+                                    
+                                    {locationError && (
+                                        <p className="text-[10px] text-red-500 mt-1 ml-4 flex items-center gap-1">
+                                            <FaTimes size={8} /> {locationError}
+                                        </p>
+                                    )}
+                                    
+                                    {!formData.location && !locationLoading && !locationError && (
+                                        <p className="text-[10px] text-slate-400 mt-1 ml-4">
+                                            Your ad will be shown to buyers near your current location
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -509,3 +600,4 @@ const PostAd = ({ onClose, onAdAdded }) => {
 };
 
 export default PostAd;
+

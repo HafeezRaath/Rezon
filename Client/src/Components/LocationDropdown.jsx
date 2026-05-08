@@ -30,32 +30,15 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     "Gujranwala, Punjab",
   ];
 
-  // Address formatter
   const formatLiveAddress = useCallback((item) => {
     if (!item?.address) return "Pakistan";
-
     const addr = item.address;
-
     const area =
-      addr.suburb ||
-      addr.city_district ||
-      addr.neighbourhood ||
-      addr.town ||
-      addr.village ||
-      addr.hamlet ||
-      addr.residential;
-
-    const city =
-      addr.city ||
-      addr.county ||
-      addr.state_district ||
-      addr.town ||
-      addr.state;
-
+      addr.suburb || addr.city_district || addr.neighbourhood || addr.town || addr.village || addr.hamlet || addr.residential;
+    const city = addr.city || addr.county || addr.state_district || addr.town || addr.state;
     if (area && city && area.toLowerCase() !== city.toLowerCase()) {
       return `${area}, ${city}`;
     }
-
     return area || city || addr.state || "Pakistan";
   }, []);
 
@@ -67,14 +50,12 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     [formatLiveAddress]
   );
 
-  // Click outside close
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-
     if (isOpen) {
       document.addEventListener("click", handleClickOutside);
       inputRef.current?.focus();
@@ -82,32 +63,23 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     }
   }, [isOpen]);
 
-  // Live search
   useEffect(() => {
     if (searchTerm.length <= 2 || !isOpen) {
       setSuggestions([]);
       return;
     }
-
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
-
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-
       abortControllerRef.current = new AbortController();
-
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            searchTerm
-          )}&countrycodes=pk&addressdetails=1&limit=5`,
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTerm)}&countrycodes=pk&addressdetails=1&limit=5`,
           { signal: abortControllerRef.current.signal }
         );
-
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
         const data = await res.json();
         setSuggestions(data || []);
       } catch (error) {
@@ -118,7 +90,6 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
         setLoading(false);
       }
     }, 400);
-
     return () => {
       clearTimeout(delayDebounceFn);
       if (abortControllerRef.current) {
@@ -127,15 +98,12 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     };
   }, [searchTerm, isOpen]);
 
-  // Select handler
   const handleSelect = useCallback(
     (val) => {
       if (!val) return;
-
       if (typeof onChange === "function") {
         onChange(val);
       }
-
       setIsOpen(false);
       setSearchTerm("");
       setSuggestions([]);
@@ -143,36 +111,26 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
     [onChange]
   );
 
-  // Current location fetch
   const fetchCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation) {
       alert("Geolocation not supported by your browser");
       return;
     }
-
     setLoading(true);
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`
           );
-
           if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
           const data = await res.json();
-
           const finalPlace = getShortAddress(data);
-
           console.log("Location fetched:", finalPlace);
-
           if (finalPlace && typeof onChange === "function") {
             onChange(finalPlace);
           }
-
           setIsOpen(false);
           setSearchTerm("");
           setSuggestions([]);
@@ -186,20 +144,17 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
       (error) => {
         console.error("Geolocation error:", error);
         setLoading(false);
-
         const errorMessages = {
           1: "Location permission denied. Please enable location access.",
           2: "Location unavailable.",
           3: "Location request timed out.",
         };
-
         alert(errorMessages[error.code] || "Unable to retrieve location");
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     );
   }, [getShortAddress, onChange]);
 
-  // Toggle dropdown
   const handleToggle = useCallback(() => {
     if (variant === "form") {
       fetchCurrentLocation();
@@ -226,24 +181,22 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
       className={`relative ${variant === "form" ? "w-full" : "w-64"} text-sm`}
     >
       <div
-        className="border-2 border-slate-200 hover:border-emerald-500 rounded-xl px-4 py-3 flex justify-between items-center cursor-pointer bg-white"
+        className="border-2 border-slate-200 hover:border-emerald-500 rounded-xl px-4 py-3 flex justify-between items-center cursor-pointer bg-white shadow-sm"
         onClick={handleToggle}
       >
-        <div className="flex items-center gap-2 truncate text-slate-700">
+        <div className="flex items-center gap-2 truncate text-slate-800">
           {loading ? (
             <FaSpinner className="text-emerald-500 animate-spin" />
           ) : (
             <FaMapMarkerAlt className="text-emerald-500" />
           )}
-
-          <span className="truncate font-semibold">
+          <span className="truncate font-semibold text-slate-800">
             {loading ? "Locating..." : selected || "Select Location"}
           </span>
         </div>
-
         {variant !== "form" && (
           <FaChevronDown
-            className={`text-xs transition-transform ${
+            className={`text-xs text-slate-500 transition-transform ${
               isOpen ? "rotate-180" : ""
             }`}
           />
@@ -251,16 +204,15 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
       </div>
 
       {variant !== "form" && isOpen && (
-        <div className="absolute z-[100] w-full bg-white border mt-2 rounded-xl shadow-xl overflow-hidden">
-          <div className="p-3 border-b">
-            <div className="flex items-center bg-white border rounded-lg px-3 py-2">
+        <div className="absolute z-[100] w-full bg-white border border-slate-200 mt-2 rounded-xl shadow-2xl overflow-hidden">
+          <div className="p-3 border-b border-slate-100">
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
               <FaSearch className="text-slate-400 mr-2" />
-
               <input
                 ref={inputRef}
                 type="text"
                 placeholder="Search city or area..."
-                className="bg-transparent outline-none w-full text-sm"
+                className="bg-transparent outline-none w-full text-sm text-slate-800 placeholder:text-slate-400"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -269,10 +221,10 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
 
           <div className="max-h-72 overflow-y-auto">
             <div
-              className="px-4 py-3 cursor-pointer flex items-center gap-3 font-semibold hover:bg-emerald-50"
+              className="px-4 py-3 cursor-pointer flex items-center gap-3 font-semibold text-slate-700 hover:bg-emerald-50 transition-colors"
               onClick={fetchCurrentLocation}
             >
-              <FaCrosshairs />
+              <FaCrosshairs className="text-emerald-500" />
               Use Current Location
             </div>
 
@@ -282,14 +234,13 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
               suggestions.map((item) => (
                 <div
                   key={item.place_id}
-                  className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b"
+                  className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 transition-colors"
                   onClick={() => handleSelect(formatLiveAddress(item))}
                 >
-                  <p className="font-bold text-xs">
+                  <p className="font-bold text-xs text-slate-800">
                     {formatLiveAddress(item)}
                   </p>
-
-                  <p className="text-[10px] text-slate-400 truncate">
+                  <p className="text-[10px] text-slate-500 truncate">
                     {item.display_name}
                   </p>
                 </div>
@@ -299,10 +250,10 @@ const LocationDropdown = ({ selected, onChange, variant = "default" }) => {
               filteredPopular.map((city) => (
                 <div
                   key={city}
-                  className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer text-xs flex items-center gap-2"
+                  className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer text-xs flex items-center gap-2 text-slate-700 transition-colors"
                   onClick={() => handleSelect(city)}
                 >
-                  <FaMapMarkerAlt className="text-slate-300 text-[10px]" />
+                  <FaMapMarkerAlt className="text-slate-400 text-[10px]" />
                   {city}
                 </div>
               ))}
