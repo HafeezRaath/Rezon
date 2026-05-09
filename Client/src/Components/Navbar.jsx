@@ -30,7 +30,17 @@ import {
     FaHeart,
     FaHome,
     FaThLarge,
-    FaArrowLeft
+    FaArrowLeft,
+    FaMobileAlt,
+    FaCar,
+    FaTv,
+    FaMotorcycle,
+    FaBriefcase,
+    FaPaw,
+    FaChair,
+    FaTshirt,
+    FaBookOpen,
+    FaChild
 } from "react-icons/fa";
 import axios from "axios";
 import { auth } from "../firebase.config";
@@ -42,7 +52,7 @@ import LoginPopup from "./Loginpopup";
 import LocationDropdown from "./LocationDropdown";
 import Ads from "../CRUD/ads";
 
-const Navbar = ({ onSearch, onLocationChange }) => {
+const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -69,6 +79,21 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const API_URL = "https://rezon.up.railway.app/api";
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
+
+    // 🔥 FIXED: Category list with icons
+    const MOBILE_CATEGORIES = [
+        { code: 'Mobile', label: 'Mobiles', icon: FaMobileAlt },
+        { code: 'Car', label: 'Vehicles', icon: FaCar },
+        { code: 'Electronics', label: 'Electronics', icon: FaTv },
+        { code: 'Bikes', label: 'Bikes', icon: FaMotorcycle },
+        { code: 'PropertySale', label: 'Property', icon: FaHome },
+        { code: 'Furniture', label: 'Furniture', icon: FaChair },
+        { code: 'Fashion', label: 'Fashion', icon: FaTshirt },
+        { code: 'Jobs', label: 'Jobs', icon: FaBriefcase },
+        { code: 'Animals', label: 'Animals', icon: FaPaw },
+        { code: 'Books', label: 'Books', icon: FaBookOpen },
+        { code: 'Kids', label: 'Kids', icon: FaChild },
+    ];
 
     // SYNC SEARCH + LOCATION WITH URL
     useEffect(() => {
@@ -168,6 +193,22 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         }
     }, [user, navigate]);
 
+    // 🔥 NEW: Handle category click - navigate to home with category param
+    const handleCategoryClick = useCallback((categoryCode) => {
+        setShowMobileMenu(false);
+        onCategoryChange?.(categoryCode);
+
+        // Navigate to home with category
+        const params = new URLSearchParams(location.search);
+        if (categoryCode && categoryCode !== 'All') {
+            params.set('category', categoryCode);
+        } else {
+            params.delete('category');
+        }
+        const queryString = params.toString();
+        navigate(queryString ? `/?${queryString}` : '/');
+    }, [navigate, location.search, onCategoryChange]);
+
     const handleLogout = async () => {
         await signOut(auth);
         setUser(null);
@@ -179,7 +220,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const handleSearchSubmit = (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
-        
+
         onSearch?.(searchQuery.trim());
         navigate(`/?search=${encodeURIComponent(searchQuery.trim())}`);
         setShowMobileSearch(false);
@@ -189,7 +230,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
     const clearSearch = () => {
         setSearchQuery("");
         onSearch?.("");
-        // 🔥 Clear search but keep location param if set
         const params = new URLSearchParams();
         if (selectedLocation && selectedLocation !== 'Pakistan') {
             params.set('location', selectedLocation);
@@ -219,7 +259,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
             />
 
             <div className={`absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-out flex flex-col ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
-                
+
                 <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
                     <Link to="/" className="flex items-center gap-3" onClick={() => setShowMobileMenu(false)}>
                         <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -266,63 +306,56 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                         </div>
                     )}
 
+                    {/* 🔥 FIXED: Location Section - Better mobile display */}
                     <div className="p-6 border-b border-slate-800">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Location</p>
-                        <button 
-                            onClick={() => setShowLocDropdown(!showLocDropdown)}
-                            className="w-full flex items-center justify-between p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50 hover:border-emerald-500/50 transition-all"
-                        >
-                            <div className="flex items-center gap-3">
-                                <FaMapMarkerAlt className="text-emerald-500" />
-                                <span className="font-medium truncate">{selectedLocation}</span>
-                            </div>
-                            <FaChevronDown size={10} className={`transition-transform duration-200 ${showLocDropdown ? "rotate-180" : ""}`} />
-                        </button>
-                        
-                        {showLocDropdown && (
-                            <div className="mt-3 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 animate-in fade-in slide-in-from-top-2">
-                                <LocationDropdown
-                                    selected={selectedLocation}
-                                    onChange={(loc) => {
-                                        setSelectedLocation(loc);
-                                        setShowLocDropdown(false);
-                                        onLocationChange?.(loc);
+                        <div className="flex items-center gap-3 p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50">
+                            <FaMapMarkerAlt className="text-emerald-500 shrink-0" />
+                            <span className="font-medium truncate flex-1">{selectedLocation || "Select Location"}</span>
+                        </div>
+                        <div className="mt-3">
+                            <LocationDropdown
+                                selected={selectedLocation}
+                                onChange={(loc) => {
+                                    setSelectedLocation(loc);
+                                    onLocationChange?.(loc);
+                                    setShowMobileMenu(false);
 
-                                        // 🔥 Update URL with location + preserve search
-                                        const params = new URLSearchParams(location.search);
-                                        if (loc && loc !== 'Pakistan') {
-                                            params.set('location', loc);
-                                        } else {
-                                            params.delete('location');
-                                        }
-                                        const queryString = params.toString();
-                                        navigate(queryString ? `/?${queryString}` : '/');
-                                    }}
-                                />
-                            </div>
-                        )}
+                                    const params = new URLSearchParams(location.search);
+                                    if (loc && loc !== 'Pakistan') {
+                                        params.set('location', loc);
+                                    } else {
+                                        params.delete('location');
+                                    }
+                                    const queryString = params.toString();
+                                    navigate(queryString ? `/?${queryString}` : '/');
+                                }}
+                            />
+                        </div>
                     </div>
 
+                    {/* 🔥 FIXED: Categories - Navigate to home with category filter */}
                     <div className="p-4 space-y-1">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2 mt-2">Browse Categories</p>
-                        {[
-                            { to: '/', icon: FaHome, label: 'Home' },
-                            { to: '/mobiles', icon: FaStore, label: 'Mobiles' },
-                            { to: '/vehicles', icon: FaStore, label: 'Vehicles' },
-                            { to: '/electronics', icon: FaStore, label: 'Electronics' },
-                            { to: '/property-for-sale', icon: FaStore, label: 'Property' },
-                            { to: '/bikes', icon: FaStore, label: 'Bikes' },
-                            { to: '/furniture', icon: FaStore, label: 'Furniture' },
-                        ].map((item) => (
-                            <Link
-                                key={item.to}
-                                to={item.to}
-                                onClick={() => setShowMobileMenu(false)}
-                                className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
+
+                        <Link
+                            to="/"
+                            onClick={() => { setShowMobileMenu(false); handleCategoryClick('All'); }}
+                            className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
+                        >
+                            <FaHome className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
+                            <span className="font-medium">All Items</span>
+                        </Link>
+
+                        {MOBILE_CATEGORIES.map((item) => (
+                            <button
+                                key={item.code}
+                                onClick={() => handleCategoryClick(item.code)}
+                                className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group text-left"
                             >
                                 <item.icon className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
                                 <span className="font-medium">{item.label}</span>
-                            </Link>
+                            </button>
                         ))}
                     </div>
 
@@ -332,10 +365,10 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                             <Link to="/profile" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
                                 <FaUserEdit className="text-slate-500" /> Profile Settings
                             </Link>
-                            <Link to="/my-ads" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl">
+                            <button onClick={() => { setShowMobileMenu(false); setShowMyAds(true); }} className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl text-left">
                                 <FaHistory className="text-slate-500" /> My Active Ads
-                            </Link>
-                            <button onClick={handleChatClick} className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl text-left">
+                            </button>
+                            <button onClick={() => { setShowMobileMenu(false); handleChatClick(); }} className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-xl text-left">
                                 <FaComments className="text-slate-500" /> Inbox Messages
                             </button>
                             <button
@@ -402,52 +435,56 @@ const Navbar = ({ onSearch, onLocationChange }) => {
         </div>
     );
 
-    // BOTTOM MOBILE NAV
-    const BottomNav = () => (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
-            <div className="flex items-center justify-around py-2">
-                <Link to="/" className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/' ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    <FaHome size={20} />
-                    <span className="text-[10px] font-medium">Home</span>
-                </Link>
-                <Link to="/category/all" className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('category') ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    <FaThLarge size={20} />
-                    <span className="text-[10px] font-medium">Categories</span>
-                </Link>
-                <button
-                    onClick={handleSellClick}
-                    className="flex flex-col items-center -mt-6"
-                >
-                    <div className="w-14 h-14 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/30 border-4 border-slate-900">
-                        <FaPlus size={24} />
-                    </div>
-                    <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
-                </button>
-                <button 
-                    onClick={handleChatClick}
-                    className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('chat') ? 'text-emerald-400' : 'text-slate-400'}`}
-                >
-                    <FaComments size={20} />
-                    <span className="text-[10px] font-medium">Chat</span>
-                </button>
-                <button
-                    onClick={() => user ? navigate('/profile') : setShowLogin(true)}
-                    className={`flex flex-col items-center gap-1 p-2 ${user ? 'text-emerald-400' : 'text-slate-400'}`}
-                >
-                    {user ? (
-                        <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" />
-                    ) : (
-                        <FaUserCircle size={20} />
-                    )}
-                    <span className="text-[10px] font-medium">Profile</span>
-                </button>
+    // 🔥 FIXED: BOTTOM MOBILE NAV - No double footer
+    const BottomNav = () => {
+        // Don't show on chat pages
+        if (location.pathname.startsWith('/chat')) return null;
+
+        return (
+            <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
+                <div className="flex items-center justify-around py-2">
+                    <Link to="/" className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/' && !location.search ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        <FaHome size={20} />
+                        <span className="text-[10px] font-medium">Home</span>
+                    </Link>
+                    <button 
+                        onClick={() => setShowMobileMenu(true)}
+                        className={`flex flex-col items-center gap-1 p-2 ${location.search.includes('category') ? 'text-emerald-400' : 'text-slate-400'}`}
+                    >
+                        <FaThLarge size={20} />
+                        <span className="text-[10px] font-medium">Categories</span>
+                    </button>
+                    <button
+                        onClick={handleSellClick}
+                        className="flex flex-col items-center -mt-6"
+                    >
+                        <div className="w-14 h-14 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/30 border-4 border-slate-900">
+                            <FaPlus size={24} />
+                        </div>
+                        <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
+                    </button>
+                    <button 
+                        onClick={handleChatClick}
+                        className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('chat') || location.pathname.includes('conversations') ? 'text-emerald-400' : 'text-slate-400'}`}
+                    >
+                        <FaComments size={20} />
+                        <span className="text-[10px] font-medium">Chat</span>
+                    </button>
+                    <button
+                        onClick={() => user ? navigate('/profile') : setShowLogin(true)}
+                        className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/profile' ? 'text-emerald-400' : 'text-slate-400'}`}
+                    >
+                        {user ? (
+                            <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                        ) : (
+                            <FaUserCircle size={20} />
+                        )}
+                        <span className="text-[10px] font-medium">Profile</span>
+                    </button>
+                </div>
             </div>
-        </div>
-    );
-    
-    if (location.pathname.startsWith('/chat')) {
-        return null;
-    }
+        );
+    };
 
     return (
         <>
@@ -489,7 +526,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                     className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-10 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
                                 />
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                                
+
                                 {searchQuery && (
                                     <button
                                         type="button"
@@ -535,7 +572,6 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                                 setShowLocDropdown(false);
                                                 onLocationChange?.(loc);
 
-                                                // 🔥 Update URL with location + preserve search
                                                 const params = new URLSearchParams(location.search);
                                                 if (loc && loc !== 'Pakistan') {
                                                     params.set('location', loc);
@@ -592,7 +628,7 @@ const Navbar = ({ onSearch, onLocationChange }) => {
                                                     <p className="text-xs text-slate-500 truncate">{user.email}</p>
                                                 </div>
                                                 <Link to="/profile" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaUserCircle /> My Profile</Link>
-                                                <Link to="/my-ads" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors"><FaHistory /> My Ads</Link>
+                                                <button onClick={() => { setShowDropdown(false); setShowMyAds(true); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors text-left"><FaHistory /> My Ads</button>
                                                 <button onClick={() => { setShowDropdown(false); handleChatClick(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 transition-colors text-left"><FaComments /> Messages</button>
                                                 {isAdmin(user.uid) && <Link to="/admin/dashboard" onClick={() => setShowDropdown(false)} className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 transition-colors"><FaUserShield /> Admin Panel</Link>}
                                                 <div className="border-t border-slate-800 mt-2">

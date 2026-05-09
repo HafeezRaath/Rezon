@@ -14,7 +14,10 @@ import {
     FaSpinner,
     FaTimes,
     FaRedo,
-    FaExclamationTriangle
+    FaExclamationTriangle,
+    FaEye,
+    FaEyeSlash,
+    FaArrowLeft
 } from 'react-icons/fa';
 import { auth } from "../firebase.config";
 import toast, { Toaster } from 'react-hot-toast';
@@ -25,7 +28,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const VerificationFlow = ({ user, onClose, onComplete }) => {
     const [loading, setLoading] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
-    
+
     const [phone, setPhone] = useState("");
     const [idFront, setIdFront] = useState(null);
     const [idFrontPreview, setIdFrontPreview] = useState(null);
@@ -35,6 +38,13 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [errors, setErrors] = useState({});
+
+    // 🔥 NEW: Password visibility states
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    // 🔥 NEW: Camera mount state - only true when step 3 is active
+    const [cameraActive, setCameraActive] = useState(false);
 
     const webcamRef = useRef(null);
 
@@ -46,35 +56,47 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         };
     }, [idFrontPreview, idBackPreview]);
 
+    // 🔥 NEW: Camera activation - only mount when step 3 is active
+    useEffect(() => {
+        if (currentStep === 3 && !selfie) {
+            setCameraActive(true);
+        } else {
+            setCameraActive(false);
+        }
+    }, [currentStep, selfie]);
+
     // Validation
     useEffect(() => {
         const newErrors = {};
-        
+
         if (phone && !/^03\d{9}$/.test(phone)) {
             newErrors.phone = "Invalid format. Use 03XXXXXXXXX";
         }
-        
+
         if (phone && phone.length === 11) {
             checkPhoneUnique(phone);
         }
-        
+
         if (password && password.length < 6) {
             newErrors.password = "Minimum 6 characters";
         }
-        
+
         if (confirmPassword && password !== confirmPassword) {
             newErrors.confirmPassword = "Passwords don't match";
         }
 
         setErrors(newErrors);
+    }, [phone, password, confirmPassword]);
 
-        if (currentStep === 1 && phone.length === 11 && password.length >= 6 && password === confirmPassword && !newErrors.phone) {
+    // 🔥 FIXED: Auto advance only when ALL validations pass
+    useEffect(() => {
+        if (currentStep === 1 && phone.length === 11 && password.length >= 6 && password === confirmPassword && !errors.phone) {
             setCurrentStep(2);
         }
         if (currentStep === 2 && idFront && idBack) {
             setCurrentStep(3);
         }
-    }, [phone, password, confirmPassword, idFront, idBack, currentStep]);
+    }, [phone, password, confirmPassword, idFront, idBack, currentStep, errors.phone]);
 
     const checkPhoneUnique = async (phoneNum) => {
         try {
@@ -127,16 +149,26 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             return;
         }
         setSelfie(imageSrc);
+        setCameraActive(false);
         toast.success("Selfie captured!");
     }, []);
 
     const retakeSelfie = useCallback(() => {
         setSelfie(null);
+        setCameraActive(true);
     }, []);
+
+    // 🔥 NEW: Go back to previous step
+    const handleBack = useCallback(() => {
+        if (loading) return;
+        if (currentStep > 1) {
+            setCurrentStep(prev => prev - 1);
+        }
+    }, [loading, currentStep]);
 
     // 🔥 FIXED: Close button handler with proper cleanup
     const handleClose = useCallback(() => {
-        if (loading) return; // Don't close if loading
+        if (loading) return;
         onClose?.();
     }, [loading, onClose]);
 
@@ -158,7 +190,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             formData.append('idFront', idFront); 
             formData.append('idBack', idBack);
             formData.append('phoneNumber', phone);
-            
+
             const selfieBlob = await fetch(selfie).then(r => r.blob());
             formData.append('liveSelfie', selfieBlob, `selfie-${Date.now()}.jpg`);
 
@@ -172,11 +204,9 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
 
             if (verifyRes.data?.success) {
                 toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 3000 });
-                
-                // 🔥 FIXED: Call onComplete first, then auto close after delay
+
                 onComplete?.(verifyRes.data?.data);
-                
-                // Auto close modal after 2 seconds
+
                 setTimeout(() => {
                     onClose?.();
                 }, 2000);
@@ -184,13 +214,12 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         } catch (err) {
             const errorMsg = err.response?.data?.message || "Verification failed.";
             const errorCode = err.response?.data?.error;
-            
-            // Show specific error for debugging
+
             if (errorCode) {
                 console.error("Verification Error Code:", errorCode);
                 console.error("Debug Info:", err.response?.data?.debug);
             }
-            
+
             toast.error(errorMsg, { id: toastId, duration: 6000 });
         } finally {
             setLoading(false);
@@ -237,9 +266,20 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
             onClick={(e) => e.target === e.currentTarget && !loading && handleClose()}
         >
             <div className="bg-white w-full max-w-5xl h-full md:h-auto md:max-h-[95vh] md:rounded-3xl shadow-2xl relative overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-                
+
                 <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4 md:p-6 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
+                        {/* 🔥 NEW: Back button */}
+                        {currentStep > 1 && (
+                            <button
+                                onClick={handleBack}
+                                disabled={loading}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50 mr-1"
+                                title="Go back"
+                            >
+                                <FaArrowLeft className="text-lg" />
+                            </button>
+                        )}
                         <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/20">
                             <FaShieldAlt className="text-2xl text-emerald-400" />
                         </div>
@@ -248,7 +288,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                             <p className="text-xs md:text-sm text-slate-300">Secure AI-powered process</p>
                         </div>
                     </div>
-                    {/* 🔥 FIXED: Close button with proper handler */}
                     <button 
                         onClick={handleClose} 
                         disabled={loading}
@@ -266,7 +305,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                         <StepIndicator />
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            
+
                             {/* Step 1 */}
                             <div className={`bg-slate-50 rounded-2xl p-6 border-2 transition-all duration-300 ${
                                 currentStep === 1 ? 'border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg' : 
@@ -304,37 +343,66 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                         </p>
                                     )}
 
+                                    {/* 🔥 NEW: Password with eye icon */}
                                     <div className="relative">
                                         <input 
-                                            type="password" 
+                                            type={showPassword ? "text" : "password"}
                                             autoComplete="new-password"
                                             placeholder="Create Password" 
                                             disabled={loading}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className={`w-full p-4 pl-12 bg-white border-2 rounded-xl outline-none transition-all ${
+                                            className={`w-full p-4 pl-12 pr-12 bg-white border-2 rounded-xl outline-none transition-all ${
                                                 errors.password ? 'border-rose-300' : 'border-slate-200 focus:border-emerald-500'
                                             }`}
                                         />
                                         <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                            tabIndex={-1}
+                                        >
+                                            {showPassword ? <FaEyeSlash /> : <FaEye />}
+                                        </button>
                                     </div>
+                                    {errors.password && (
+                                        <p className="text-xs text-rose-500 flex items-center gap-1">
+                                            <FaExclamationTriangle /> {errors.password}
+                                        </p>
+                                    )}
 
+                                    {/* 🔥 NEW: Confirm Password with eye icon */}
                                     <div className="relative">
                                         <input 
-                                            type="password" 
+                                            type={showConfirmPassword ? "text" : "password"}
                                             autoComplete="new-password"
                                             placeholder="Confirm Password" 
                                             disabled={loading}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
-                                            className={`w-full p-4 pl-12 bg-white border-2 rounded-xl outline-none transition-all ${
+                                            className={`w-full p-4 pl-12 pr-12 bg-white border-2 rounded-xl outline-none transition-all ${
                                                 errors.confirmPassword ? 'border-rose-300 focus:border-rose-500' : 
                                                 confirmPassword && password === confirmPassword ? 'border-emerald-500' : 'border-slate-200 focus:border-emerald-500'
                                             }`}
                                         />
                                         <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                            tabIndex={-1}
+                                        >
+                                            {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                                        </button>
                                         {confirmPassword && password === confirmPassword && (
-                                            <FaCheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" />
+                                            <FaCheckCircle className="absolute right-12 top-1/2 -translate-y-1/2 text-emerald-500" />
                                         )}
                                     </div>
+                                    {/* 🔥 NEW: Password match error */}
+                                    {errors.confirmPassword && (
+                                        <p className="text-xs text-rose-500 flex items-center gap-1">
+                                            <FaExclamationTriangle /> {errors.confirmPassword}
+                                        </p>
+                                    )}
                                 </form>
                             </div>
 
@@ -409,23 +477,33 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                     {!selfie ? (
                                         <div className="relative">
                                             <div className="w-56 h-56 rounded-full overflow-hidden border-4 border-amber-200 shadow-2xl bg-slate-900">
-                                                <Webcam 
-                                                    ref={webcamRef} 
-                                                    audio={false}
-                                                    screenshotFormat="image/jpeg" 
-                                                    className="w-full h-full object-cover"
-                                                    mirrored={true}
-                                                    onUserMediaError={(err) => { 
-                                                        console.error("Camera error:", err); 
-                                                        toast.error("Camera access denied. Please allow camera permission in browser settings."); 
-                                                    }}
-                                                    videoConstraints={{ facingMode: "user" }}
-                                                />
+                                                {/* 🔥 FIXED: Camera only mounts when cameraActive is true */}
+                                                {cameraActive ? (
+                                                    <Webcam 
+                                                        ref={webcamRef} 
+                                                        audio={false}
+                                                        screenshotFormat="image/jpeg" 
+                                                        className="w-full h-full object-cover"
+                                                        mirrored={true}
+                                                        onUserMediaError={(err) => { 
+                                                            console.error("Camera error:", err); 
+                                                            toast.error("Camera access denied. Please allow camera permission in browser settings."); 
+                                                        }}
+                                                        videoConstraints={{ facingMode: "user" }}
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-500">
+                                                        <div className="text-center">
+                                                            <FaCamera className="text-4xl mx-auto mb-2 opacity-50" />
+                                                            <p className="text-sm">Camera off</p>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                                                 <button 
                                                     onClick={captureSelfie} 
-                                                    disabled={loading}
+                                                    disabled={loading || !cameraActive}
                                                     className="bg-amber-500 hover:bg-amber-600 text-white p-4 rounded-full border-4 border-white shadow-lg transition-transform hover:scale-110 active:scale-95 disabled:opacity-50"
                                                 >
                                                     <FaCamera size={24} />
@@ -463,7 +541,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                 <FaShieldAlt className="text-emerald-500 text-xl" />
                                 <p>Your identity is verified in real-time using OpenAI vision. Data is encrypted and deleted after processing.</p>
                             </div>
-                            
+
                             <button 
                                 onClick={handleFinalSubmit} 
                                 disabled={loading || !selfie || !idFront || !idBack}

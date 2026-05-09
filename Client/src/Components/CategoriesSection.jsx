@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     FaMobileAlt, FaCar, FaHome, FaBuilding, FaTv, FaMotorcycle, 
@@ -247,51 +247,72 @@ const ModernCategoryCard = ({ category, index, isMobile = false }) => {
     );
 };
 
-// 🔥 NEW: Mobile-Optimized Horizontal Scroll
+// 🔥 FIXED: Mobile-Optimized Horizontal Scroll with working dots
 const MobileScrollRow = () => {
     const scrollRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
     const [showIndicators, setShowIndicators] = useState(true);
+    const [activeIndex, setActiveIndex] = useState(0);  // 🔥 NEW: Track active dot
 
-    const checkScroll = () => {
+    const checkScroll = useCallback(() => {
         const el = scrollRef.current;
         if (el) {
             const hasScroll = el.scrollWidth > el.clientWidth;
             setShowIndicators(hasScroll);
             setCanScrollLeft(el.scrollLeft > 0);
             setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+            
+            // 🔥 NEW: Calculate active index based on scroll position
+            const cardWidth = el.querySelector('.snap-start')?.offsetWidth || 200;
+            const gap = 16;
+            const scrollPos = el.scrollLeft + (el.clientWidth / 2);
+            const newIndex = Math.floor(scrollPos / (cardWidth + gap));
+            const clampedIndex = Math.max(0, Math.min(newIndex, categories.length - 1));
+            setActiveIndex(clampedIndex);
         }
-    };
+    }, []);
 
     useEffect(() => {
         const el = scrollRef.current;
         if (el) {
-            // Initial check
             checkScroll();
             
-            // Add scroll listener
-            el.addEventListener('scroll', checkScroll, { passive: true });
-            
-            // Check on resize
+            const handleScroll = () => checkScroll();
+            el.addEventListener('scroll', handleScroll, { passive: true });
             window.addEventListener('resize', checkScroll);
             
             return () => {
-                el.removeEventListener('scroll', checkScroll);
+                el.removeEventListener('scroll', handleScroll);
                 window.removeEventListener('resize', checkScroll);
             };
         }
-    }, []);
+    }, [checkScroll]);
 
     const scroll = (direction) => {
         const el = scrollRef.current;
         if (el) {
-            const cardWidth = el.querySelector('.snap-start')?.offsetWidth || 280;
-            const gap = 16; // 4 * 4px (gap-4)
+            const cardWidth = el.querySelector('.snap-start')?.offsetWidth || 200;
+            const gap = 16;
             const scrollAmount = cardWidth + gap;
             
             el.scrollBy({ 
                 left: direction === 'left' ? -scrollAmount : scrollAmount, 
+                behavior: 'smooth' 
+            });
+        }
+    };
+
+    // 🔥 NEW: Scroll to specific dot index
+    const scrollToIndex = (index) => {
+        const el = scrollRef.current;
+        if (el) {
+            const cardWidth = el.querySelector('.snap-start')?.offsetWidth || 200;
+            const gap = 16;
+            const scrollAmount = index * (cardWidth + gap);
+            
+            el.scrollTo({ 
+                left: scrollAmount, 
                 behavior: 'smooth' 
             });
         }
@@ -339,12 +360,20 @@ const MobileScrollRow = () => {
                 ))}
             </div>
 
-            {/* Pagination Dots Indicator */}
-            <div className="flex justify-center gap-1.5 mt-2">
+            {/* 🔥 FIXED: Pagination Dots Indicator - Clickable and Active State */}
+            <div className="flex justify-center gap-2 mt-3 px-4">
                 {categories.map((_, idx) => (
-                    <div 
+                    <button
                         key={idx}
-                        className="w-1.5 h-1.5 rounded-full bg-slate-300 transition-colors"
+                        onClick={() => scrollToIndex(idx)}
+                        className={`
+                            rounded-full transition-all duration-300 active:scale-90
+                            ${idx === activeIndex 
+                                ? 'w-6 h-2 bg-emerald-500' 
+                                : 'w-2 h-2 bg-slate-300 hover:bg-slate-400'
+                            }
+                        `}
+                        aria-label={`Go to category ${idx + 1}`}
                     />
                 ))}
             </div>

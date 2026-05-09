@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import heroimage from '../assets/images/OIP.jpg';
 import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase.config";
@@ -13,9 +13,10 @@ const getApiUrl = () => {
         : "https://rezon.up.railway.app/api";
 };
 
-// 🔥 Props: setShowLogin + setShowVerification (NEW)
-const HeroSection = ({ setShowLogin, setShowVerification }) => {
+// 🔥 Props: setShowLogin + setShowVerification + setShowPostAd (NEW)
+const HeroSection = ({ setShowLogin, setShowVerification, setShowPostAd }) => {
     const navigate = useNavigate();
+    const [isChecking, setIsChecking] = useState(false);
 
     const handleStartSelling = useCallback(async () => {
         const currentUser = auth.currentUser;
@@ -25,6 +26,10 @@ const HeroSection = ({ setShowLogin, setShowVerification }) => {
             setShowLogin(true);
             return;
         }
+
+        // Agar already checking chal raha hai toh return
+        if (isChecking) return;
+        setIsChecking(true);
 
         const API_URL = getApiUrl();
         const toastId = toast.loading("Checking verification status...");
@@ -38,17 +43,19 @@ const HeroSection = ({ setShowLogin, setShowVerification }) => {
 
             toast.dismiss(toastId);
 
+            // 🔥 SAME LOGIC AS NAVBAR: Check verification
             if (!res.data?.isVerified) {
                 toast("Please verify your identity first 🛡️", { icon: '⚠️' });
-                // 🔥 FIXED: Modal open karo, navigate mat karo
+                // 🔥 Verification modal open karo, navigate mat karo
                 setShowVerification?.(true);
             } else {
-                navigate('/post-ad');
+                // 🔥 User verified hai → PostAd modal open karo
+                setShowPostAd?.(true);
             }
         } catch (err) {
             toast.dismiss(toastId);
             console.error("Verification check failed:", err);
-            
+
             if (err.code === 'ECONNABORTED') {
                 toast.error("Request timeout. Please check your connection.");
             } else if (err.response?.status === 401) {
@@ -57,8 +64,10 @@ const HeroSection = ({ setShowLogin, setShowVerification }) => {
             } else {
                 toast.error("Unable to verify status. Please try again.");
             }
+        } finally {
+            setIsChecking(false);
         }
-    }, [setShowLogin, setShowVerification, navigate]);
+    }, [setShowLogin, setShowVerification, setShowPostAd, isChecking]);
 
     const theme = {
         primary: "emerald",
@@ -72,7 +81,7 @@ const HeroSection = ({ setShowLogin, setShowVerification }) => {
     return (
         <div className="w-full bg-slate-50 py-16 px-6">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
-                
+
                 {/* Left: Image */}
                 <div className="md:w-1/2 w-full">
                     <div className="relative group">
@@ -104,14 +113,25 @@ const HeroSection = ({ setShowLogin, setShowVerification }) => {
                     </p>
 
                     <div className="flex flex-wrap gap-4 justify-center md:justify-start w-full">
-                        {/* 🔥 Start Selling → Verification check */}
+                        {/* 🔥 Start Selling → Verification check + PostAd modal */}
                         <button 
                             onClick={handleStartSelling}
-                            className={`${theme.buttonPrimary} text-white px-10 py-4 rounded-2xl text-lg font-bold shadow-xl transition-all active:scale-95 flex items-center gap-2`}
+                            disabled={isChecking}
+                            className={`${theme.buttonPrimary} text-white px-10 py-4 rounded-2xl text-lg font-bold shadow-xl transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
-                            Start Selling Now
+                            {isChecking ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                    </svg>
+                                    Checking...
+                                </>
+                            ) : (
+                                "Start Selling Now"
+                            )}
                         </button>
-                        
+
                         {/* 🔥 Browse Products → Home (All Ads) */}
                         <button 
                             onClick={() => navigate('/')}  

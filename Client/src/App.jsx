@@ -87,7 +87,8 @@ function App() {
       <Navbar 
         user={user} 
         onSearch={handleSearch} 
-        onLocationChange={handleLocationChange} 
+         onLocationChange={handleLocationChange}
+    onCategoryChange={handleCategoryChange}
       /> 
 
       {/* 🔥 ADDED: main wrapper for flex-grow */}
