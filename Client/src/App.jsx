@@ -53,6 +53,15 @@ function App() {
     navigate(`/?city=${encodeURIComponent(loc)}`);
   };
 
+  // 🔥 FIXED: handleCategoryChange function added
+  const handleCategoryChange = (category) => {
+    if (category && category !== 'All') {
+      navigate(`/?category=${encodeURIComponent(category)}`);
+    } else {
+      navigate('/');
+    }
+  };
+
   const isAdmin = (userUid) => {
     const ADMIN_UIDS = ["btVq523cTvh4pTUS7AErSyVNER53"];
     return ADMIN_UIDS.includes(userUid);
@@ -87,8 +96,8 @@ function App() {
       <Navbar 
         user={user} 
         onSearch={handleSearch} 
-         onLocationChange={handleLocationChange}
-    onCategoryChange={handleCategoryChange}
+        onLocationChange={handleLocationChange}
+        onCategoryChange={handleCategoryChange}
       /> 
 
       {/* 🔥 ADDED: main wrapper for flex-grow */}
@@ -102,17 +111,17 @@ function App() {
               setShowVerification={setShowVerification} 
             />
           } />
-          
+
           <Route path="/profile" element={<Profile user={user}/>}/>
-          
+
           {/* 🔥 PostAd as normal route */}
           <Route path="/post-ad" element={<PostAd user={user} />} />
-          
+
           <Route path="/update-ad/:id" element={<UpdateAd user={user} />} />
-          
+
           {/* 🔥 ADDED: All Ads route */}
           <Route path="/all-ads" element={<AllAds user={user} />} />
-          
+
           {/* Categories */}
           <Route path="/mobiles" element={<CategoryAds user={user} category="Mobile" />} /> 
           <Route path="/vehicles" element={<CategoryAds user={user} category="Car" />} /> 
@@ -125,11 +134,11 @@ function App() {
           {/* Chat */}
           <Route path="/conversations" element={<ConversationList user={user} />} />
           <Route path="/chat/:conversationId" element={<ChatRoom user={user} />} />
-          
+
           {/* Auth */}
           <Route path="/PhoneLogin" element={<PhoneLogin user={user}/>}/>
           <Route path="/verify" element={<VerificationFlow user={user} />} />
-          
+
           {/* 🔥 ADDED: Footer pages */}
           <Route path="/about" element={<PlaceholderPage />} />
           <Route path="/blog" element={<PlaceholderPage />} />
@@ -137,7 +146,7 @@ function App() {
           <Route path="/contact" element={<PlaceholderPage />} />
           <Route path="/privacy" element={<PlaceholderPage />} />
           <Route path="/terms" element={<PlaceholderPage />} />
-          
+
           {/* Admin */}
           <Route path="/admin/*" element={
             user && isAdmin(user.uid) ? (
@@ -157,7 +166,7 @@ function App() {
               </div>
             )
           } />
-          
+
           {/* 404 */}
           <Route path="*" element={
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
