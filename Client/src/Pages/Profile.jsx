@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import EditProfileModal from "../Components/EditProfileModal";
+import Ads from "../CRUD/ads";
 
 // 🔧 FIXED: API Config
 const API_BASE_URL = "https://rezon.up.railway.app/api";
@@ -343,7 +344,7 @@ const Profile = ({ user }) => {
                   <FaPlus size={12} /> New Ad
                 </button>
                 <button
-                  onClick={() => setShowMyAds(false)}
+                  onClick={() => setShowMyAds(true)}
                   className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition"
                 >
                   <FaArrowLeft size={18} />
@@ -419,7 +420,10 @@ const Profile = ({ user }) => {
                       </div>
 
                       <button
-                        onClick={() => navigate(`/ad/${ad._id}`)}
+                       onClick={() => {
+    onClose(); // Pehle My Ads modal band karein
+    navigate(`/allads?openAd=${ad._id}`); // Phir AllAds par bhejein parameters ke sath
+  }}
                         className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900 transition active:scale-95"
                       >
                         View Details

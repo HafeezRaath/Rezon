@@ -14,60 +14,53 @@ const getApiUrl = () => {
 };
 
 // 🔥 Props: setShowLogin + setShowVerification + setShowPostAd (NEW)
-const HeroSection = ({ setShowLogin, setShowVerification, setShowPostAd }) => {
+const HeroSection = ({ setShowLogin, setShowMyAds }) => {
     const navigate = useNavigate();
     const [isChecking, setIsChecking] = useState(false);
 
     const handleStartSelling = useCallback(async () => {
+        // Navbar ki tarah Firebase auth se current user lein
         const currentUser = auth.currentUser;
 
         if (!currentUser) {
-            toast.error("Please login first! 🔒");
+            toast("Please login first! 🔒", { icon: '🔑' });
             setShowLogin(true);
             return;
         }
 
-        // Agar already checking chal raha hai toh return
         if (isChecking) return;
         setIsChecking(true);
 
-        const API_URL = getApiUrl();
-        const toastId = toast.loading("Checking verification status...");
+        const API_URL = "https://rezon.up.railway.app/api";
+        const loadingToast = toast.loading("Verifying...");
 
         try {
-            const token = await currentUser.getIdToken();
+            // Navbar ki tarah token nikaalein
+            const token = await currentUser.getIdToken(true);
+            
             const res = await axios.get(`${API_URL}/users/me`, {
-                headers: { 'Authorization': `Bearer ${token}` },
-                timeout: 10000
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            toast.dismiss(toastId);
+            toast.dismiss(loadingToast);
 
-            // 🔥 SAME LOGIC AS NAVBAR: Check verification
+            // SAME LOGIC AS NAVBAR:
             if (!res.data?.isVerified) {
-                toast("Please verify your identity first 🛡️", { icon: '⚠️' });
-                // 🔥 Verification modal open karo, navigate mat karo
-                setShowVerification?.(true);
+                toast("Please verify your profile 🛡️", { icon: '⚠️' });
+                navigate('/verify'); // Agar verify nahi hai to verify page par bhejein
             } else {
-                // 🔥 User verified hai → PostAd modal open karo
-                setShowPostAd?.(true);
+                // Agar verify hai to modal open karein
+                setShowMyAds?.(true); 
             }
         } catch (err) {
-            toast.dismiss(toastId);
+            toast.dismiss(loadingToast);
             console.error("Verification check failed:", err);
-
-            if (err.code === 'ECONNABORTED') {
-                toast.error("Request timeout. Please check your connection.");
-            } else if (err.response?.status === 401) {
-                toast.error("Session expired. Please login again.");
-                setShowLogin(true);
-            } else {
-                toast.error("Unable to verify status. Please try again.");
-            }
+            // Error ki surat mein bhi safety ke liye verify par bhej sakte hain
+            navigate('/verify');
         } finally {
             setIsChecking(false);
         }
-    }, [setShowLogin, setShowVerification, setShowPostAd, isChecking]);
+    }, [setShowLogin, setShowMyAds, isChecking, navigate]);
 
     const theme = {
         primary: "emerald",

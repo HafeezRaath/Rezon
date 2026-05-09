@@ -380,47 +380,48 @@ const ChatRoom = ({ user }) => {
     const ad = chatData?.adDetails;
 
     // 🔥 VIEW AD
-    const handleViewAd = useCallback(() => {
-        if (ad?._id) {
-            navigate(`/ad/${ad._id}`);
-        }
-    }, [ad, navigate]);
+   // 🔥 ChatRoom.jsx mein handleViewAd update karein
+const handleViewAd = useCallback(() => {
+    if (ad?._id) {
+        // Direct ad page par janay ki bajaye AllAds par bhejein ek parameter ke sath
+        navigate(`/allads?openAd=${ad._id}`);
+    }
+}, [ad, navigate]);
 
     // 🔥 HANDLE REPORT
-    const handleReport = useCallback(async () => {
-        if (!reportReason.trim()) {
-            toast.error("Please enter a reason");
-            return;
-        }
+   const handleReport = useCallback(async () => {
+    if (!reportReason) {
+        toast.error("Please select a reason");
+        return;
+    }
+    if (!reviewComment.trim()) { // Yahan hum report description use karenge
+        toast.error("Please describe the issue");
+        return;
+    }
 
-        if (!ad?._id) {
-            toast.error("Ad information not available");
-            return;
-        }
+    setReportSubmitting(true);
+    try {
+        const token = await user.getIdToken();
+        await axios.post(`${API_BASE_URL}/reports`, {
+            reportedUserId: otherUser?.uid, // Schema: reportedUserId
+            adId: ad?._id,                  // Schema: adId
+            reason: reportReason,           // Schema: reason (from dropdown)
+            description: reviewComment      // Humne description ke liye reviewComment state use ki hai ya aap nayi state add kar sakte hain
+        }, { 
+            headers: { Authorization: `Bearer ${token}` } 
+        });
 
-        setReportSubmitting(true);
-        try {
-            const token = await user.getIdToken();
-            await axios.post(`${API_BASE_URL}/reports`, {
-                reportedUserId: otherUser?.uid,
-                adId: ad?._id,
-                reason: reportReason,
-                description: reportReason
-            }, { 
-                headers: { Authorization: `Bearer ${token}` } 
-            });
+        toast.success("Report submitted to admin");
+        setShowReportModal(false);
+        setReportReason('');
+        setReviewComment(''); // Clear description
 
-            toast.success("Report submitted to admin");
-            setShowReportModal(false);
-            setReportReason('');
-
-        } catch (err) {
-            console.error("Report error:", err);
-            toast.error(err.response?.data?.message || "Failed to submit report");
-        } finally {
-            setReportSubmitting(false);
-        }
-    }, [reportReason, otherUser, ad, user]);
+    } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to submit report");
+    } finally {
+        setReportSubmitting(false);
+    }
+}, [reportReason, reviewComment, otherUser, ad, user]);
 
     // 🔥 HANDLE REVIEW
     const handleReview = useCallback(async () => {
@@ -718,51 +719,67 @@ const ChatRoom = ({ user }) => {
             </div>
 
             {/* 🔥 REPORT MODAL */}
-            {showReportModal && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                        <div className="flex items-center gap-2 mb-4 text-rose-600">
-                            <FaExclamationTriangle />
-                            <h3 className="font-bold text-lg">Report User</h3>
-                        </div>
+            {/* 🔥 NEW PROFESSIONAL REPORT MODAL */}
+{showReportModal && (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        onClick={(e) => e.target === e.currentTarget && setShowReportModal(false)}>
+        <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 text-rose-600">
+                <FaFlag />
+                <h3 className="font-bold text-lg">Report Ad</h3>
+            </div>
 
-                        <div className="bg-slate-50 rounded-xl p-3 mb-4">
-                            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Reporting</p>
-                            <p className="font-bold text-slate-700 text-sm">{otherUser?.name || "User"}</p>
-                            {ad?.title && (
-                                <p className="text-xs text-slate-500 mt-1 truncate">Ad: {ad.title}</p>
-                            )}
-                        </div>
+            <p className="text-slate-500 text-sm mb-4">
+                Reporting: <span className="font-semibold text-slate-700">{ad?.title || otherUser?.name}</span>
+            </p>
 
-                        <textarea
-                            value={reportReason}
-                            onChange={(e) => setReportReason(e.target.value)}
-                            placeholder="Describe the issue in detail (e.g. Fake listing, Scam, Harassment, etc.)"
-                            className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none"
-                            rows={4}
-                        />
-                        <div className="flex gap-3 mt-4">
-                            <button 
-                                onClick={() => {
-                                    setShowReportModal(false);
-                                    setReportReason('');
-                                }}
-                                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={handleReport}
-                                disabled={!reportReason.trim() || !ad?._id || reportSubmitting}
-                                className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {reportSubmitting ? <FaSpinner className="animate-spin" /> : <FaFlag />}
-                                {reportSubmitting ? 'Submitting...' : 'Submit'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <div className="mb-4">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Reason *</label>
+                <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 bg-white"
+                >
+                    <option value="">Select a reason...</option>
+                    <option value="Scam/Fraud">Scam/Fraud</option>
+                    <option value="Abusive Behavior">Abusive Behavior</option>
+                    <option value="Fake Product">Fake Product</option>
+                    <option value="Inappropriate Content">Inappropriate Content</option>
+                    <option value="Spam">Spam</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div className="mb-4">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Description *</label>
+                <textarea
+                    value={reviewComment} // Description ke liye state
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Please describe the issue in detail..."
+                    className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none"
+                    rows={4}
+                />
+            </div>
+
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => setShowReportModal(false)}
+                    className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50"
+                >
+                    Cancel
+                </button>
+                <button 
+                    onClick={handleReport}
+                    disabled={reportSubmitting || !reportReason || !reviewComment.trim()}
+                    className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                    {reportSubmitting ? <FaSpinner className="animate-spin" /> : <FaFlag />}
+                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                </button>
+            </div>
+        </div>
+    </div>
+)}
 
             {/* 🔥 REVIEW MODAL */}
             {showReviewModal && (

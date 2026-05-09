@@ -305,6 +305,20 @@ const AllAds = ({ user }) => {
         };
         fetchSeller();
     }, [selectedAd, profileModalUid]);
+    // 🔥 AllAds.jsx mein useEffect add karein (ads load honay ke baad chalay ga)
+useEffect(() => {
+    const openAdId = searchParams.get('openAd');
+    
+    if (openAdId && ads.length > 0) {
+        const adToOpen = ads.find(a => a._id === openAdId);
+        if (adToOpen) {
+            setSelectedAd(adToOpen);
+            setCurrentImageIndex(0);
+            // Modal khulnay ke baad URL clean karna ho to:
+            // setSearchParams({}); 
+        }
+    }
+}, [ads, searchParams]);
 
     const startChat = useCallback(async () => {
         if (!user) {
@@ -340,37 +354,44 @@ const AllAds = ({ user }) => {
     }, [user]);
 
     // 🔥 FIXED: Report submit matching backend schema
-    const submitReport = useCallback(async () => {
-        if (!reportReason) {
-            toast.error("Please select a reason for reporting");
-            return;
-        }
-        if (!reportDescription.trim()) {
-            toast.error("Please provide a description");
-            return;
-        }
-        setReportSubmitting(true);
-        try {
-            const token = await user.getIdToken();
-            await axios.post(`${API_BASE_URL}/reports`, {
-                adId: selectedAd._id,
-                sellerId: selectedAd.posted_by_uid,
-                reason: reportReason,
-                description: reportDescription
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            toast.success("Report submitted successfully");
-            setShowReportModal(false);
-            setReportReason('');
-            setReportDescription('');
-        } catch (err) {
-            console.error("Report error:", err);
-            toast.error(err.response?.data?.message || "Failed to submit report");
-        } finally {
-            setReportSubmitting(false);
-        }
-    }, [reportReason, reportDescription, selectedAd, user]);
+   const submitReport = useCallback(async () => {
+    if (!reportReason) {
+        toast.error("Please select a reason for reporting");
+        return;
+    }
+    if (!reportDescription.trim()) {
+        toast.error("Please provide a description");
+        return;
+    }
+
+    setReportSubmitting(true);
+    try {
+        const token = await user.getIdToken();
+
+        // Schema ke mutabiq keys set ki hain:
+        const reportData = {
+            adId: selectedAd._id,            // Schema matches 'adId'
+            reportedUserId: selectedAd.posted_by_uid, // 🔥 FIXED: sellerId ki jagah reportedUserId
+            reason: reportReason,            // Schema matches 'reason'
+            description: reportDescription   // Schema matches 'description'
+        };
+
+        await axios.post(`${API_BASE_URL}/reports`, reportData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        toast.success("Report submitted successfully");
+        setShowReportModal(false);
+        setReportReason('');
+        setReportDescription('');
+    } catch (err) {
+        console.error("Report error:", err);
+        // Agar ab bhi masla aaye to exact backend message dikhayein
+        toast.error(err.response?.data?.message || "Failed to submit report");
+    } finally {
+        setReportSubmitting(false);
+    }
+}, [reportReason, reportDescription, selectedAd, user]);
 
     const handleAdClick = useCallback((ad) => {
         setSelectedAd(ad);

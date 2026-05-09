@@ -2,30 +2,36 @@ import React, { useState } from 'react'
 import HeroSection from '../Components/HeroSection';
 import CategoriesSection from '../Components/CategoriesSection';
 import AllAds from '../Components/allads';
-import PostAd from '../CRUD/postad';  // 🔥 Import PostAd modal
+import PostAd from '../CRUD/postad'; 
 
 const Home = ({ user, setShowLogin, setShowAds, setShowVerification }) => {
-  // 🔥 NEW: PostAd modal state
+  // Naya ad post karne ke liye modal state
   const [showPostAd, setShowPostAd] = useState(false);
 
-  // 🔥 NEW: Handle new ad posted
+  // Jab naya ad successfully post ho jaye
   const handleAdPosted = (newAd) => {
     setShowPostAd(false);
-    // Optionally refresh ads list or show success
+    // Yahan aap mazeed logic add kar sakte hain (e.g. success message ya list refresh)
   };
 
   return (
     <>
+      {/* 
+          HeroSection ko 'setShowMyAds' prop ke tor par 'setShowPostAd' pass kiya hai 
+          taake HeroSection ke andar 'setShowMyAds(true)' chalne par PostAd modal khul jaye.
+      */}
       <HeroSection 
         setShowLogin={setShowLogin} 
-        setShowAds={setShowAds} 
+        setShowMyAds={setShowPostAd} 
         setShowVerification={setShowVerification}
-        setShowPostAd={setShowPostAd}  // 🔥 NEW: Pass PostAd setter
       />
-      <CategoriesSection/>
+      
+      <CategoriesSection />
+      
+      {/* Saare ads dikhane wala section */}
       <AllAds user={user} />  
 
-      {/* 🔥 NEW: PostAd Modal */}
+      {/* Jab showPostAd true ho aur user login ho tab hi modal dikhao */}
       {showPostAd && user && (
         <PostAd 
           user={user}
