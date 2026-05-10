@@ -912,7 +912,7 @@ If you think it MIGHT be the same person (even with doubts), set isMatched to TR
                 bestResult = result;
             }
 
-            if (result.confidence >= 40 && result.isMatched === true) {
+            if (result.confidence >= 85 && result.isMatched === true) {
                 console.log("✅ Match found, stopping retries.");
                 break;
             }
@@ -928,7 +928,7 @@ If you think it MIGHT be the same person (even with doubts), set isMatched to TR
 
         console.log("🏆 Best Result:", bestResult);
 
-        const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 40;
+        const isActuallyMatched = bestResult.isMatched === true && bestResult.confidence >= 85;
 
         if (!isActuallyMatched) {
             return res.status(400).json({ 
