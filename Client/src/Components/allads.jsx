@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import axios from "axios";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { 
@@ -7,7 +7,8 @@ import {
     FaTimes, FaWhatsapp, FaCommentDots, FaHeart, FaShareAlt,
     FaFilter, FaSort, FaBolt, FaEye, FaClock, FaTag,
     FaThLarge, FaList, FaChevronDown, FaCheck,
-    FaChevronLeft, FaChevronRight, FaCircle, FaSpinner
+    FaChevronLeft, FaChevronRight, FaCircle, FaSpinner,
+    FaSlidersH, FaRegHeart
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import LocationDropdown from "./LocationDropdown";
@@ -34,8 +35,6 @@ const CATEGORIES = [
 
 const PROFESSIONAL_GRADIENT = "from-slate-700 via-slate-800 to-slate-900";
 const ACTIVE_CATEGORY_BG = "bg-slate-800";
-
-// 🔥 NEW: Pagination config
 const ITEMS_PER_PAGE_DESKTOP = 10;
 const ITEMS_PER_PAGE_MOBILE = 6;
 
@@ -44,13 +43,13 @@ const handleCallSeller = (phoneNumber) => {
         toast.error("Seller phone number not available");
         return;
     }
-    const cleanNumber = phoneNumber.replace(/[\s-]/g, '');
+    const cleanNumber = phoneNumber.replace(/[\s-]/g, '');  // single backslash
     window.location.href = `tel:${cleanNumber}`;
     toast.success(`Dialing ${phoneNumber}...`, { icon: '📞' });
 };
 
-// 🔥 FIXED: Real reviews — no dummy data
-const AdCard = ({ ad, onClick, isListView, sellerStats }) => {
+// 🔥 UPDATED: AdCard with real favorite toggle
+const AdCard = ({ ad, onClick, isListView, sellerStats, isFavorite, onToggleFavorite }) => {
     const stats = sellerStats?.[ad.posted_by_uid];
     const rating = stats?.avg ?? ad.sellerRating ?? null;
     const reviewCount = stats?.count ?? ad.reviewCount ?? 0;
@@ -85,14 +84,16 @@ const AdCard = ({ ad, onClick, isListView, sellerStats }) => {
                         {ad.category}
                     </span>
                 </div>
+                {/* 🔥 REAL FAVORITE BUTTON */}
                 <button 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toast.success("Added to favorites!");
-                    }}
-                    className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
+                    onClick={(e) => onToggleFavorite(ad._id, e)}
+                    className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${
+                        isFavorite 
+                            ? 'bg-rose-500 text-white' 
+                            : 'bg-white/90 backdrop-blur text-slate-400 hover:text-rose-500'
+                    }`}
                 >
-                    <FaHeart size={14} />
+                    {isFavorite ? <FaHeart size={14} /> : <FaRegHeart size={14} />}
                 </button>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                     <p className="text-white font-black text-lg">
@@ -149,10 +150,24 @@ const AllAds = ({ user }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
-    // 🔥 NEW: Real seller stats state
-    const [sellerStats, setSellerStats] = useState({});
+    // 🔥 NEW: Favorites from localStorage
+    const [favorites, setFavorites] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('rezon_favorites')) || [];
+        } catch {
+            return [];
+        }
+    });
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-    // 🔥 NEW: Pagination state
+    // 🔥 NEW: Advanced filter states
+    const [priceMin, setPriceMin] = useState('');
+    const [priceMax, setPriceMax] = useState('');
+    const [conditionFilter, setConditionFilter] = useState('All');
+    const [dateFilter, setDateFilter] = useState('all'); // all, today, week, month
+    const [showFiltersPanel, setShowFiltersPanel] = useState(false);
+
+    const [sellerStats, setSellerStats] = useState({});
     const [currentPage, setCurrentPage] = useState(1);
 
     const [selectedAd, setSelectedAd] = useState(null);
@@ -181,6 +196,49 @@ const AllAds = ({ user }) => {
         'Spam',
         'Other'
     ];
+
+    // 🔥 NEW: Toggle favorite
+    const toggleFavorite = useCallback((adId, e) => {
+        if (e) e.stopPropagation();
+        setFavorites(prev => {
+            const isFav = prev.includes(adId);
+            const newFavs = isFav
+                ? prev.filter(id => id !== adId)
+                : [...prev, adId];
+            localStorage.setItem('rezon_favorites', JSON.stringify(newFavs));
+            toast.success(isFav ? "Removed from favorites ❌" : "Added to favorites ❤️");
+            return newFavs;
+        });
+    }, []);
+
+    // 🔥 NEW: Clear all filters
+    const clearAllFilters = useCallback(() => {
+        setSearchTerm('');
+        setDebouncedSearch('');
+        setSelectedLocation('');
+        setActiveCategory('All');
+        setShowFavoritesOnly(false);
+        setPriceMin('');
+        setPriceMax('');
+        setConditionFilter('All');
+        setDateFilter('all');
+        setSortBy('newest');
+        setSearchParams({});
+        setShowFiltersPanel(false);
+    }, [setSearchParams]);
+
+    // 🔥 NEW: Active filters count
+    const activeFiltersCount = useMemo(() => {
+        let count = 0;
+        if (debouncedSearch) count++;
+        if (selectedLocation) count++;
+        if (activeCategory !== 'All') count++;
+        if (showFavoritesOnly) count++;
+        if (priceMin || priceMax) count++;
+        if (conditionFilter !== 'All') count++;
+        if (dateFilter !== 'all') count++;
+        return count;
+    }, [debouncedSearch, selectedLocation, activeCategory, showFavoritesOnly, priceMin, priceMax, conditionFilter, dateFilter]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -215,10 +273,9 @@ const AllAds = ({ user }) => {
         }
     }, [debouncedSearch, selectedLocation, activeCategory, setSearchParams, searchParams]);
 
-    // 🔥 NEW: Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [debouncedSearch, activeCategory, selectedLocation, sortBy]);
+    }, [debouncedSearch, activeCategory, selectedLocation, sortBy, showFavoritesOnly, priceMin, priceMax, conditionFilter, dateFilter]);
 
     // Fetch Ads
     useEffect(() => {
@@ -253,7 +310,7 @@ const AllAds = ({ user }) => {
         return () => abortControllerRef.current?.abort();
     }, [debouncedSearch, activeCategory]);
 
-    // 🔥 NEW: Fetch REAL seller stats for visible ads
+    // Fetch REAL seller stats for visible ads
     useEffect(() => {
         const fetchSellerStats = async () => {
             if (!ads.length) return;
@@ -286,12 +343,21 @@ const AllAds = ({ user }) => {
         fetchSellerStats();
     }, [ads]);
 
-    // Filter ads
+    // 🔥 UPDATED: Filter ads with all new filters
     useEffect(() => {
         let result = [...ads];
+        
+        // Category filter
         if (activeCategory !== "All") {
             result = result.filter(ad => ad.category === activeCategory);
         }
+        
+        // Favorites filter
+        if (showFavoritesOnly) {
+            result = result.filter(ad => favorites.includes(ad._id));
+        }
+        
+        // Location filter
         if (selectedLocation) {
             const loc = selectedLocation.toLowerCase();
             result = result.filter(ad => {
@@ -299,6 +365,8 @@ const AllAds = ({ user }) => {
                 return adLoc.includes(loc);
             });
         }
+        
+        // Search filter
         if (debouncedSearch) {
             const term = debouncedSearch.toLowerCase();
             result = result.filter(ad => 
@@ -307,6 +375,38 @@ const AllAds = ({ user }) => {
                 ad.location?.toLowerCase().includes(term)
             );
         }
+        
+        // Price range filter
+        if (priceMin && !isNaN(Number(priceMin))) {
+            result = result.filter(ad => (ad.price || 0) >= Number(priceMin));
+        }
+        if (priceMax && !isNaN(Number(priceMax))) {
+            result = result.filter(ad => (ad.price || 0) <= Number(priceMax));
+        }
+        
+        // Condition filter
+        if (conditionFilter !== 'All') {
+            result = result.filter(ad => ad.condition === conditionFilter);
+        }
+        
+        // Date filter
+        const now = new Date();
+        if (dateFilter === 'today') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            result = result.filter(ad => {
+                const adDate = new Date(ad.createdAt);
+                return adDate >= today;
+            });
+        } else if (dateFilter === 'week') {
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            result = result.filter(ad => new Date(ad.createdAt) >= weekAgo);
+        } else if (dateFilter === 'month') {
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            result = result.filter(ad => new Date(ad.createdAt) >= monthAgo);
+        }
+        
+        // Sort
         switch(sortBy) {
             case 'price-low':
                 result.sort((a, b) => (a.price || 0) - (b.price || 0));
@@ -318,8 +418,9 @@ const AllAds = ({ user }) => {
             default:
                 result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         }
+        
         setFilteredAds(result);
-    }, [debouncedSearch, activeCategory, ads, sortBy, selectedLocation]);
+    }, [debouncedSearch, activeCategory, ads, sortBy, selectedLocation, favorites, showFavoritesOnly, priceMin, priceMax, conditionFilter, dateFilter]);
 
     // Fetch seller details (for modal)
     useEffect(() => {
@@ -507,7 +608,7 @@ const AllAds = ({ user }) => {
         ));
     };
 
-    // 🔥 NEW: Pagination calculations
+    // Pagination calculations
     const itemsPerPage = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
     const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -521,7 +622,7 @@ const AllAds = ({ user }) => {
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                         <div>
                             <h1 className="text-3xl md:text-4xl font-black mb-2">
-                                {activeCategory === 'All' ? 'Discover Amazing Deals' : CATEGORIES.find(c => c.code === activeCategory)?.name}
+                                {showFavoritesOnly ? 'My Favorites ❤️' : activeCategory === 'All' ? 'Discover Amazing Deals' : CATEGORIES.find(c => c.code === activeCategory)?.name}
                             </h1>
                             <p className="text-white/80 text-sm md:text-base">
                                 {filteredAds.length} {filteredAds.length === 1 ? 'item' : 'items'} found
@@ -559,7 +660,8 @@ const AllAds = ({ user }) => {
                         </div>
                     </div>
 
-                    {(selectedLocation || debouncedSearch) && (
+                    {/* 🔥 Active filter chips */}
+                    {(selectedLocation || debouncedSearch || activeFiltersCount > 0) && (
                         <div className="mt-4 flex items-center gap-2 flex-wrap">
                             {debouncedSearch && (
                                 <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
@@ -573,13 +675,32 @@ const AllAds = ({ user }) => {
                                     {selectedLocation}
                                 </span>
                             )}
+                            {showFavoritesOnly && (
+                                <span className="bg-rose-500/80 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaHeart size={10} />
+                                    Favorites
+                                </span>
+                            )}
+                            {(priceMin || priceMax) && (
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaTag size={10} />
+                                    Rs {priceMin || '0'} - {priceMax || '∞'}
+                                </span>
+                            )}
+                            {conditionFilter !== 'All' && (
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaCheckCircle size={10} />
+                                    {conditionFilter}
+                                </span>
+                            )}
+                            {dateFilter !== 'all' && (
+                                <span className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2">
+                                    <FaClock size={10} />
+                                    {dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'This Week' : 'This Month'}
+                                </span>
+                            )}
                             <button 
-                                onClick={() => {
-                                    setSearchTerm('');
-                                    setSelectedLocation('');
-                                    setActiveCategory('All');
-                                    setSearchParams({}); 
-                                }}
+                                onClick={clearAllFilters}
                                 className="bg-white/20 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 hover:bg-white/30 transition-colors"
                             >
                                 <FaTimes size={10} /> Clear All
@@ -589,9 +710,27 @@ const AllAds = ({ user }) => {
                 </div>
             </div>
 
+            {/* 🔥 UPDATED: Category bar with Favorites */}
             <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 py-3">
-                    <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide pb-2 md:pb-0">
+                    <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide pb-2 md:pb-0">
+                        {/* Favorites Toggle Button */}
+                        <button 
+                            onClick={() => setShowFavoritesOnly(prev => !prev)}
+                            className={`
+                                flex items-center gap-2 px-4 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all shrink-0
+                                ${showFavoritesOnly 
+                                    ? 'bg-rose-500 text-white shadow-lg' 
+                                    : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-500'
+                                }
+                            `}
+                        >
+                            {showFavoritesOnly ? <FaHeart /> : <FaRegHeart />}
+                            <span>Favorites ({favorites.length})</span>
+                        </button>
+
+                        <div className="w-px h-6 bg-slate-200 shrink-0" />
+
                         {CATEGORIES.map((cat) => (
                             <button 
                                 key={cat.code} 
@@ -621,25 +760,46 @@ const AllAds = ({ user }) => {
                 </div>
             </div>
 
+            {/* 🔥 NEW: Filters & Sort Bar */}
             <div className="max-w-7xl mx-auto px-4 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {/* Filter Toggle Button */}
+                        <button
+                            onClick={() => setShowFiltersPanel(prev => !prev)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                                showFiltersPanel || activeFiltersCount > 0
+                                    ? 'bg-emerald-600 text-white shadow-md'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                        >
+                            <FaSlidersH />
+                            Filters
+                            {activeFiltersCount > 0 && (
+                                <span className="bg-white text-emerald-600 text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
+                                    {activeFiltersCount}
+                                </span>
+                            )}
+                        </button>
+
                         <div className="relative">
                             <select 
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
                                 className="appearance-none bg-slate-100 text-slate-700 font-semibold text-sm px-4 py-2.5 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
                             >
-                                <option value="newest">Newest First</option>
-                                <option value="price-low">Price: Low to High</option>
-                                <option value="price-high">Price: High to Low</option>
+                                <option value="newest">⏰ Newest First</option>
+                                <option value="price-low">💰 Price: Low to High</option>
+                                <option value="price-high">💰 Price: High to Low</option>
                             </select>
                             <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs" />
                         </div>
+
                         <span className="text-xs text-slate-500 font-medium">
                             {debouncedSearch ? `Searching: "${debouncedSearch}"` : 'All results'}
                         </span>
                     </div>
+
                     <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
                         <button
                             onClick={() => setViewMode('grid')}
@@ -655,6 +815,137 @@ const AllAds = ({ user }) => {
                         </button>
                     </div>
                 </div>
+
+                {/* 🔥 NEW: Advanced Filters Panel */}
+                {showFiltersPanel && (
+                    <div className="mt-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 animate-in slide-in-from-top-2 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                <FaSlidersH className="text-emerald-500" /> Advanced Filters
+                            </h3>
+                            <button 
+                                onClick={() => setShowFiltersPanel(false)}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {/* Price Range */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                    Price Range (PKR)
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Min"
+                                        value={priceMin}
+                                        onChange={(e) => setPriceMin(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 rounded-xl outline-none font-bold text-sm border border-transparent focus:border-emerald-500 transition-all"
+                                    />
+                                    <span className="text-slate-400 font-bold">-</span>
+                                    <input
+                                        type="number"
+                                        placeholder="Max"
+                                        value={priceMax}
+                                        onChange={(e) => setPriceMax(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 rounded-xl outline-none font-bold text-sm border border-transparent focus:border-emerald-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Condition Filter */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                    Condition
+                                </label>
+                                <div className="flex gap-2">
+                                    {['All', 'New', 'Used'].map(cond => (
+                                        <button
+                                            key={cond}
+                                            onClick={() => setConditionFilter(cond)}
+                                            className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                                                conditionFilter === cond
+                                                    ? 'bg-emerald-600 text-white shadow-md'
+                                                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            {cond}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Date Posted */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                    Date Posted
+                                </label>
+                                <select
+                                    value={dateFilter}
+                                    onChange={(e) => setDateFilter(e.target.value)}
+                                    className="w-full p-3 bg-slate-50 rounded-xl outline-none font-bold text-sm border border-transparent focus:border-emerald-500 transition-all cursor-pointer"
+                                >
+                                    <option value="all">All Time</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                </select>
+                            </div>
+
+                            {/* Favorites Only */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                    Show Only
+                                </label>
+                                <button
+                                    onClick={() => setShowFavoritesOnly(prev => !prev)}
+                                    className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                        showFavoritesOnly
+                                            ? 'bg-rose-500 text-white shadow-md'
+                                            : 'bg-slate-50 text-slate-600 hover:bg-rose-50 hover:text-rose-500'
+                                    }`}
+                                >
+                                    {showFavoritesOnly ? <FaHeart /> : <FaRegHeart />}
+                                    {showFavoritesOnly ? 'Favorites Only' : 'All Ads'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Quick Preset Buttons */}
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Quick Presets</p>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => { setPriceMin(''); setPriceMax('50000'); setConditionFilter('All'); setDateFilter('all'); }}
+                                    className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                >
+                                    Under Rs 50k
+                                </button>
+                                <button
+                                    onClick={() => { setPriceMin('50000'); setPriceMax('200000'); setConditionFilter('All'); setDateFilter('all'); }}
+                                    className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                >
+                                    Rs 50k - 2L
+                                </button>
+                                <button
+                                    onClick={() => { setPriceMin(''); setPriceMax(''); setConditionFilter('New'); setDateFilter('week'); }}
+                                    className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                >
+                                    New This Week
+                                </button>
+                                <button
+                                    onClick={() => { setPriceMin(''); setPriceMax(''); setConditionFilter('Used'); setDateFilter('today'); }}
+                                    className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                >
+                                    Used Today
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="max-w-7xl mx-auto px-4 pb-12">
@@ -673,22 +964,22 @@ const AllAds = ({ user }) => {
                 ) : filteredAds.length === 0 ? (
                     <div className="text-center py-20">
                         <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <FaSearch className="text-4xl text-slate-300" />
+                            {showFavoritesOnly ? <FaHeart className="text-4xl text-rose-300" /> : <FaSearch className="text-4xl text-slate-300" />}
                         </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">No items found</h3>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">
+                            {showFavoritesOnly ? 'No favorites yet' : 'No items found'}
+                        </h3>
                         <p className="text-slate-500">
-                            {debouncedSearch || selectedLocation || activeCategory !== 'All'
-                                ? `No results${debouncedSearch ? ` for "${debouncedSearch}"` : ''}${activeCategory !== 'All' ? ` in ${CATEGORIES.find(c => c.code === activeCategory)?.name}` : ''}${selectedLocation ? ` in ${selectedLocation}` : ''}. Try different filters.` 
-                                : "Try adjusting your search or category"}
+                            {showFavoritesOnly 
+                                ? "Heart ads to save them here for later!"
+                                : (debouncedSearch || selectedLocation || activeCategory !== 'All' || activeFiltersCount > 0)
+                                    ? `No results${debouncedSearch ? ` for "${debouncedSearch}"` : ''}${activeCategory !== 'All' ? ` in ${CATEGORIES.find(c => c.code === activeCategory)?.name}` : ''}${selectedLocation ? ` in ${selectedLocation}` : ''}. Try different filters.` 
+                                    : "Try adjusting your search or category"
+                            }
                         </p>
-                        {(debouncedSearch || selectedLocation || activeCategory !== 'All') && (
+                        {(debouncedSearch || selectedLocation || activeCategory !== 'All' || activeFiltersCount > 0) && (
                             <button 
-                                onClick={() => {
-                                    setSearchTerm('');
-                                    setSelectedLocation('');
-                                    setActiveCategory('All');
-                                    setSearchParams({});
-                                }}
+                                onClick={clearAllFilters}
                                 className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
                             >
                                 Clear All Filters
@@ -705,11 +996,13 @@ const AllAds = ({ user }) => {
                                     sellerStats={sellerStats}
                                     onClick={() => handleAdClick(ad)}
                                     isListView={viewMode === 'list'}
+                                    isFavorite={favorites.includes(ad._id)}
+                                    onToggleFavorite={toggleFavorite}
                                 />
                             ))}
                         </div>
 
-                        {/* 🔥 NEW: Pagination Controls */}
+                        {/* Pagination Controls */}
                         {totalPages > 1 && (
                             <div className="flex items-center justify-center gap-2 mt-8 mb-4">
                                 <button
@@ -792,6 +1085,17 @@ const AllAds = ({ user }) => {
                                 <span className="text-sm font-medium text-slate-500">Ad Details</span>
                             </div>
                             <div className="flex items-center gap-2">
+                                {/* 🔥 Favorite button in modal header */}
+                                <button 
+                                    onClick={() => toggleFavorite(selectedAd._id)}
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                                        favorites.includes(selectedAd._id)
+                                            ? 'bg-rose-50 text-rose-500'
+                                            : 'hover:bg-slate-100 text-slate-500'
+                                    }`}
+                                >
+                                    {favorites.includes(selectedAd._id) ? <FaHeart /> : <FaRegHeart />}
+                                </button>
                                 <button onClick={() => {}} className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500">
                                     <FaShareAlt />
                                 </button>
@@ -1094,3 +1398,4 @@ const AllAds = ({ user }) => {
 };
 
 export default AllAds;
+

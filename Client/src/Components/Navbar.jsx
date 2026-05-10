@@ -687,17 +687,7 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                 />
             )}
 
-            <Toaster
-                position="top-center"
-                toastOptions={{
-                    style: {
-                        background: '#0f172a',
-                        color: '#fff',
-                        borderRadius: '16px',
-                        border: '1px solid #334155'
-                    }
-                }}
-            />
+           
         </>
     );
 };
