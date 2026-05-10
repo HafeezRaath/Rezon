@@ -32,7 +32,6 @@ const CATEGORIES = [
     { code: "Kids", name: "Kids", icon: "👶" },
 ];
 
-// 🔥 FIXED: Single professional gradient for all categories
 const PROFESSIONAL_GRADIENT = "from-slate-700 via-slate-800 to-slate-900";
 const ACTIVE_CATEGORY_BG = "bg-slate-800";
 
@@ -46,7 +45,12 @@ const handleCallSeller = (phoneNumber) => {
     toast.success(`Dialing ${phoneNumber}...`, { icon: '📞' });
 };
 
-const AdCard = ({ ad, onClick, isListView }) => {
+// 🔥 FIXED: Real reviews — no dummy data
+const AdCard = ({ ad, onClick, isListView, sellerStats }) => {
+    const stats = sellerStats?.[ad.posted_by_uid];
+    const rating = stats?.avg ?? ad.sellerRating ?? null;
+    const reviewCount = stats?.count ?? ad.reviewCount ?? 0;
+
     return (
         <div 
             onClick={onClick}
@@ -102,9 +106,13 @@ const AdCard = ({ ad, onClick, isListView }) => {
                 </div>
                 <div className="mt-auto flex items-center justify-between">
                     <div className="flex items-center gap-1">
-                        <FaStar className="text-yellow-400 text-xs" />
-                        <span className="text-xs font-bold text-slate-700">{ad.sellerRating || "4.5"}</span>
-                        <span className="text-xs text-slate-400">({Math.floor(Math.random() * 50) + 1})</span>
+                        <FaStar className={`text-xs ${rating ? 'text-yellow-400' : 'text-slate-300'}`} />
+                        <span className="text-xs font-bold text-slate-700">
+                            {rating ? Number(rating).toFixed(1) : "New"}
+                        </span>
+                        {reviewCount > 0 && (
+                            <span className="text-xs text-slate-400">({reviewCount})</span>
+                        )}
                     </div>
                     <span className="text-[10px] text-slate-400 font-medium">
                         {new Date(ad.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -122,7 +130,7 @@ const AllAds = ({ user }) => {
 
     const urlSearch = searchParams.get('search') || '';
     const urlLocation = searchParams.get('location') || '';
-    const urlCategory = searchParams.get('category') || 'All';  // 🔥 NEW: Read category from URL
+    const urlCategory = searchParams.get('category') || 'All';
 
     const [searchTerm, setSearchTerm] = useState(urlSearch);
     const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
@@ -130,12 +138,15 @@ const AllAds = ({ user }) => {
 
     const [ads, setAds] = useState([]);
     const [filteredAds, setFilteredAds] = useState([]);
-    const [activeCategory, setActiveCategory] = useState(urlCategory);  // 🔥 FIXED: Use URL category
+    const [activeCategory, setActiveCategory] = useState(urlCategory);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('grid');
     const [sortBy, setSortBy] = useState('newest');
     const [showFilters, setShowFilters] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+
+    // 🔥 NEW: Real seller stats state
+    const [sellerStats, setSellerStats] = useState({});
 
     const [selectedAd, setSelectedAd] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -155,7 +166,6 @@ const AllAds = ({ user }) => {
     const abortControllerRef = useRef(null);
     const touchStartX = useRef(null);
 
-    // 🔥 NEW: Report reasons matching backend enum
     const REPORT_REASONS = [
         'Scam/Fraud',
         'Abusive Behavior', 
@@ -172,7 +182,6 @@ const AllAds = ({ user }) => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // 🔥 FIXED: Sync URL params with state
     useEffect(() => {
         const currentSearch = searchParams.get('search') || '';
         const currentLocation = searchParams.get('location') || '';
@@ -199,7 +208,7 @@ const AllAds = ({ user }) => {
         }
     }, [debouncedSearch, selectedLocation, activeCategory, setSearchParams, searchParams]);
 
-    // 🔥 FIXED: Fetch ads with category filter
+    // Fetch Ads
     useEffect(() => {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
@@ -209,7 +218,7 @@ const AllAds = ({ user }) => {
             try {
                 const params = new URLSearchParams();
                 if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim());
-                if (activeCategory !== 'All') params.append('category', activeCategory);  // 🔥 NEW
+                if (activeCategory !== 'All') params.append('category', activeCategory);
 
                 const queryString = params.toString();
                 const url = `${API_BASE_URL}/ads${queryString ? `?${queryString}` : ''}`;
@@ -230,9 +239,42 @@ const AllAds = ({ user }) => {
         };
         fetchAds();
         return () => abortControllerRef.current?.abort();
-    }, [debouncedSearch, activeCategory]);  // 🔥 FIXED: Add activeCategory dependency
+    }, [debouncedSearch, activeCategory]);
 
-    // 🔥 FIXED: Filter ads with all criteria
+    // 🔥 NEW: Fetch REAL seller stats for visible ads
+    useEffect(() => {
+        const fetchSellerStats = async () => {
+            if (!ads.length) return;
+            
+            const uniqueUids = [...new Set(ads.map(ad => ad.posted_by_uid).filter(Boolean))];
+            const newStats = { ...sellerStats };
+            let hasNew = false;
+
+            await Promise.all(
+                uniqueUids.map(async (uid) => {
+                    if (newStats[uid] !== undefined) return;
+                    
+                    try {
+                        const res = await axios.get(`${API_BASE_URL}/reviews/seller/${uid}`, { timeout: 5000 });
+                        const reviews = res.data?.reviews || [];
+                        const avg = reviews.length > 0 
+                            ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+                            : null;
+                        newStats[uid] = { avg, count: reviews.length };
+                    } catch (e) {
+                        newStats[uid] = { avg: null, count: 0 };
+                    }
+                    hasNew = true;
+                })
+            );
+            
+            if (hasNew) setSellerStats(newStats);
+        };
+        
+        fetchSellerStats();
+    }, [ads]);
+
+    // Filter ads
     useEffect(() => {
         let result = [...ads];
         if (activeCategory !== "All") {
@@ -267,6 +309,7 @@ const AllAds = ({ user }) => {
         setFilteredAds(result);
     }, [debouncedSearch, activeCategory, ads, sortBy, selectedLocation]);
 
+    // Fetch seller details (for modal)
     useEffect(() => {
         const fetchSeller = async () => {
             const uid = profileModalUid || selectedAd?.posted_by_uid;
@@ -305,20 +348,19 @@ const AllAds = ({ user }) => {
         };
         fetchSeller();
     }, [selectedAd, profileModalUid]);
-    // 🔥 AllAds.jsx mein useEffect add karein (ads load honay ke baad chalay ga)
-useEffect(() => {
-    const openAdId = searchParams.get('openAd');
-    
-    if (openAdId && ads.length > 0) {
-        const adToOpen = ads.find(a => a._id === openAdId);
-        if (adToOpen) {
-            setSelectedAd(adToOpen);
-            setCurrentImageIndex(0);
-            // Modal khulnay ke baad URL clean karna ho to:
-            // setSearchParams({}); 
+
+    // Open ad from URL param
+    useEffect(() => {
+        const openAdId = searchParams.get('openAd');
+        
+        if (openAdId && ads.length > 0) {
+            const adToOpen = ads.find(a => a._id === openAdId);
+            if (adToOpen) {
+                setSelectedAd(adToOpen);
+                setCurrentImageIndex(0);
+            }
         }
-    }
-}, [ads, searchParams]);
+    }, [ads, searchParams]);
 
     const startChat = useCallback(async () => {
         if (!user) {
@@ -353,45 +395,41 @@ useEffect(() => {
         setShowReportModal(true);
     }, [user]);
 
-    // 🔥 FIXED: Report submit matching backend schema
-   const submitReport = useCallback(async () => {
-    if (!reportReason) {
-        toast.error("Please select a reason for reporting");
-        return;
-    }
-    if (!reportDescription.trim()) {
-        toast.error("Please provide a description");
-        return;
-    }
+    const submitReport = useCallback(async () => {
+        if (!reportReason) {
+            toast.error("Please select a reason for reporting");
+            return;
+        }
+        if (!reportDescription.trim()) {
+            toast.error("Please provide a description");
+            return;
+        }
 
-    setReportSubmitting(true);
-    try {
-        const token = await user.getIdToken();
+        setReportSubmitting(true);
+        try {
+            const token = await user.getIdToken();
+            const reportData = {
+                adId: selectedAd._id,
+                reportedUserId: selectedAd.posted_by_uid,
+                reason: reportReason,
+                description: reportDescription
+            };
 
-        // Schema ke mutabiq keys set ki hain:
-        const reportData = {
-            adId: selectedAd._id,            // Schema matches 'adId'
-            reportedUserId: selectedAd.posted_by_uid, // 🔥 FIXED: sellerId ki jagah reportedUserId
-            reason: reportReason,            // Schema matches 'reason'
-            description: reportDescription   // Schema matches 'description'
-        };
+            await axios.post(`${API_BASE_URL}/reports`, reportData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        await axios.post(`${API_BASE_URL}/reports`, reportData, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        toast.success("Report submitted successfully");
-        setShowReportModal(false);
-        setReportReason('');
-        setReportDescription('');
-    } catch (err) {
-        console.error("Report error:", err);
-        // Agar ab bhi masla aaye to exact backend message dikhayein
-        toast.error(err.response?.data?.message || "Failed to submit report");
-    } finally {
-        setReportSubmitting(false);
-    }
-}, [reportReason, reportDescription, selectedAd, user]);
+            toast.success("Report submitted successfully");
+            setShowReportModal(false);
+            setReportReason('');
+            setReportDescription('');
+        } catch (err) {
+            console.error("Report error:", err);
+            toast.error(err.response?.data?.message || "Failed to submit report");
+        } finally {
+            setReportSubmitting(false);
+        }
+    }, [reportReason, reportDescription, selectedAd, user]);
 
     const handleAdClick = useCallback((ad) => {
         setSelectedAd(ad);
@@ -459,7 +497,6 @@ useEffect(() => {
 
     return (
         <div className="w-full min-h-screen bg-slate-50">
-            {/* 🔥 FIXED: Same professional gradient for ALL categories */}
             <div className={`bg-gradient-to-r ${PROFESSIONAL_GRADIENT} text-white`}>
                 <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -477,7 +514,7 @@ useEffect(() => {
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input 
                                     type="text" 
-                                    placeholder="Search iPhone, Car, Laptop..." 
+                                    placeholder="iPhone, Car, Laptop..." 
                                     className="w-full pl-12 pr-10 py-4 rounded-2xl bg-white/95 backdrop-blur text-black placeholder:text-slate-400 shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30"
                                     value={searchTerm} 
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -533,7 +570,6 @@ useEffect(() => {
                 </div>
             </div>
 
-            {/* 🔥 FIXED: Category tabs with consistent styling */}
             <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 py-3">
                     <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide pb-2 md:pb-0">
@@ -542,7 +578,6 @@ useEffect(() => {
                                 key={cat.code} 
                                 onClick={() => {
                                     setActiveCategory(cat.code);
-                                    // Update URL
                                     const params = new URLSearchParams(location.search);
                                     if (cat.code !== 'All') {
                                         params.set('category', cat.code);
@@ -647,6 +682,7 @@ useEffect(() => {
                             <AdCard 
                                 key={ad._id} 
                                 ad={ad} 
+                                sellerStats={sellerStats}
                                 onClick={() => handleAdClick(ad)}
                                 isListView={viewMode === 'list'}
                             />
@@ -655,6 +691,7 @@ useEffect(() => {
                 )}
             </div>
 
+            {/* Ad Detail Modal */}
             {selectedAd && (
                 <div 
                     className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex justify-center items-center z-[100] p-0 md:p-6"
@@ -841,7 +878,7 @@ useEffect(() => {
                 </div>
             )}
 
-            {/* 🔥 FIXED: Report Modal with proper fields matching backend schema */}
+            {/* Report Modal */}
             {showReportModal && selectedAd && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
                     onClick={(e) => e.target === e.currentTarget && setShowReportModal(false)}>
@@ -854,7 +891,6 @@ useEffect(() => {
                             Reporting: <span className="font-semibold text-slate-700">{selectedAd.title}</span>
                         </p>
 
-                        {/* 🔥 NEW: Reason dropdown matching backend enum */}
                         <div className="mb-4">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
                                 Reason *
@@ -871,7 +907,6 @@ useEffect(() => {
                             </select>
                         </div>
 
-                        {/* 🔥 NEW: Description field (required by backend) */}
                         <div className="mb-4">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
                                 Description *
@@ -909,6 +944,7 @@ useEffect(() => {
                 </div>
             )}
 
+            {/* Profile Modal */}
             {profileModalUid && (
                 <div className="fixed inset-0 bg-slate-900/90 z-[120] flex items-center justify-center p-4 backdrop-blur-md"
                     onClick={(e) => e.target === e.currentTarget && setProfileModalUid(null)}>

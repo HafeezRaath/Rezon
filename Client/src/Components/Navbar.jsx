@@ -80,19 +80,19 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
 
     const isAdmin = (uid) => uid === "btVq523cTvh4pTUS7AErSyVNER53";
 
-    // 🔥 FIXED: Category list with icons
+    // 🔥 FIXED: Category list with DIRECT paths (no query params)
     const MOBILE_CATEGORIES = [
-        { code: 'Mobile', label: 'Mobiles', icon: FaMobileAlt },
-        { code: 'Car', label: 'Vehicles', icon: FaCar },
-        { code: 'Electronics', label: 'Electronics', icon: FaTv },
-        { code: 'Bikes', label: 'Bikes', icon: FaMotorcycle },
-        { code: 'PropertySale', label: 'Property', icon: FaHome },
-        { code: 'Furniture', label: 'Furniture', icon: FaChair },
-        { code: 'Fashion', label: 'Fashion', icon: FaTshirt },
-        { code: 'Jobs', label: 'Jobs', icon: FaBriefcase },
-        { code: 'Animals', label: 'Animals', icon: FaPaw },
-        { code: 'Books', label: 'Books', icon: FaBookOpen },
-        { code: 'Kids', label: 'Kids', icon: FaChild },
+        { code: 'Mobile', label: 'Mobiles', icon: FaMobileAlt, path: '/mobiles' },
+        { code: 'Car', label: 'Vehicles', icon: FaCar, path: '/vehicles' },
+        { code: 'Electronics', label: 'Electronics', icon: FaTv, path: '/electronics' },
+        { code: 'Bikes', label: 'Bikes', icon: FaMotorcycle, path: '/bikes' },
+        { code: 'PropertySale', label: 'Property', icon: FaHome, path: '/property-for-sale' },
+        { code: 'Furniture', label: 'Furniture', icon: FaChair, path: '/furniture' },
+        { code: 'Fashion', label: 'Fashion', icon: FaTshirt, path: '/category/fashion' },
+        { code: 'Jobs', label: 'Jobs', icon: FaBriefcase, path: '/category/jobs' },
+        { code: 'Animals', label: 'Animals', icon: FaPaw, path: '/category/animals' },
+        { code: 'Books', label: 'Books', icon: FaBookOpen, path: '/category/books' },
+        { code: 'Kids', label: 'Kids', icon: FaChild, path: '/category/kids' },
     ];
 
     // SYNC SEARCH + LOCATION WITH URL
@@ -193,22 +193,6 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
         }
     }, [user, navigate]);
 
-    // 🔥 NEW: Handle category click - navigate to home with category param
-    const handleCategoryClick = useCallback((categoryCode) => {
-        setShowMobileMenu(false);
-        onCategoryChange?.(categoryCode);
-
-        // Navigate to home with category
-        const params = new URLSearchParams(location.search);
-        if (categoryCode && categoryCode !== 'All') {
-            params.set('category', categoryCode);
-        } else {
-            params.delete('category');
-        }
-        const queryString = params.toString();
-        navigate(queryString ? `/?${queryString}` : '/');
-    }, [navigate, location.search, onCategoryChange]);
-
     const handleLogout = async () => {
         await signOut(auth);
         setUser(null);
@@ -306,7 +290,7 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                         </div>
                     )}
 
-                    {/* 🔥 FIXED: Location Section - Better mobile display */}
+                    {/* Location Section */}
                     <div className="p-6 border-b border-slate-800">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Location</p>
                         <div className="flex items-center gap-3 p-3.5 bg-slate-800/40 rounded-xl text-slate-300 border border-slate-700/50">
@@ -334,13 +318,13 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                         </div>
                     </div>
 
-                    {/* 🔥 FIXED: Categories - Navigate to home with category filter */}
+                    {/* 🔥 FIXED: Categories - Direct Links to CategoryAds */}
                     <div className="p-4 space-y-1">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2 mt-2">Browse Categories</p>
 
                         <Link
                             to="/"
-                            onClick={() => { setShowMobileMenu(false); handleCategoryClick('All'); }}
+                            onClick={() => setShowMobileMenu(false)}
                             className="flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
                         >
                             <FaHome className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
@@ -348,14 +332,15 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                         </Link>
 
                         {MOBILE_CATEGORIES.map((item) => (
-                            <button
+                            <Link
                                 key={item.code}
-                                onClick={() => handleCategoryClick(item.code)}
-                                className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group text-left"
+                                to={item.path}
+                                onClick={() => setShowMobileMenu(false)}
+                                className="w-full flex items-center gap-4 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded-xl transition-all group"
                             >
                                 <item.icon className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
                                 <span className="font-medium">{item.label}</span>
-                            </button>
+                            </Link>
                         ))}
                     </div>
 
@@ -435,25 +420,35 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
         </div>
     );
 
-    // 🔥 FIXED: BOTTOM MOBILE NAV - No double footer
+    // 🔥 FIXED: BOTTOM MOBILE NAV
     const BottomNav = () => {
         // Don't show on chat pages
         if (location.pathname.startsWith('/chat')) return null;
 
+        // 🔥 Check if current path is a category path
+        const categoryPaths = MOBILE_CATEGORIES.map(c => c.path);
+        const isCategoryActive = categoryPaths.includes(location.pathname);
+
         return (
             <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 lg:hidden z-40 pb-safe">
                 <div className="flex items-center justify-around py-2">
-                    <Link to="/" className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/' && !location.search ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    <Link 
+                        to="/" 
+                        className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/' && !location.search ? 'text-emerald-400' : 'text-slate-400'}`}
+                    >
                         <FaHome size={20} />
                         <span className="text-[10px] font-medium">Home</span>
                     </Link>
+                    
+                    {/* 🔥 FIXED: Categories button opens side menu */}
                     <button 
                         onClick={() => setShowMobileMenu(true)}
-                        className={`flex flex-col items-center gap-1 p-2 ${location.search.includes('category') ? 'text-emerald-400' : 'text-slate-400'}`}
+                        className={`flex flex-col items-center gap-1 p-2 ${isCategoryActive ? 'text-emerald-400' : 'text-slate-400'}`}
                     >
                         <FaThLarge size={20} />
                         <span className="text-[10px] font-medium">Categories</span>
                     </button>
+                    
                     <button
                         onClick={handleSellClick}
                         className="flex flex-col items-center -mt-6"
@@ -463,6 +458,7 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                         </div>
                         <span className="text-[10px] font-medium text-emerald-400 mt-1">Sell</span>
                     </button>
+                    
                     <button 
                         onClick={handleChatClick}
                         className={`flex flex-col items-center gap-1 p-2 ${location.pathname.includes('chat') || location.pathname.includes('conversations') ? 'text-emerald-400' : 'text-slate-400'}`}
@@ -470,6 +466,7 @@ const Navbar = ({ onSearch, onLocationChange, onCategoryChange }) => {
                         <FaComments size={20} />
                         <span className="text-[10px] font-medium">Chat</span>
                     </button>
+                    
                     <button
                         onClick={() => user ? navigate('/profile') : setShowLogin(true)}
                         className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/profile' ? 'text-emerald-400' : 'text-slate-400'}`}

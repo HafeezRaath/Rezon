@@ -9,7 +9,7 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import Navbar from "./Navbar";
-import Footer from "./footer";
+
 
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 
@@ -684,7 +684,7 @@ const CategoryAds = ({ user }) => {
                 </div>
             )}
 
-            <Footer />
+            
         </div>
     );
 };

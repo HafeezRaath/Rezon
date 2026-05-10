@@ -19,11 +19,14 @@ import ChatRoom from "./Components/ChatRoom";
 import PhoneLogin from "./Components/PhoneLogin";
 import VerificationFlow from "./loginsetup/VerificationFlow";
 import AdminPanel from "./Admin";
-import Footer from "./Components/Footer"; // 🔥 ADDED: Footer import
+import Footer from "./Components/Footer";
 
 // 🔥 NEW: AllAds and Placeholder pages
-import AllAds from "./Components/allads"; // 🔥 ADDED: AllAds import
-import PlaceholderPage from "./Pages/PlaceholderPage"; // 🔥 ADDED: Placeholder page
+import AllAds from "./Components/allads";
+import PlaceholderPage from "./Pages/PlaceholderPage";
+
+// 🔥 ADDED: ScrollToTop component
+import ScrollToTop from "./Components/ScrollToTop";
 
 function App() {
   const location = useLocation();
@@ -53,7 +56,6 @@ function App() {
     navigate(`/?city=${encodeURIComponent(loc)}`);
   };
 
-  // 🔥 FIXED: handleCategoryChange function added
   const handleCategoryChange = (category) => {
     if (category && category !== 'All') {
       navigate(`/?category=${encodeURIComponent(category)}`);
@@ -68,7 +70,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col"> {/* 🔥 ADDED: flex flex-col for footer */}
+    <div className="min-h-screen flex flex-col">
+      {/* 🔥 ADDED: ScrollToTop - har route change pe page upar jayega */}
+      <ScrollToTop />
+
       {/* 🔥 TOASTER */}
       <Toaster 
         position="top-center"
@@ -100,7 +105,6 @@ function App() {
         onCategoryChange={handleCategoryChange}
       /> 
 
-      {/* 🔥 ADDED: main wrapper for flex-grow */}
       <main className="flex-1">
         <Routes location={background || location}>
           <Route path="/" element={
@@ -114,12 +118,10 @@ function App() {
 
           <Route path="/profile" element={<Profile user={user}/>}/>
 
-          {/* 🔥 PostAd as normal route */}
           <Route path="/post-ad" element={<PostAd user={user} />} />
 
           <Route path="/update-ad/:id" element={<UpdateAd user={user} />} />
 
-          {/* 🔥 ADDED: All Ads route */}
           <Route path="/all-ads" element={<AllAds user={user} />} />
 
           {/* Categories */}
@@ -139,7 +141,7 @@ function App() {
           <Route path="/PhoneLogin" element={<PhoneLogin user={user}/>}/>
           <Route path="/verify" element={<VerificationFlow user={user} />} />
 
-          {/* 🔥 ADDED: Footer pages */}
+          {/* Footer pages */}
           <Route path="/about" element={<PlaceholderPage />} />
           <Route path="/blog" element={<PlaceholderPage />} />
           <Route path="/help" element={<PlaceholderPage />} />
@@ -194,7 +196,7 @@ function App() {
       {/* Manual Popups */}
       {showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
 
-      {/* 🔥 ADDED: Footer at bottom */}
+      {/* ✅ Footer sirf ek dafa yahan - App.js mein */}
       <Footer />
     </div>
   );
