@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import heroimage from '../assets/images/OIP.jpg';
+import heroimage from '../assets/images/OIP.jpeg';
 import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase.config";
 import axios from "axios";
