@@ -13,19 +13,20 @@ import {
   FaEnvelope,
   FaBoxOpen,
   FaPlus,
-  FaArrowLeft
+  FaArrowLeft,
+  FaSignOutAlt        // 🔥 NEW: Logout icon
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { signOut } from "firebase/auth";        // 🔥 NEW: Firebase signOut
+import { auth } from "../firebase.config";      // 🔥 NEW: Auth instance
 import EditProfileModal from "../Components/EditProfileModal";
 import Ads from "../CRUD/ads";
 
-// 🔧 FIXED: API Config
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 const BASE_URL = "https://rezon.up.railway.app";
 
-// 🔧 Image URL Helper
 const getImageUrl = (path) => {
   if (!path) return '/default-avatar.png';
   if (path.startsWith('http')) return path;
@@ -52,7 +53,6 @@ const Profile = ({ user }) => {
     email: ""
   });
 
-  // 🔧 FIXED: API calls with correct endpoints
   const fetchProfileData = useCallback(async () => {
     if (!user?.uid) {
       setError("User not authenticated");
@@ -69,7 +69,6 @@ const Profile = ({ user }) => {
         throw new Error("Authentication required");
       }
 
-      // 🔧 FIXED: Correct endpoints
       const [reviewsRes, userRes] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/reviews/seller/${user.uid}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -122,7 +121,6 @@ const Profile = ({ user }) => {
     }
   }, [user, navigate]);
 
-  // 🔥 NEW: Fetch My Ads
   const fetchMyAds = useCallback(async () => {
     const token = localStorage.getItem('firebaseIdToken');
     if (!token) {
@@ -147,23 +145,33 @@ const Profile = ({ user }) => {
     }
   }, []);
 
+  // 🔥 NEW: Logout handler
+  const handleLogout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('firebaseIdToken');
+      toast.success("Logged out successfully!");
+      navigate('/');
+      window.location.reload(); // Force reload to clear all states
+    } catch (err) {
+      console.error("Logout error:", err);
+      toast.error("Failed to logout");
+    }
+  }, [navigate]);
+
   useEffect(() => {
     fetchProfileData();
   }, [fetchProfileData]);
 
-  // 🔥 NEW: Handle profile update
   const handleProfileUpdate = useCallback((updatedData) => {
-    // Update local user state if parent provides setter
     if (user && typeof user === 'object') {
       user.displayName = updatedData.displayName;
       user.photoURL = updatedData.photoURL;
     }
-    // Force re-render
     setSellerStats(prev => ({ ...prev }));
     toast.success("Profile refreshed!");
   }, [user]);
 
-  // 🎨 FIXED: Professional Color Scheme - Emerald + Slate
   const StarRating = useMemo(() => ({ rating }) => (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -217,7 +225,6 @@ const Profile = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
-      {/* 🎨 FIXED: Professional Cover - Slate Gradient */}
       <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 h-48 w-full relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-50 to-transparent"></div>
@@ -244,12 +251,10 @@ const Profile = ({ user }) => {
               </div>
             </div>
 
-            {/* Online Status */}
             <div className="absolute bottom-2 right-2 w-5 h-5 bg-emerald-500 rounded-full border-3 border-white shadow-sm flex items-center justify-center">
               <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             </div>
 
-            {/* Verified Badge */}
             {sellerStats.verified && (
               <div className="absolute -top-1 -right-1 bg-blue-500 text-white p-1.5 rounded-full border-2 border-white shadow-md" title="Verified">
                 <FaCheckCircle size={14} />
@@ -262,7 +267,6 @@ const Profile = ({ user }) => {
               {user?.displayName || user?.name || "Rezon Member"}
             </h1>
 
-            {/* 🔧 ADDED: Contact Info */}
             <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-2 sm:gap-4 mt-2 text-sm text-slate-500">
               <span className="flex items-center gap-1">
                 <FaEnvelope className="text-slate-400" />
@@ -281,7 +285,6 @@ const Profile = ({ user }) => {
               {sellerStats.verified ? "Rezon Verified" : "Member"} • Joined {sellerStats.memberSince}
             </p>
 
-            {/* 🎨 FIXED: Stats Grid - Emerald Theme */}
             <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
               <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 text-center min-w-[90px]">
                 <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Rating</p>
@@ -306,7 +309,7 @@ const Profile = ({ user }) => {
             </div>
           </div>
 
-          {/* 🔧 FIXED: Buttons - Responsive */}
+          {/* 🔥 FIXED: Buttons with Logout */}
           <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto">
             <button 
               onClick={() => setShowEditModal(true)}
@@ -320,10 +323,17 @@ const Profile = ({ user }) => {
             >
               My Ads
             </button>
+            {/* 🔥 NEW: Logout Button */}
+            <button 
+              onClick={handleLogout}
+              className="bg-rose-50 text-rose-600 border border-rose-200 px-6 py-2.5 rounded-lg font-bold hover:bg-rose-100 hover:text-rose-700 transition shadow-sm active:scale-95 flex items-center justify-center gap-2 text-sm"
+            >
+              <FaSignOutAlt size={14} /> Logout
+            </button>
           </div>
         </div>
 
-        {/* 🔥 NEW: My Ads Section */}
+        {/* My Ads Section */}
         {showMyAds && (
           <div className="mt-8 animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-4">
@@ -344,7 +354,7 @@ const Profile = ({ user }) => {
                   <FaPlus size={12} /> New Ad
                 </button>
                 <button
-                  onClick={() => setShowMyAds(true)}
+                  onClick={() => setShowMyAds(false)}
                   className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition"
                 >
                   <FaArrowLeft size={18} />
@@ -420,10 +430,10 @@ const Profile = ({ user }) => {
                       </div>
 
                       <button
-                       onClick={() => {
-    onClose(); // Pehle My Ads modal band karein
-    navigate(`/allads?openAd=${ad._id}`); // Phir AllAds par bhejein parameters ke sath
-  }}
+                        onClick={() => {
+                          setShowMyAds(false);
+                          navigate(`/allads?openAd=${ad._id}`);
+                        }}
                         className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900 transition active:scale-95"
                       >
                         View Details
@@ -436,10 +446,9 @@ const Profile = ({ user }) => {
           </div>
         )}
 
-        {/* Main Content Grid - Only show when My Ads is hidden */}
+        {/* Main Content Grid */}
         {!showMyAds && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-            {/* Reviews Section */}
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3">
@@ -502,9 +511,7 @@ const Profile = ({ user }) => {
               </div>
             </div>
 
-            {/* Sidebar */}
             <div className="space-y-4">
-              {/* Trust Tips */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 text-white">
                   <h3 className="font-bold flex items-center gap-2 text-sm">
@@ -528,7 +535,6 @@ const Profile = ({ user }) => {
                 </div>
               </div>
 
-              {/* Verification Status */}
               <div className={`rounded-xl p-5 text-white shadow-lg ${
                 sellerStats.verified 
                   ? 'bg-gradient-to-br from-blue-600 to-blue-700' 
@@ -560,7 +566,6 @@ const Profile = ({ user }) => {
                 )}
               </div>
 
-              {/* Quick Stats */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
                 <h4 className="font-bold text-slate-800 mb-4 text-sm">Quick Stats</h4>
                 <div className="space-y-3">
@@ -581,7 +586,6 @@ const Profile = ({ user }) => {
         )}
       </div>
 
-      {/* 🔥 NEW: Edit Profile Modal */}
       {showEditModal && (
         <EditProfileModal 
           user={user}

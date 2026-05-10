@@ -35,6 +35,10 @@ const CATEGORIES = [
 const PROFESSIONAL_GRADIENT = "from-slate-700 via-slate-800 to-slate-900";
 const ACTIVE_CATEGORY_BG = "bg-slate-800";
 
+// 🔥 NEW: Pagination config
+const ITEMS_PER_PAGE_DESKTOP = 10;
+const ITEMS_PER_PAGE_MOBILE = 6;
+
 const handleCallSeller = (phoneNumber) => {
     if (!phoneNumber) {
         toast.error("Seller phone number not available");
@@ -148,6 +152,9 @@ const AllAds = ({ user }) => {
     // 🔥 NEW: Real seller stats state
     const [sellerStats, setSellerStats] = useState({});
 
+    // 🔥 NEW: Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+
     const [selectedAd, setSelectedAd] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [sellerTrust, setSellerTrust] = useState({ avg: 0, total: 0 });
@@ -207,6 +214,11 @@ const AllAds = ({ user }) => {
             setSearchParams(params);
         }
     }, [debouncedSearch, selectedLocation, activeCategory, setSearchParams, searchParams]);
+
+    // 🔥 NEW: Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearch, activeCategory, selectedLocation, sortBy]);
 
     // Fetch Ads
     useEffect(() => {
@@ -495,6 +507,13 @@ const AllAds = ({ user }) => {
         ));
     };
 
+    // 🔥 NEW: Pagination calculations
+    const itemsPerPage = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
+    const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedAds = filteredAds.slice(startIndex, endIndex);
+
     return (
         <div className="w-full min-h-screen bg-slate-50">
             <div className={`bg-gradient-to-r ${PROFESSIONAL_GRADIENT} text-white`}>
@@ -677,17 +696,84 @@ const AllAds = ({ user }) => {
                         )}
                     </div>
                 ) : (
-                    <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
-                        {filteredAds.map((ad) => (
-                            <AdCard 
-                                key={ad._id} 
-                                ad={ad} 
-                                sellerStats={sellerStats}
-                                onClick={() => handleAdClick(ad)}
-                                isListView={viewMode === 'list'}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
+                            {paginatedAds.map((ad) => (
+                                <AdCard 
+                                    key={ad._id} 
+                                    ad={ad} 
+                                    sellerStats={sellerStats}
+                                    onClick={() => handleAdClick(ad)}
+                                    isListView={viewMode === 'list'}
+                                />
+                            ))}
+                        </div>
+
+                        {/* 🔥 NEW: Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-2 mt-8 mb-4">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                        currentPage === 1 
+                                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+                                            : 'bg-white text-slate-700 shadow-md hover:bg-emerald-50 hover:text-emerald-600 active:scale-95'
+                                    }`}
+                                >
+                                    <FaChevronLeft />
+                                </button>
+
+                                <div className="flex items-center gap-1">
+                                    {[...Array(totalPages)].map((_, idx) => {
+                                        const pageNum = idx + 1;
+                                        const show = pageNum === 1 || pageNum === totalPages || 
+                                                   Math.abs(pageNum - currentPage) <= 1;
+                                        const showEllipsis = (pageNum === 2 && currentPage > 3) || 
+                                                           (pageNum === totalPages - 1 && currentPage < totalPages - 2);
+                                        
+                                        if (showEllipsis) {
+                                            return <span key={pageNum} className="text-slate-400 px-2">...</span>;
+                                        }
+                                        if (!show) return null;
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
+                                                    currentPage === pageNum
+                                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                                                        : 'bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                        currentPage === totalPages 
+                                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+                                            : 'bg-white text-slate-700 shadow-md hover:bg-emerald-50 hover:text-emerald-600 active:scale-95'
+                                    }`}
+                                >
+                                    <FaChevronRight />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Page info */}
+                        {filteredAds.length > 0 && (
+                            <p className="text-center text-xs text-slate-400 font-medium mb-8">
+                                Showing {startIndex + 1}-{Math.min(endIndex, filteredAds.length)} of {filteredAds.length} items
+                            </p>
+                        )}
+                    </>
                 )}
             </div>
 
