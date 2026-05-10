@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { Toaster } from "react-hot-toast";
+
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase.config";
 
@@ -74,7 +74,7 @@ function App() {
       {/* 🔥 ADDED: ScrollToTop - har route change pe page upar jayega */}
       <ScrollToTop />
 
-      {/* 🔥 TOASTER */}
+      {/* 🔥 TOASTER
       <Toaster 
         position="top-center"
         containerStyle={{ zIndex: 99999 }}
@@ -96,7 +96,7 @@ function App() {
             iconTheme: { primary: '#fff', secondary: '#ef4444' }
           }
         }}
-      />
+      /> */}
 
       <Navbar 
         user={user} 
