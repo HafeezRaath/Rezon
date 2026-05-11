@@ -1,12 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     FaHome, FaAd, FaFlag, FaUsers, FaSignOutAlt, FaChartBar,
     FaBell, FaSearch, FaMoon, FaSun, FaCog, FaBars, FaTimes,
-    FaChevronRight, FaShieldAlt, FaDatabase, FaSync, FaExclamationTriangle
+    FaChevronRight, FaShieldAlt, FaSync, FaExclamationTriangle
 } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+
+// 🔥 Tailwind color classes mapping (static for JIT compiler)
+const COLOR_CLASSES = {
+    emerald: {
+        bg: 'bg-emerald-500',
+        text: 'text-emerald-400',
+        border: 'border-emerald-500',
+        bgLight: 'bg-emerald-500/20',
+        shadow: 'shadow-emerald-500/30',
+        from: 'from-emerald-500/20'
+    },
+    blue: {
+        bg: 'bg-blue-500',
+        text: 'text-blue-400',
+        border: 'border-blue-500',
+        bgLight: 'bg-blue-500/20',
+        shadow: 'shadow-blue-500/30',
+        from: 'from-blue-500/20'
+    },
+    rose: {
+        bg: 'bg-rose-500',
+        text: 'text-rose-400',
+        border: 'border-rose-500',
+        bgLight: 'bg-rose-500/20',
+        shadow: 'shadow-rose-500/30',
+        from: 'from-rose-500/20'
+    },
+    violet: {
+        bg: 'bg-violet-500',
+        text: 'text-violet-400',
+        border: 'border-violet-500',
+        bgLight: 'bg-violet-500/20',
+        shadow: 'shadow-violet-500/30',
+        from: 'from-violet-500/20'
+    },
+    amber: {
+        bg: 'bg-amber-500',
+        text: 'text-amber-400',
+        border: 'border-amber-500',
+        bgLight: 'bg-amber-500/20',
+        shadow: 'shadow-amber-500/30',
+        from: 'from-amber-500/20'
+    },
+    slate: {
+        bg: 'bg-slate-500',
+        text: 'text-slate-400',
+        border: 'border-slate-500',
+        bgLight: 'bg-slate-500/20',
+        shadow: 'shadow-slate-500/30',
+        from: 'from-slate-500/20'
+    }
+};
+
+const API_BASE_URL = "https://rezon.up.railway.app/api/admin";
 
 const AdminLayout = ({ children, activeTab, setActiveTab }) => {
     const navigate = useNavigate();
@@ -17,7 +71,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     
-    // 🔥 NEW: Real stats state with loading
     const [stats, setStats] = useState({
         totalAds: 0,
         activeUsers: 0,
@@ -27,12 +80,16 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
         lastUpdated: null
     });
 
-    // 🔥 API Base URL (Production ya Local)
-    const API_BASE_URL = "https://rezon.up.railway.app/api/admin";
-    // const API_BASE_URL = 'http://localhost:8000/api/admin'; // Local testing ke liye
+    // ✅ Pehle handleLogout define karo (TDZ fix)
+    const handleLogout = useCallback(() => {
+        localStorage.removeItem('firebaseIdToken');
+        localStorage.removeItem('user');
+        toast.success("Logged out successfully");
+        navigate('/');
+    }, [navigate]);
 
-    // 🔥 Fetch Dashboard Stats
-    const fetchDashboardStats = async () => {
+    // ✅ Phir fetchDashboardStats (jo handleLogout use karta hai)
+    const fetchDashboardStats = useCallback(async () => {
         try {
             const token = localStorage.getItem('firebaseIdToken');
             if (!token) {
@@ -64,104 +121,44 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                 loading: false,
                 error: error.response?.data?.message || 'Failed to load stats'
             }));
-            // Agar 401/403 aaye toh logout kar do
+            
             if (error.response?.status === 401 || error.response?.status === 403) {
                 toast.error('Session expired. Please login again.');
                 handleLogout();
             }
         }
-    };
+    }, [handleLogout]);
 
-    // 🔥 Initial fetch + Auto refresh every 30 seconds
+    // Auto refresh
     useEffect(() => {
         fetchDashboardStats();
-        
-        // Auto refresh interval
-        const interval = setInterval(() => {
-            fetchDashboardStats();
-        }, 30000); // 30 seconds
-
+        const interval = setInterval(fetchDashboardStats, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchDashboardStats]);
 
-    // Handle logout
-    const handleLogout = () => {
-        localStorage.removeItem('firebaseIdToken');
-        localStorage.removeItem('user');
-        toast.success("Logged out successfully");
-        navigate('/');
-    };
-
-    // Menu items with badges and colors
+    // Menu items
     const menuItems = [
-        { 
-            id: 'dashboard', 
-            label: 'Dashboard', 
-            icon: FaHome,
-            color: 'emerald',
-            description: 'Overview & stats'
-        },
-        { 
-            id: 'ads', 
-            label: 'Ads Management', 
-            icon: FaAd,
-            color: 'blue',
-            description: 'Manage listings'
-        },
+        { id: 'dashboard', label: 'Dashboard', icon: FaHome, color: 'emerald', description: 'Overview & stats' },
+        { id: 'ads', label: 'Ads Management', icon: FaAd, color: 'blue', description: 'Manage listings' },
         { 
             id: 'reports', 
             label: 'Reports', 
             icon: FaFlag, 
-            badge: stats.pendingReports > 0 ? stats.pendingReports : null, // 🔥 Real badge
-            color: 'rose',
-            description: 'User reports'
+            badge: stats.pendingReports > 0 ? stats.pendingReports : null,
+            color: 'rose', 
+            description: 'User reports' 
         },
-        { 
-            id: 'users', 
-            label: 'Users', 
-            icon: FaUsers,
-            color: 'violet',
-            description: 'User management'
-        },
-        { 
-            id: 'analytics', 
-            label: 'Analytics', 
-            icon: FaChartBar,
-            color: 'amber',
-            description: 'Insights & data'
-        },
-        { 
-            id: 'settings', 
-            label: 'Settings', 
-            icon: FaCog,
-            color: 'slate',
-            description: 'System config'
-        },
+        { id: 'users', label: 'Users', icon: FaUsers, color: 'violet', description: 'User management' },
+        { id: 'analytics', label: 'Analytics', icon: FaChartBar, color: 'amber', description: 'Insights & data' },
+        { id: 'settings', label: 'Settings', icon: FaCog, color: 'slate', description: 'System config' },
     ];
 
-    // 🔥 Real Quick Stats from API
     const quickStats = [
-        { 
-            label: 'Total Ads', 
-            value: stats.loading ? '...' : stats.totalAds.toLocaleString(), 
-            color: 'text-emerald-400',
-            icon: FaAd
-        },
-        { 
-            label: 'Active Users', 
-            value: stats.loading ? '...' : stats.activeUsers.toLocaleString(), 
-            color: 'text-blue-400',
-            icon: FaUsers
-        },
-        { 
-            label: 'Pending Reports', 
-            value: stats.loading ? '...' : stats.pendingReports.toLocaleString(), 
-            color: 'text-rose-400',
-            icon: FaFlag
-        },
+        { label: 'Total Ads', value: stats.loading ? '...' : stats.totalAds.toLocaleString(), color: 'text-emerald-400', Icon: FaAd },
+        { label: 'Active Users', value: stats.loading ? '...' : stats.activeUsers.toLocaleString(), color: 'text-blue-400', Icon: FaUsers },
+        { label: 'Pending Reports', value: stats.loading ? '...' : stats.pendingReports.toLocaleString(), color: 'text-rose-400', Icon: FaFlag },
     ];
 
-    // 🔥 Loading Skeleton Component
     const StatSkeleton = () => (
         <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 animate-pulse">
             <div className="h-3 w-20 bg-slate-700 rounded mb-2"></div>
@@ -172,15 +169,10 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
     return (
         <div className={`flex h-screen overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
             
-            {/* Mobile Sidebar Overlay */}
             {!isSidebarOpen && (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                    onClick={() => setIsSidebarOpen(true)}
-                />
+                <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(true)} />
             )}
 
-            {/* 🔥 NEW: Modern Sidebar */}
             <aside className={`
                 fixed lg:static inset-y-0 left-0 z-50 w-72 
                 bg-slate-900 border-r border-slate-800
@@ -188,7 +180,7 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-20 xl:w-72'}
                 flex flex-col
             `}>
-                {/* Logo Section */}
+                {/* Logo */}
                 <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800">
                     <div className={`flex items-center gap-3 ${!isSidebarOpen && 'lg:hidden xl:flex'}`}>
                         <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -199,15 +191,12 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Admin Panel</p>
                         </div>
                     </div>
-                    <button 
-                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className="lg:hidden w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white"
-                    >
+                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white">
                         <FaTimes />
                     </button>
                 </div>
 
-                {/* Search Bar (expandable) */}
+                {/* Search */}
                 <div className={`px-4 py-4 ${!isSidebarOpen && 'lg:hidden xl:block'}`}>
                     <div className="relative">
                         <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm" />
@@ -229,6 +218,7 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                     
                     {menuItems.map((item) => {
                         const Icon = item.icon;
+                        const colors = COLOR_CLASSES[item.color];
                         const isActive = activeTab === item.id;
                         
                         return (
@@ -241,7 +231,7 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                 className={`
                                     w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
                                     ${isActive 
-                                        ? `bg-gradient-to-r from-${item.color}-500/20 to-transparent border-l-2 border-${item.color}-500 text-white` 
+                                        ? `${colors.bgLight} bg-gradient-to-r to-transparent border-l-2 ${colors.border} text-white` 
                                         : 'text-slate-400 hover:bg-slate-800 hover:text-white border-l-2 border-transparent'
                                     }
                                     ${!isSidebarOpen && 'lg:justify-center xl:justify-start'}
@@ -250,7 +240,7 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                 <div className={`
                                     w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200
                                     ${isActive 
-                                        ? `bg-${item.color}-500 text-white shadow-lg shadow-${item.color}-500/30` 
+                                        ? `${colors.bg} text-white shadow-lg ${colors.shadow}` 
                                         : 'bg-slate-800 group-hover:bg-slate-700'
                                     }
                                 `}>
@@ -262,7 +252,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                     <p className="text-[10px] text-slate-500 group-hover:text-slate-400">{item.description}</p>
                                 </div>
 
-                                {/* 🔥 Real Badge from API */}
                                 {item.badge > 0 && (
                                     <span className={`
                                         bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center animate-pulse
@@ -272,7 +261,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                     </span>
                                 )}
 
-                                {/* Active Indicator */}
                                 {isActive && (
                                     <FaChevronRight className={`text-emerald-500 text-xs ${!isSidebarOpen && 'lg:hidden xl:block'}`} />
                                 )}
@@ -280,13 +268,10 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                         );
                     })}
 
-                    {/* 🔥 Quick Stats with Real Data */}
+                    {/* Quick Stats */}
                     <div className={`mt-6 pt-6 border-t border-slate-800 ${!isSidebarOpen && 'lg:hidden xl:block'}`}>
                         <div className="flex items-center justify-between px-3 mb-3">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                Quick Stats
-                            </p>
-                            {/* Refresh Button */}
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Stats</p>
                             <button 
                                 onClick={fetchDashboardStats}
                                 disabled={stats.loading}
@@ -297,7 +282,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                             </button>
                         </div>
 
-                        {/* Error State */}
                         {stats.error && (
                             <div className="mx-2 mb-3 p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-2 text-rose-400 text-xs">
                                 <FaExclamationTriangle />
@@ -307,27 +291,27 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
 
                         <div className="space-y-2 px-2">
                             {stats.loading ? (
-                                // Loading Skeletons
                                 <>
                                     <StatSkeleton />
                                     <StatSkeleton />
                                     <StatSkeleton />
                                 </>
                             ) : (
-                                // Real Data
-                                quickStats.map((stat, idx) => (
-                                    <div key={idx} className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 hover:border-slate-600 transition-colors group">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                                            <stat.icon className={`text-xs ${stat.color} opacity-50 group-hover:opacity-100 transition-opacity`} />
+                                quickStats.map((stat, idx) => {
+                                    const StatIcon = stat.Icon;
+                                    return (
+                                        <div key={idx} className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 hover:border-slate-600 transition-colors group">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                                                <StatIcon className={`text-xs ${stat.color} opacity-50 group-hover:opacity-100 transition-opacity`} />
+                                            </div>
+                                            <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
                                         </div>
-                                        <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
 
-                        {/* Last Updated */}
                         {!stats.loading && stats.lastUpdated && (
                             <p className="px-3 mt-2 text-[10px] text-slate-600 text-center">
                                 Updated {stats.lastUpdated.toLocaleTimeString()}
@@ -336,15 +320,11 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                     </div>
                 </nav>
 
-                {/* Bottom Actions */}
+                {/* Bottom */}
                 <div className="p-4 border-t border-slate-800 space-y-2">
-                    {/* Theme Toggle */}
                     <button
                         onClick={() => setIsDarkMode(!isDarkMode)}
-                        className={`
-                            w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all
-                            ${!isSidebarOpen && 'lg:justify-center xl:justify-start'}
-                        `}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all ${!isSidebarOpen && 'lg:justify-center xl:justify-start'}`}
                     >
                         <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
                             {isDarkMode ? <FaSun className="text-amber-400" /> : <FaMoon className="text-indigo-400" />}
@@ -354,13 +334,9 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                         </span>
                     </button>
 
-                    {/* Logout */}
                     <button
                         onClick={handleLogout}
-                        className={`
-                            w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-500/10 transition-all group
-                            ${!isSidebarOpen && 'lg:justify-center xl:justify-start'}
-                        `}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-500/10 transition-all group ${!isSidebarOpen && 'lg:justify-center xl:justify-start'}`}
                     >
                         <div className="w-10 h-10 rounded-lg bg-rose-500/10 group-hover:bg-rose-500 group-hover:text-white flex items-center justify-center transition-all">
                             <FaSignOutAlt />
@@ -370,21 +346,13 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                 </div>
             </aside>
 
-            {/* 🔥 NEW: Modern Main Content */}
+            {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                
-                {/* Header */}
-                <header className={`
-                    h-20 flex items-center justify-between px-6 border-b
-                    ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}
-                `}>
+                <header className={`h-20 flex items-center justify-between px-6 border-b ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className={`
-                                w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                                ${isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}
-                            `}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                         >
                             <FaBars />
                         </button>
@@ -400,7 +368,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Notifications */}
                         <button className="relative w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                             <FaBell />
                             {notifications > 0 && (
@@ -410,7 +377,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                             )}
                         </button>
 
-                        {/* User Menu */}
                         <div className="relative">
                             <button 
                                 onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -426,7 +392,6 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                 <FaChevronRight className={`text-slate-400 text-xs transition-transform ${userMenuOpen ? 'rotate-90' : ''}`} />
                             </button>
 
-                            {/* Dropdown */}
                             {userMenuOpen && (
                                 <div className="absolute right-0 top-full mt-2 w-56 bg-slate-800 rounded-xl border border-slate-700 shadow-xl py-2 z-50">
                                     <div className="px-4 py-3 border-b border-slate-700">
@@ -436,14 +401,8 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                                     <button className="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                                         <FaCog /> Settings
                                     </button>
-                                    <button className="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                                        <FaDatabase /> Backup
-                                    </button>
                                     <div className="border-t border-slate-700 mt-2 pt-2">
-                                        <button 
-                                            onClick={handleLogout}
-                                            className="w-full px-4 py-2.5 text-left text-sm text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"
-                                        >
+                                        <button onClick={handleLogout} className="w-full px-4 py-2.5 text-left text-sm text-rose-400 hover:bg-rose-500/10 flex items-center gap-2">
                                             <FaSignOutAlt /> Logout
                                         </button>
                                     </div>
@@ -453,11 +412,7 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                     </div>
                 </header>
 
-                {/* Breadcrumb */}
-                <div className={`
-                    px-6 py-3 border-b flex items-center gap-2 text-sm
-                    ${isDarkMode ? 'bg-slate-900/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}
-                `}>
+                <div className={`px-6 py-3 border-b flex items-center gap-2 text-sm ${isDarkMode ? 'bg-slate-900/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
                     <span className="hover:text-emerald-500 cursor-pointer transition-colors">Home</span>
                     <FaChevronRight className="text-xs" />
                     <span className="hover:text-emerald-500 cursor-pointer transition-colors">Admin</span>
@@ -465,15 +420,8 @@ const AdminLayout = ({ children, activeTab, setActiveTab }) => {
                     <span className="text-emerald-500 font-medium capitalize">{activeTab}</span>
                 </div>
 
-                {/* Page Content */}
-                <div className={`
-                    flex-1 overflow-auto p-6
-                    ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}
-                `}>
-                    <div className={`
-                        rounded-2xl border min-h-full
-                        ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}
-                    `}>
+                <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
+                    <div className={`rounded-2xl border min-h-full ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                         {children}
                     </div>
                 </div>
