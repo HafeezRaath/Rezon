@@ -77,6 +77,72 @@ const CATEGORY_FIELD_MAP = {
 
 const ALLOWED_CATEGORIES = Object.keys(CATEGORY_FIELD_MAP);
 
+// ==========================================
+// 🛡️ PROHIBITED CONTENT DETECTION SYSTEM
+// ==========================================
+const PROHIBITED_KEYWORDS = [
+    // Weapons
+    'gun', 'pistol', 'rifle', 'revolver', 'shotgun', 'ammo', 'ammunition', 'bullet', 
+    'weapon', 'dagger', 'knife', 'sword', 'blade', 'crossbow', 'tasla', 'bandook', 
+    'banduk', 'pistol', 'rifle', 'gun', 'weapon', 'dagger', 'knife', 'glock', 'ak47', 
+    'ak-47', 'm4', '9mm', 'kalashnikov', 'grenade', 'bomb', 'explosive', 'detonator',
+    
+    // Drugs / Narcotics
+    'drug', 'cocaine', 'heroin', 'meth', 'weed', 'marijuana', 'cannabis', 'hashish', 
+    'charas', 'opium', 'ecstasy', 'mdma', 'lsd', 'nasha', 'drugs', 'cigarette', 
+    'cigar', 'tobacco', 'shisha', 'hookah', 'vape', 'e-cigarette', 'heroin', 'crack',
+    'methamphetamine', 'fentanyl', 'tramadol', 'morphine', 'codeine', 'xanax', 'valium',
+    'adderall', 'oxycodone', 'oxycontin', 'percocet', 'vicodin', 'suboxone', 'ketamine',
+    
+    // Adult / Illegal Services
+    'escort', 'prostitute', 'sex', 'porn', 'adult', 'massage parlor', 'body massage',
+    'call girl', 'randi', 'tawaif', 'fahashi', 'brothel', 'red light', 'sex worker',
+    
+    // Human / Animal Trade / Organs
+    'human', 'kidney', 'organ', 'slave', 'trafficking', 'snake venom', 'poison', 'acid',
+    'organ sale', 'blood sale', 'surrogate', 'baby sale', 'child sale',
+    
+    // Gambling
+    'casino', 'betting', 'gambling', 'lottery', 'satta', 'jua', 'satta matka', 'bet',
+    'poker', 'blackjack', 'roulette', 'slot machine',
+    
+    // Alcohol
+    'alcohol', 'whiskey', 'vodka', 'rum', 'beer', 'wine', 'liquor', 'sharab', 'desi sharab',
+    
+    // Fake / Counterfeit
+    'fake degree', 'fake certificate', 'fake passport', 'fake id', 'fake cnic', 
+    'counterfeit', 'duplicate', 'pirated', 'crack software', 'hacked', 'stolen',
+    
+    // Other Illegal
+    'hitman', 'mercenary', 'hacker for hire', 'ddos', 'malware', 'virus', 'trojan',
+    'spyware', 'keylogger', 'phishing', 'carding', 'credit card dump', 'cvv', 'fullz'
+];
+
+const PROHIBITED_CATEGORIES = [
+    'Weapons', 'Drugs', 'Adult', 'Gambling', 'Human Organs', 'Alcohol', 'Tobacco'
+];
+
+function containsProhibitedContent(text) {
+    if (!text) return { flagged: false };
+    const lowerText = text.toLowerCase();
+    
+    const found = PROHIBITED_KEYWORDS.filter(keyword => 
+        lowerText.includes(keyword.toLowerCase())
+    );
+    
+    if (found.length > 0) {
+        return { 
+            flagged: true, 
+            reason: `Prohibited content detected: ${found.join(', ')}`,
+            keywords: found 
+        };
+    }
+    return { flagged: false };
+}
+
+// ==========================================
+// AI SUGGESTIONS
+// ==========================================
 export const getAISuggestions = async (req, res) => {
     try {
         const { category } = req.body; 
@@ -113,6 +179,11 @@ Strictly analyze the provided images for the "${category}" category.
    - Detect if it's a "Stock/Internet photo" (too perfect, studio background, or watermarks).
    - Create a "uniqueVisualKey": A short string summarizing the background + object (e.g., "iphone-on-red-carpet") to identify re-uploads.
    - Assign "imageQuality": "Original" (Real photo), "Stock" (Internet photo), "Screenshot" (Stolen from other app), or "Suspicious".
+5. **🛡️ PROHIBITED ITEM DETECTION**: 
+   - Check if the images show ANY weapons (guns, knives, bullets, swords), drugs, narcotics, alcohol bottles, cigarettes, or any illegal items.
+   - If detected, set "isProhibited": true and "prohibitedReason": "description of what was detected".
+   - Also check if it's prescription medicine being sold illegally.
+   - Look for drug paraphernalia (pipes, bongs, syringes, rolling papers).
 
 **LANGUAGE RULE**: "aiDescription" MUST be in Roman Urdu.
 
@@ -124,6 +195,8 @@ Return ONLY a JSON object:
   "estimatedPrice": number,
   "imageQuality": "string",
   "isDuplicateRisk": boolean,
+  "isProhibited": boolean,
+  "prohibitedReason": "string or null",
   "extractedDetails": { "field_name": "value" }
 }`;
 
@@ -142,6 +215,15 @@ Return ONLY a JSON object:
         });
 
         const aiData = JSON.parse(response.choices[0].message.content);
+
+        // 🛡️ Check if AI detected prohibited items in images
+        if (aiData.isProhibited === true) {
+            return res.status(400).json({
+                success: false,
+                message: `🛡️ Rezon AI Security: ${aiData.prohibitedReason || "Prohibited item detected in images"}`,
+                error: "AI_PROHIBITED_CONTENT"
+            });
+        }
 
         const similarAds = await Ad.find({
             category: category,
@@ -180,6 +262,9 @@ Return ONLY a JSON object:
     }
 };
 
+// ==========================================
+// REGISTER USER
+// ==========================================
 export const registerUser = async (req, res) => {
     try {
         console.log("📥 REGISTER BODY:", req.body);
@@ -228,6 +313,9 @@ export const registerUser = async (req, res) => {
     }
 };
 
+// ==========================================
+// CREATE AD (WITH CONTENT MODERATION)
+// ==========================================
 export const create = async (req, res) => {
     try {
         console.log("🔍 POST AD REQUEST:", {
@@ -273,6 +361,41 @@ export const create = async (req, res) => {
             return res.status(400).json({ success: false, message: "🏷️ Valid category is required" });
         }
 
+        // 🛡️ STEP 1: Parse details if string
+        let parsedDetails = {};
+        if (details) {
+            try {
+                parsedDetails = typeof details === 'string' 
+                    ? JSON.parse(details) 
+                    : details;
+            } catch (e) {
+                console.log("⚠️ Details parse failed:", e.message);
+            }
+        }
+
+        // 🛡️ STEP 2: TEXT CONTENT MODERATION
+        const combinedText = `${title} ${description} ${category} ${JSON.stringify(parsedDetails)}`;
+        
+        const textCheck = containsProhibitedContent(combinedText);
+        if (textCheck.flagged) {
+            return res.status(400).json({ 
+                success: false,
+                message: `🛡️ Rezon Security: Ye ad post nahi ho sakti. ${textCheck.reason}.`,
+                error: "PROHIBITED_CONTENT",
+                flaggedKeywords: textCheck.keywords
+            });
+        }
+
+        // 🛡️ STEP 3: CATEGORY BLOCK
+        if (PROHIBITED_CATEGORIES.includes(category)) {
+            return res.status(400).json({
+                success: false,
+                message: `🛡️ Rezon Security: "${category}" category allow nahi hai.`,
+                error: "PROHIBITED_CATEGORY"
+            });
+        }
+
+        // 🛡️ STEP 4: AI IMAGE QUALITY CHECK
         const aiQuality = imageQualityByAI || "Original";
         if (aiQuality === "Stock" || aiQuality === "Screenshot") {
             return res.status(400).json({ 
@@ -281,6 +404,7 @@ export const create = async (req, res) => {
             });
         }
 
+        // Duplicate image check
         const imageHashes = [];
         const duplicateChecks = req.files.map(async (file) => {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
@@ -307,27 +431,19 @@ export const create = async (req, res) => {
             throw err;
         }
 
+        // Upload images to Cloudinary
         const imageUrls = await Promise.all(
             req.files.map(file => uploadBufferToCloudinary(file.buffer, 'rezon_products'))
         );
 
-        let parsedDetails = {};
-        if (details) {
-            try {
-                parsedDetails = typeof details === 'string' 
-                    ? JSON.parse(details) 
-                    : details;
-            } catch (e) {
-                console.log("⚠️ Details parse failed:", e.message);
-            }
-        }
-
+        // Check required fields
         const requiredFields = CATEGORY_FIELD_MAP[category] || [];
         const missingFields = requiredFields.filter(field => !parsedDetails[field]);
         if (missingFields.length > 0 && category === "Mobile") {
             console.log("⚠️ Missing fields for", category, ":", missingFields);
         }
 
+        // Create and save ad
         const newAd = new Ad({
             images: imageUrls,
             imageHashes: imageHashes,
@@ -363,6 +479,9 @@ export const create = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET ALL ADS
+// ==========================================
 export const getAllAds = async (req, res) => {
     try {
         const { city } = req.query;
@@ -382,6 +501,9 @@ export const getAllAds = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET AD BY ID
+// ==========================================
 export const getAdById = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
@@ -392,6 +514,9 @@ export const getAdById = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET MY ADS
+// ==========================================
 export const getMyAds = async (req, res) => {
     try {
         const userUid = req.user.uid;
@@ -405,6 +530,9 @@ export const getMyAds = async (req, res) => {
     }
 };
 
+// ==========================================
+// UPDATE AD
+// ==========================================
 export const updateAd = async (req, res) => {
     try {
         const adId = req.params.id;
@@ -463,6 +591,9 @@ export const updateAd = async (req, res) => {
     }
 };
 
+// ==========================================
+// DELETE AD
+// ==========================================
 export const deleteAd = async (req, res) => {
     try {
         const ad = await Ad.findById(req.params.id);
@@ -487,6 +618,9 @@ export const deleteAd = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET CHAT USERS FOR AD
+// ==========================================
 export const getChatUsersForAd = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -528,6 +662,9 @@ export const getChatUsersForAd = async (req, res) => {
     }
 };
 
+// ==========================================
+// MARK AS SOLD
+// ==========================================
 export const markAsSold = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -591,6 +728,9 @@ export const markAsSold = async (req, res) => {
     }
 };
 
+// ==========================================
+// CAN REVIEW
+// ==========================================
 export const canReview = async (req, res) => {
     try {
         const { adId } = req.params;
@@ -624,6 +764,9 @@ export const canReview = async (req, res) => {
     }
 };
 
+// ==========================================
+// CREATE REVIEW
+// ==========================================
 export const createReview = async (req, res) => {
     try {
         const { sellerId, adId, rating, comment } = req.body;
@@ -665,6 +808,9 @@ export const createReview = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET SELLER REVIEWS
+// ==========================================
 export const getSellerReviews = async (req, res) => {
     try {
         const { sellerId } = req.params;
@@ -682,6 +828,9 @@ export const getSellerReviews = async (req, res) => {
     }
 };
 
+// ==========================================
+// CREATE REPORT
+// ==========================================
 export const createReport = async (req, res) => {
     try {
         const { reportedUserId, adId, reason, description } = req.body;
@@ -712,7 +861,7 @@ export const createReport = async (req, res) => {
 };
 
 // ==========================================
-// 🛡️ KYC VERIFICATION (FIXED - OCR + Server Error)
+// 🛡️ KYC VERIFICATION
 // ==========================================
 export const verifyIdentity = async (req, res) => {
     try {
@@ -1018,6 +1167,9 @@ If you think it MIGHT be the same person (even with doubts), set isMatched to TR
     }
 };
 
+// ==========================================
+// ME
+// ==========================================
 export const me = async (req, res) => {
     try {
         const userUid = req.user.uid;
@@ -1030,6 +1182,9 @@ export const me = async (req, res) => {
     }
 };
 
+// ==========================================
+// UPDATE AD STATUS
+// ==========================================
 export const updateAdStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -1046,6 +1201,9 @@ export const updateAdStatus = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET CHAT LIST
+// ==========================================
 export const getChatList = async (req, res) => {
     try {
         const userId = req.user.uid;
@@ -1091,6 +1249,9 @@ export const getChatList = async (req, res) => {
     }
 };
 
+// ==========================================
+// GET CHAT MESSAGES
+// ==========================================
 export const getChatMessages = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -1127,6 +1288,9 @@ export const getChatMessages = async (req, res) => {
     }
 };
 
+// ==========================================
+// SEND MESSAGE
+// ==========================================
 export const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -1171,6 +1335,9 @@ export const sendMessage = async (req, res) => {
     }
 };
 
+// ==========================================
+// DELETE CHAT
+// ==========================================
 export const deleteChat = async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -1192,6 +1359,9 @@ export const deleteChat = async (req, res) => {
     }
 };
 
+// ==========================================
+// START CHAT
+// ==========================================
 export const startChat = async (req, res) => {
     try {
         const { buyerId, sellerId, adId } = req.body;
