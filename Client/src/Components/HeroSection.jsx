@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase.config";
 import axios from "axios";
 import toast from "react-hot-toast";
+import AllAds from "./Components/allads";  // 🔥 Import added
 
 const getApiUrl = () => {
     const isLocal = window.location.hostname === "localhost" || 
@@ -125,12 +126,12 @@ const HeroSection = ({ setShowLogin, setShowMyAds }) => {
                             )}
                         </button>
 
-                        {/* 🔥 Browse Products → Home (All Ads) */}
+                        {/* 🔥 Browse Store → All Ads */}
                         <button 
-                            onClick={() => navigate('/')}  
+                            onClick={() => navigate('/allads')}  // 🔥 Changed from '/' to '/allads'
                             className={`bg-white border-2 border-slate-200 text-slate-700 px-10 py-4 rounded-2xl text-lg font-bold ${theme.buttonSecondary} transition-all active:scale-95`}
                         >
-                            Browse Store
+                            All Ads  // 🔥 Text changed
                         </button>
                     </div>
                 </div>

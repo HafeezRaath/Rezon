@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import axios from 'axios';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';  // 🔥 ADD THIS
 import { 
     FaPhone, 
     FaIdCard, 
@@ -12,20 +13,20 @@ import {
     FaCheckCircle,
     FaShieldAlt,
     FaSpinner,
-    FaTimes,
     FaRedo,
     FaExclamationTriangle,
     FaEye,
     FaEyeSlash,
-    FaArrowLeft
+    FaArrowLeft  // 🔥 Already imported
 } from 'react-icons/fa';
 import { auth } from "../firebase.config";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 const API_BASE_URL = "https://rezon.up.railway.app/api";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const VerificationFlow = ({ user, onClose, onComplete }) => {
+    const navigate = useNavigate();  // 🔥 ADD THIS
     const [loading, setLoading] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
 
@@ -39,11 +40,8 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [errors, setErrors] = useState({});
 
-    // 🔥 NEW: Password visibility states
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-    // 🔥 NEW: Camera mount state - only true when step 3 is active
     const [cameraActive, setCameraActive] = useState(false);
 
     const webcamRef = useRef(null);
@@ -56,7 +54,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         };
     }, [idFrontPreview, idBackPreview]);
 
-    // 🔥 NEW: Camera activation - only mount when step 3 is active
+    // Camera activation
     useEffect(() => {
         if (currentStep === 3 && !selfie) {
             setCameraActive(true);
@@ -88,7 +86,7 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         setErrors(newErrors);
     }, [phone, password, confirmPassword]);
 
-    // 🔥 FIXED: Auto advance only when ALL validations pass
+    // Auto advance
     useEffect(() => {
         if (currentStep === 1 && phone.length === 11 && password.length >= 6 && password === confirmPassword && !errors.phone) {
             setCurrentStep(2);
@@ -158,7 +156,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         setCameraActive(true);
     }, []);
 
-    // 🔥 NEW: Go back to previous step
     const handleBack = useCallback(() => {
         if (loading) return;
         if (currentStep > 1) {
@@ -166,13 +163,14 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         }
     }, [loading, currentStep]);
 
-    // 🔥 FIXED: Close button handler with proper cleanup
+    // 🔥 CHANGED: Navigate home instead of just closing
     const handleClose = useCallback(() => {
         if (loading) return;
-        onClose?.();
-    }, [loading, onClose]);
+        navigate('/');      // 🏠 Home bhejo
+        onClose?.();        // Parent cleanup bhi karo
+    }, [loading, onClose, navigate]);
 
-    // 🔥 FIXED: Auto close after successful verification
+    // 🔥 CHANGED: Auto close after success → navigate home
     const handleFinalSubmit = useCallback(async () => {
         if (!selfie || !idFront || !idBack) {
             toast.error("Please complete all steps (Front, Back & Selfie) 📸");
@@ -204,10 +202,10 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
 
             if (verifyRes.data?.success) {
                 toast.success("Mubarak ho! AI Verification Successful! 🎉", { id: toastId, duration: 3000 });
-
                 onComplete?.(verifyRes.data?.data);
 
                 setTimeout(() => {
+                    navigate('/');   // 🏠 Success ke baad home
                     onClose?.();
                 }, 2000);
             }
@@ -224,16 +222,19 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
         } finally {
             setLoading(false);
         }
-    }, [selfie, idFront, idBack, phone, onComplete, onClose]);
+    }, [selfie, idFront, idBack, phone, onComplete, onClose, navigate]);
 
-    // Escape key handler
+    // 🔥 CHANGED: Escape key → navigate home
     useEffect(() => {
         const handleEscape = (e) => {
-            if (e.key === 'Escape' && !loading) onClose?.();
+            if (e.key === 'Escape' && !loading) {
+                navigate('/');
+                onClose?.();
+            }
         };
         window.addEventListener('keydown', handleEscape);
         return () => window.removeEventListener('keydown', handleEscape);
-    }, [onClose, loading]);
+    }, [onClose, loading, navigate]);
 
     const StepIndicator = useCallback(() => (
         <div className="flex items-center justify-between mb-8 px-2 max-w-md mx-auto">
@@ -269,7 +270,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
 
                 <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-4 md:p-6 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
-                        {/* 🔥 NEW: Back button */}
                         {currentStep > 1 && (
                             <button
                                 onClick={handleBack}
@@ -288,17 +288,19 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                             <p className="text-xs md:text-sm text-slate-300">Secure AI-powered process</p>
                         </div>
                     </div>
+                    
+                    {/* 🔥 CHANGED: Cross ki jagah Back to Home arrow */}
                     <button 
                         onClick={handleClose} 
                         disabled={loading}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50 cursor-pointer"
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2"
                         type="button"
+                        title="Back to Home"
                     >
-                        <FaTimes className="text-xl" />
+                        <FaArrowLeft className="text-xl" />
+                        <span className="hidden sm:inline text-sm font-bold">Home</span>
                     </button>
                 </div>
-
-                
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="max-w-4xl mx-auto p-4 md:p-8">
@@ -343,7 +345,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                         </p>
                                     )}
 
-                                    {/* 🔥 NEW: Password with eye icon */}
                                     <div className="relative">
                                         <input 
                                             type={showPassword ? "text" : "password"}
@@ -371,7 +372,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                         </p>
                                     )}
 
-                                    {/* 🔥 NEW: Confirm Password with eye icon */}
                                     <div className="relative">
                                         <input 
                                             type={showConfirmPassword ? "text" : "password"}
@@ -397,7 +397,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                             <FaCheckCircle className="absolute right-12 top-1/2 -translate-y-1/2 text-emerald-500" />
                                         )}
                                     </div>
-                                    {/* 🔥 NEW: Password match error */}
                                     {errors.confirmPassword && (
                                         <p className="text-xs text-rose-500 flex items-center gap-1">
                                             <FaExclamationTriangle /> {errors.confirmPassword}
@@ -477,7 +476,6 @@ const VerificationFlow = ({ user, onClose, onComplete }) => {
                                     {!selfie ? (
                                         <div className="relative">
                                             <div className="w-56 h-56 rounded-full overflow-hidden border-4 border-amber-200 shadow-2xl bg-slate-900">
-                                                {/* 🔥 FIXED: Camera only mounts when cameraActive is true */}
                                                 {cameraActive ? (
                                                     <Webcam 
                                                         ref={webcamRef} 
