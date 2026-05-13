@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase.config";
 import axios from "axios";
 import toast from "react-hot-toast";
-import AllAds from "./Components/allads";  // 🔥 Import added
+import AllAds from "../Components/allads";  // 🔥 Import added
 
 const getApiUrl = () => {
     const isLocal = window.location.hostname === "localhost" || 
