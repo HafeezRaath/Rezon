@@ -231,13 +231,24 @@ export const registerUser = async (req, res) => {
 export const create = async (req, res) => {
     try {
         console.log("🔍 POST AD REQUEST:", {
-            files: req.files?.length,
+            filesCount: req.files?.length,
             bodyFields: Object.keys(req.body),
-            user: req.user?.uid
+            hasUser: !!req.user,
+            userUid: req.user?.uid
         });
+
+        // 🔥 FIX 1: req.user check (agar auth middleware fail ho toh)
+        if (!req.user?.uid) {
+            console.error("❌ req.user missing - auth middleware issue?");
+            return res.status(401).json({ 
+                success: false,
+                message: "🔒 Authentication required. Please login again." 
+            });
+        }
 
         const posted_by_uid = req.user.uid;
 
+        // 🔥 FIX 2: File check with buffer validation
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ 
                 success: false,
@@ -245,6 +256,17 @@ export const create = async (req, res) => {
             });
         }
 
+        // Agar multer diskStorage use kar raha hai toh buffer nahi hoga
+        const missingBuffer = req.files.find(f => !f.buffer);
+        if (missingBuffer) {
+            console.error("❌ Multer config error: file.buffer missing. Switch to memoryStorage.");
+            return res.status(500).json({ 
+                success: false,
+                message: "Server upload config error. Contact admin." 
+            });
+        }
+
+        // 🔥 FIX 3: Frontend bhejta hai "phoneNumber", backend expect kar raha tha "contactNumber"
         const { 
             price, 
             title, 
@@ -253,10 +275,12 @@ export const create = async (req, res) => {
             condition, 
             location, 
             imageQualityByAI,
-            contactNumber,
+            phoneNumber,      // ✅ Frontend field
+            contactNumber,    // Fallback
             details 
         } = req.body;
 
+        // Validation
         if (!title?.trim()) {
             return res.status(400).json({ success: false, message: "📝 Title is required" });
         }
@@ -281,30 +305,21 @@ export const create = async (req, res) => {
             });
         }
 
+        // 🔥 FIX 4: Duplicate check simplified
         const imageHashes = [];
-        const duplicateChecks = req.files.map(async (file) => {
+        for (const file of req.files) {
             const hash = crypto.createHash('md5').update(file.buffer).digest('hex');
             const duplicate = await Ad.findOne({ 
                 imageHashes: hash, 
                 isDeleted: false 
             });
             if (duplicate) {
-                throw new Error(`DUPLICATE_IMAGE:${hash}`);
-            }
-            return hash;
-        });
-
-        try {
-            const hashes = await Promise.all(duplicateChecks);
-            imageHashes.push(...hashes);
-        } catch (err) {
-            if (err.message.startsWith('DUPLICATE_IMAGE')) {
                 return res.status(400).json({ 
                     success: false,
                     message: "🛡️ Rezon Shield: Ye image pehle hi use ho chuki hai. Nayi photo upload karein." 
                 });
             }
-            throw err;
+            imageHashes.push(hash);
         }
 
         const imageUrls = await Promise.all(
@@ -324,9 +339,12 @@ export const create = async (req, res) => {
 
         const requiredFields = CATEGORY_FIELD_MAP[category] || [];
         const missingFields = requiredFields.filter(field => !parsedDetails[field]);
-        if (missingFields.length > 0 && category === "Mobile") {
+        if (missingFields.length > 0) {
             console.log("⚠️ Missing fields for", category, ":", missingFields);
         }
+
+        // 🔥 FIX 5: phoneNumber ko contactNumber me map karo
+        const finalPhone = phoneNumber || contactNumber || null;
 
         const newAd = new Ad({
             images: imageUrls,
@@ -340,7 +358,7 @@ export const create = async (req, res) => {
             posted_by_uid,
             status: 'Active',
             aiAuditStatus: aiQuality,
-            contactNumber: contactNumber || null,
+            contactNumber: finalPhone,  // ✅ Ab sahi field aayegi
             details: parsedDetails
         });
 
@@ -354,10 +372,13 @@ export const create = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("🔥 CREATE AD ERROR:", error);
+        // 🔥 FIX 6: Error properly log karo taake Railway me dikhe
+        console.error("🔥 CREATE AD ERROR:", error.message);
+        console.error("🔥 STACK:", error.stack);
+        
         res.status(500).json({ 
             success: false,
-            message: "Post failed", 
+            message: error.message || "Post failed", 
             error: error.message 
         });
     }

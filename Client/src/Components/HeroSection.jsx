@@ -127,12 +127,7 @@ const HeroSection = ({ setShowLogin, setShowMyAds }) => {
                         </button>
 
                         {/* 🔥 Browse Store → All Ads */}
-                        <button 
-                            onClick={() => navigate('/allads')}  // 🔥 Changed from '/' to '/allads'
-                            className={`bg-white border-2 border-slate-200 text-slate-700 px-10 py-4 rounded-2xl text-lg font-bold ${theme.buttonSecondary} transition-all active:scale-95`}
-                        >
-                            All Ads  // 🔥 Text changed
-                        </button>
+                        
                     </div>
                 </div>
 
